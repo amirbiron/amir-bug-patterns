@@ -1,34 +1,34 @@
 # like-wildcard-injection
 
-**CRITICAL — SQL query manipulation / data exposure**
+**CRITICAL — מניפולציה של SQL query / חשיפת נתונים**
 
-Detect `LIKE` clauses constructed from user-supplied input without escaping the `_` and `%` wildcard characters. User-supplied input can match more rows than intended (data leak) or all rows (`%`).
+זהה סעיפי `LIKE` שנבנים מקלט שסופק על ידי המשתמש בלי escape לתווי ה-wildcard `_` ו-`%`. קלט שסופק על ידי המשתמש יכול להתאים ליותר שורות מהמיועד (דליפת נתונים) או לכל השורות (`%`).
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. A SQL `LIKE` clause (or `ILIKE`, `NOT LIKE`) where the pattern is built from a user-supplied value.
-2. The user value is concatenated / interpolated directly:
+1. סעיף SQL `LIKE` (או `ILIKE`, `NOT LIKE`) שבו ה-pattern נבנה מערך שסופק על ידי המשתמש.
+2. ערך המשתמש משורשר / מוזרק ישירות:
    - `f"{user_prefix}%"` / `f"%{user_input}%"`
    - `:param || '%'` / `'%' || :param || '%'`
-   - `.like(`f"...{value}..."`)` in SQLAlchemy
-3. The input is not escaped (`_` → `\_`, `%` → `\%`, backslash → `\\`) and the query doesn't include `ESCAPE '\\'`.
+   - `.like(`f"...{value}..."`)` ב-SQLAlchemy
+3. הקלט אינו מצוין escape (`_` → `\_`, `%` → `\%`, backslash → `\\`) וה-query לא כולל `ESCAPE '\\'`.
 
-## Fix patterns
+## דפוסי תיקון
 
-- **SQLAlchemy:** use `column.startswith(value, autoescape=True)` / `.endswith(...)` / `.contains(...)` — these escape automatically.
-- **Raw SQL:** escape and declare:
+- **SQLAlchemy:** השתמש ב-`column.startswith(value, autoescape=True)` / `.endswith(...)` / `.contains(...)` — אלה עושים escape אוטומטית.
+- **Raw SQL:** escape והכרזה:
   ```python
   esc = value.replace("\\","\\\\").replace("%","\\%").replace("_","\\_")
   q = "SELECT ... WHERE col LIKE :p ESCAPE '\\\\'"
   conn.execute(q, {"p": f"{esc}%"})
   ```
-- **Or use `=`** if a prefix search isn't actually required (often the answer).
+- **או השתמש ב-`=`** אם חיפוש prefix לא באמת נדרש (לרוב זו התשובה).
 
 ## False positives
 
-- Hardcoded patterns (no user input).
-- Internal admin tools where only trusted operators provide input — still risky.
+- patterns קשיחים (בלי קלט משתמש).
+- כלי admin פנימיים שבהם רק operators אמינים מספקים קלט — עדיין מסוכן.
 
-## Severity
+## חומרה
 
-CRITICAL — `prefix="%"` selects all rows; `prefix="user_id_"` matches `user_idXfoo` etc. — leaks data the user shouldn't see.
+CRITICAL — `prefix="%"` בוחר את כל השורות; `prefix="user_id_"` מתאים ל-`user_idXfoo` וכו' — דולף נתונים שהמשתמש לא צריך לראות.

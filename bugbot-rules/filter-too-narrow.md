@@ -1,32 +1,32 @@
 # filter-too-narrow
 
-Detect filter expressions (`WHERE`, regex, `Array.filter`) that exclude legitimate cases or are applied in the wrong order — producing empty UI lists, blocked emails, or security-bypass via override.
+זהה ביטויי filter (`WHERE`, regex, `Array.filter`) שמוציאים מקרים לגיטימיים או שמופעלים בסדר שגוי — מייצרים רשימות UI ריקות, emails חסומים, או security-bypass דרך override.
 
-## Flag when ANY apply
+## דווח כשמתקיים אחד מהבאים
 
-1. **Filter on a single channel/source/type** where the entity is documented to have multiple variants. Example: `WHERE channel = 'whatsapp'` in a UI list that should also show email-pref entities.
+1. **Filter על channel/source/type יחיד** כשהישות מתועדת כבעלת מספר variants. דוגמה: `WHERE channel = 'whatsapp'` ברשימת UI שצריכה להציג גם ישויות שמעדיפות email.
 
-2. **Domain blacklist using exact match** (`host == "mailchimp.com"`) instead of suffix match (`host.endswith(".mailchimp.com") or host == "mailchimp.com"`).
+2. **Domain blacklist עם exact match** (`host == "mailchimp.com"`) במקום suffix match (`host.endswith(".mailchimp.com") or host == "mailchimp.com"`).
 
-3. **Regex over email / URL / phone** without handling display-name (`"Alice <alice@example.com>"`), subdomain, or international format variants.
+3. **Regex על email / URL / phone** בלי טיפול ב-display-name (`"Alice <alice@example.com>"`), subdomain, או variants של פורמט בינלאומי.
 
-4. **Filter order: business override before security/deny check.** Example:
+4. **סדר filter: override של business לפני בדיקת security/deny.** דוגמה:
    ```python
    if message.contains(FORCE_SEND_KEYWORD):
      send(lead, message); return
    if blocked_publishers.contains(lead.publisher_id):
-     return  # never reached for force_send
+     return  # לעולם לא מגיע ל-force_send
    ```
-   Security / deny / block filters must run FIRST.
+   Filters של security / deny / block חייבים לרוץ **קודם**.
 
-5. **`Array.filter` followed by `.length === 0` UI** where the filter's predicate doesn't cover all expected entity variants → user sees empty list incorrectly.
+5. **`Array.filter` ולאחריו UI של `.length === 0`** כש-predicate ה-filter לא מכסה את כל variants הישות הצפויות → המשתמש רואה רשימה ריקה בטעות.
 
 ## False positives
 
-- Intentional scope reduction (owner-scoped, role-scoped, tenant-scoped) where the filter IS the feature.
-- Debug-only / admin-only filters where the narrow scope is intentional.
-- Test fixtures.
+- צמצום scope מכוון (owner-scoped, role-scoped, tenant-scoped) כש-ה-filter *הוא* הפיצ'ר.
+- filters debug-only / admin-only כשה-scope הצר מכוון.
+- test fixtures.
 
-## Severity
+## חומרה
 
-MEDIUM — empty UI / blocked operations (UX-breaking); HIGH if filter order causes a security bypass.
+MEDIUM — UI ריק / פעולות חסומות (שובר UX); HIGH אם סדר filter גורם ל-security bypass.

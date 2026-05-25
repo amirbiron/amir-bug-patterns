@@ -1,35 +1,35 @@
-# BY-STACK: Browser-side handoff (mailto:, tel:, clipboard, DOM quirks)
+# BY-STACK: handoff צד-דפדפן (mailto:, tel:, clipboard, DOM quirks)
 
-## Relevance — copy this file if your project has...
-- ✅ Browser code that opens `mailto:`, `tel:`, `sms:`, or `file:` links
-- ✅ Browser code that uses `navigator.clipboard.*`
-- ✅ React components with tooltips, dropdowns, or modals that close on outside click
-- ✅ CSS resets in a project that uses Tailwind / utility-CSS frameworks
-- ✅ Code that creates blob URLs (`URL.createObjectURL`) for previews
-- ⏭ Skip if: server-rendered, no browser-side JS, or pure React without browser-API integration
+## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+- ✅ קוד דפדפן שפותח קישורי `mailto:`, `tel:`, `sms:`, או `file:`
+- ✅ קוד דפדפן שמשתמש ב-`navigator.clipboard.*`
+- ✅ קומפוננטות React עם tooltips, dropdowns, או modals שנסגרים על click מבחוץ
+- ✅ CSS resets בפרויקט שמשתמש ב-Tailwind / framework utility-CSS
+- ✅ קוד שיוצר blob URLs (`URL.createObjectURL`) ל-previews
+- ⏭ דלג אם: server-rendered, בלי JS צד-דפדפן, או React טהור בלי אינטגרציה עם Browser API
 
-> Cross-link: **R3** (browser API quirks) is the parent pattern. **K4** (XSS) is a separate concern — see `react-frontend.md`.
+> Cross-link: **R3** (quirks של Browser API) הוא דפוס האב. **K4** (XSS) הוא דאגה נפרדת — ראה `react-frontend.md`.
 
 ---
 
-## Pattern 1 — `window.open(mailto:)` returns null (Noa P10)
+## דפוס 1 — `window.open(mailto:)` מחזיר null (Noa P10)
 
-**Severity:** MEDIUM — legitimate operation cancelled by mistake
+**חומרה:** MEDIUM — פעולה לגיטימית מבוטלת בטעות
 
-### What it looks like
+### איך זה נראה
 ```jsx
 const win = window.open(`mailto:${address}`, "_blank");
 if (!win) {
   showError("Popup blocked");
-  return;  // ❌ cancels mark_sent flow
+  return;  // ❌ מבטל flow של mark_sent
 }
 markAsSent();
 ```
 
-In Chrome, `window.open(url, ...)` returns `null` when `url` uses a system protocol (`mailto:`, `tel:`, `sms:`, `file:`). This is **intentional handoff to the OS**, not a popup-blocker action. The check above misinterprets handoff as block.
+ב-Chrome, `window.open(url, ...)` מחזיר `null` כש-`url` משתמש ב-protocol מערכת (`mailto:`, `tel:`, `sms:`, `file:`). זה **handoff מכוון ל-OS**, לא פעולה של popup-blocker. הבדיקה למעלה מפרשת handoff כחסימה.
 
-### Fix
-For system protocols, use an `<a>` element + `.click()`:
+### תיקון
+ל-protocols מערכת, השתמש באלמנט `<a>` + `.click()`:
 ```jsx
 const a = document.createElement("a");
 a.href = `mailto:${address}`;
@@ -37,7 +37,7 @@ a.click();
 markAsSent();
 ```
 
-Or detect by URL scheme before deciding the popup-blocker fallback applies:
+או זהה לפי URL scheme לפני שאתה מחליט שה-fallback של popup-blocker חל:
 ```jsx
 const isSystemProtocol = /^(mailto|tel|sms|file):/.test(url);
 const win = window.open(url, "_blank");
@@ -48,22 +48,22 @@ if (!win && !isSystemProtocol) {
 markAsSent();
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `f635304`.
 
 ---
 
-## Pattern 2 — `navigator.clipboard.writeText` on HTTP
+## דפוס 2 — `navigator.clipboard.writeText` על HTTP
 
 ```js
 function copy(text) {
-  navigator.clipboard.writeText(text);  // ❌ throws on HTTP; promise rejection unhandled
+  navigator.clipboard.writeText(text);  // ❌ זורק על HTTP; promise rejection לא נתפס
 }
 ```
 
-The Clipboard API requires a secure context (HTTPS, localhost). On HTTP, `navigator.clipboard` may be `undefined`, or `writeText` may reject.
+ה-Clipboard API דורש secure context (HTTPS, localhost). על HTTP, `navigator.clipboard` עשוי להיות `undefined`, או `writeText` עשוי לדחות.
 
-### Fix
+### תיקון
 ```js
 async function copy(text) {
   try {
@@ -71,139 +71,139 @@ async function copy(text) {
     await navigator.clipboard.writeText(text);
     return { ok: true };
   } catch (err) {
-    // Fallback: legacy document.execCommand or show error
+    // Fallback: legacy document.execCommand או הצג שגיאה
     return { ok: false, err };
   }
 }
 ```
 
-### Real commits
+### Commits אמיתיים
 - Markdown-Academy `b97d3f5`.
 
 ---
 
-## Pattern 3 — Tooltip / dropdown closes on click due to event bubbling
+## דפוס 3 — Tooltip / dropdown נסגר על click בגלל event bubbling
 
 ```jsx
 <div onClick={closeMenu}>
-  <Tooltip>...</Tooltip>  {/* clicks inside bubble up → menu closes */}
+  <Tooltip>...</Tooltip>  {/* clicks בפנים בועלים → menu נסגר */}
 </div>
 ```
 
-### Fix
+### תיקון
 ```jsx
 <Tooltip onClick={(e) => e.stopPropagation()}>...</Tooltip>
 ```
 
-Or use a "click outside" hook that ignores clicks within the inner element's tree (compare `event.target` against the inner ref via `.contains()`).
+או השתמש ב-hook של "click outside" שמתעלם מ-clicks בתוך עץ האלמנט הפנימי (השווה `event.target` מול ref פנימי דרך `.contains()`).
 
-### Real commits
+### Commits אמיתיים
 - Markdown-Academy `315154e`.
 
 ---
 
-## Pattern 4 — Global CSS reset overrides utility classes
+## דפוס 4 — CSS reset גלובלי דורס מחלקות utility
 
 ```css
-/* somewhere in legacy CSS */
+/* איפשהו ב-CSS legacy */
 * { margin: 0; padding: 0; }
 ```
 
-In a Tailwind project, `space-y-6` translates to margins on children. The global reset has higher specificity (universal selector + direct declaration) and wins.
+בפרויקט Tailwind, `space-y-6` מתורגם ל-margins על ילדים. ה-reset הגלובלי יש לו specificity גבוהה יותר (universal selector + declaration ישיר) ומנצח.
 
-### Fix
-- Use Tailwind's own `@tailwind base` for the reset (Preflight).
-- Or scope the reset: `body > * { margin: 0; padding: 0 }` — but this still breaks utilities.
-- Best: remove the manual reset and rely on Tailwind / utility-CSS framework's built-in reset.
+### תיקון
+- השתמש ב-`@tailwind base` של Tailwind עצמו ל-reset (Preflight).
+- או scope ל-reset: `body > * { margin: 0; padding: 0 }` — אבל זה עדיין שובר utilities.
+- הכי טוב: הסר את ה-reset הידני וסמוך על ה-reset המובנה של Tailwind / framework utility-CSS.
 
-### Real commits
+### Commits אמיתיים
 - Web `c586691`.
 
 ---
 
-## Pattern 5 — `URL.createObjectURL` not revoked
+## דפוס 5 — `URL.createObjectURL` לא משוחרר
 
 ```jsx
-const url = URL.createObjectURL(blob);  // ❌ never revoked, leaks on every render
+const url = URL.createObjectURL(blob);  // ❌ לעולם לא משוחרר, דולף בכל render
 return <img src={url} />;
 ```
 
-### Fix
+### תיקון
 ```jsx
 useEffect(() => {
   if (!blob) return;
   const url = URL.createObjectURL(blob);
   setSrc(url);
-  return () => URL.revokeObjectURL(url);  // cleanup on unmount or blob change
+  return () => URL.revokeObjectURL(url);  // cleanup על unmount או שינוי blob
 }, [blob]);
 ```
 
-### Real commits
+### Commits אמיתיים
 - Web `f5cbaf9`.
 
 ---
 
-## Pattern 6 — `setTimeout(fn, delay)` / `new Date(value)` with NaN
+## דפוס 6 — `setTimeout(fn, delay)` / `new Date(value)` עם NaN
 
 ```js
-const delay = parseInt(input);  // user-provided
-setTimeout(load, delay);  // ❌ if NaN → React error / immediate or never
+const delay = parseInt(input);  // ממשתמש
+setTimeout(load, delay);  // ❌ אם NaN → שגיאת React / מיידי או לעולם לא
 ```
 
-### Fix
+### תיקון
 ```js
 const parsed = parseInt(input, 10);
 const delay = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_DELAY;
 setTimeout(load, delay);
 ```
 
-Same for `new Date(value).getTime()` — guard with `isFinite`.
+אותו דבר ל-`new Date(value).getTime()` — הגן עם `isFinite`.
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `e432866`.
 
 ---
 
-## Pattern 7 — `localStorage` partial update of multi-field auth state
+## דפוס 7 — עדכון חלקי של state auth מרובה-שדות ב-`localStorage`
 
 ```js
-localStorage.setItem("token", newToken);  // ❌ refreshToken stays from signup
+localStorage.setItem("token", newToken);  // ❌ refreshToken נשאר מההרשמה
 ```
 
-`localStorage` operates per-key; updating just `token` leaves `refreshToken` stale.
+`localStorage` פועל per-key; עדכון רק `token` משאיר `refreshToken` ישן.
 
-### Fix
-- Store as one JSON object: `localStorage.setItem("auth", JSON.stringify({token, refreshToken, expires}))`.
-- Or always update both atomically: `localStorage.setItem("token", t); localStorage.setItem("refreshToken", r);` and never write one without the other.
+### תיקון
+- שמור כאובייקט JSON אחד: `localStorage.setItem("auth", JSON.stringify({token, refreshToken, expires}))`.
+- או תמיד עדכן את שניהם atomically: `localStorage.setItem("token", t); localStorage.setItem("refreshToken", r);` ולעולם אל תכתוב אחד בלי השני.
 
-### Real commits
+### Commits אמיתיים
 - Web `2e5c480`.
 
 ---
 
-## Pattern 8 — UI button shown at wrong time relative to slot
+## דפוס 8 — כפתור UI מוצג בזמן שגוי יחסית ל-slot
 
 ```jsx
-const showBooked = nowMs > slot_start + 30 * 60 * 1000;  // ❌ short meetings broken
+const showBooked = nowMs > slot_start + 30 * 60 * 1000;  // ❌ שובר מפגשים קצרים
 ```
 
-If the action is "after the meeting ends", calculate from `slot_end`, not `slot_start + estimate`.
+אם הפעולה היא "אחרי שהמפגש מסתיים", חשב מ-`slot_end`, לא `slot_start + estimate`.
 
-### Fix
+### תיקון
 ```jsx
 const showBooked = nowMs > slot_end;
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `f4769bf`.
 
 ---
 
-## Pattern 9 — Component unmounts before async operation finishes
+## דפוס 9 — קומפוננטה עושה unmount לפני שפעולת async מסתיימת
 
-If the user navigates away while a `useEffect` is mid-await, the subsequent `setState` runs on an unmounted component → warning in dev, memory retention in prod.
+אם המשתמש עובר ל-route אחר תוך כדי `useEffect` באמצע await, ה-`setState` שלאחר מכן רץ על קומפוננטה לא mounted → אזהרה ב-dev, החזקת זיכרון ב-prod.
 
-### Fix
+### תיקון
 Cancellation flag:
 ```jsx
 useEffect(() => {
@@ -218,14 +218,14 @@ useEffect(() => {
 }, [...]);
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `b360c66`, `7444dd9`.
 
 ---
 
-## Cross-references
+## הפניות צולבות
 
-- **R3** — Browser API quirks (this file is the deep-dive)
-- **CORE U2** — React state sync (Pattern 9 here is the cancellation-flag variant)
+- **R3** — quirks של Browser API (הקובץ הזה הוא ה-deep-dive)
+- **CORE U2** — סנכרון state ב-React (דפוס 9 כאן הוא וריאציית cancellation-flag)
 - **CRITICAL K4** — XSS via innerHTML
 - **`bugbot-rules/window-open-protocol-handoff.md`**

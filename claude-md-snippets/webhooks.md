@@ -1,19 +1,19 @@
-# Webhook patterns (paste into CLAUDE.md)
+# דפוסי Webhooks (להעתקה ל-CLAUDE.md)
 
-1. **Reserve before fill.** INSERT to local DB with `UNIQUE` constraint or idempotency key BEFORE any irreversible external call (Gmail draft, SMS, payment). On `IntegrityError`, return 200 (duplicate, ignore). Never `commit()` after `await client.X()`.
+1. **Reserve לפני fill.** INSERT ל-DB מקומי עם UNIQUE constraint או idempotency key לפני כל קריאה חיצונית בלתי הפיכה (Gmail draft, SMS, payment). על `IntegrityError`, החזר 200 (duplicate, ignore). לעולם אל תעשה `commit()` אחרי `await client.X()`.
 
-2. **CAS on shared cursors.** When two webhooks can read the same `sync_token` / `history_id` / cursor, advance it via `UPDATE ... WHERE id=:id AND token=:expected RETURNING ...`. Branch `IS NULL` for nullable values.
+2. **CAS על cursors משותפים.** כששני webhooks יכולים לקרוא את אותו `sync_token` / `history_id` / cursor, הקדם אותו דרך `UPDATE ... WHERE id=:id AND token=:expected RETURNING ...`. הסתעפות `IS NULL` לערכים nullable.
 
-3. **Persist cursor on every call, even empty.** If the provider returns `changes=[]` with `next_sync_token`, write the token. Otherwise infinite loop.
+3. **התמד ב-cursor בכל קריאה, גם ריקה.** אם הספק מחזיר `changes=[]` עם `next_sync_token`, כתוב את ה-token. אחרת לולאה אינסופית.
 
-4. **Signature verification before any processing.** Use the provider's verifier (`stripe.Webhook.construct_event`, Meta HMAC-SHA256, GitHub `X-Hub-Signature-256`). Compare with `hmac.compare_digest`, never `==`. Read raw bytes, not re-encoded text.
+4. **אימות signature לפני כל processing.** השתמש ב-verifier של הספק (`stripe.Webhook.construct_event`, Meta HMAC-SHA256, GitHub `X-Hub-Signature-256`). השווה עם `hmac.compare_digest`, לעולם לא `==`. קרא bytes גולמיים, לא טקסט שעבר encoding מחדש.
 
-5. **Trusted proxy for IP-based decisions.** Configure `ProxyHeadersMiddleware` / `app.set('trust proxy', N)` with explicit hop count. Then read `request.client.host`. Never read `X-Forwarded-For` directly.
+5. **trusted proxy להחלטות מבוססות-IP.** הגדר `ProxyHeadersMiddleware` / `app.set('trust proxy', N)` עם hop count מפורש. ואז קרא `request.client.host`. לעולם אל תקרא `X-Forwarded-For` ישירות.
 
-6. **Acquire rate-limit slot AFTER work-validity check.** Spam / not-business should not consume slots reserved for real work.
+6. **רכוש slot של rate-limit אחרי בדיקת תקפות עבודה.** spam / not-business לא צריכים לצרוך slots שמורים לעבודה אמיתית.
 
-7. **No fallback "skip verification" on storage failure.** If Redis SET / DB INSERT of OTP fails, do not send the SMS. Fail closed.
+7. **אין נתיב fallback "דלג על verification" בכשל storage.** אם Redis SET / DB INSERT של OTP נכשל, אל תשלח את ה-SMS. fail closed.
 
-8. **Beat scheduler + `.delay()` race:** atomic `UPDATE ... WHERE status='pending' RETURNING id`, check rowcount before sending.
+8. **race של beat scheduler + `.delay()`:** atomic `UPDATE ... WHERE status='pending' RETURNING id`, בדוק rowcount לפני שליחה.
 
-See `BY-STACK/webhooks.md` and `CRITICAL-PATTERNS.md` K2 / K9.
+ראה `BY-STACK/webhooks.md` ו-`CRITICAL-PATTERNS.md` K2 / K9.

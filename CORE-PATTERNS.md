@@ -1,151 +1,151 @@
-# CORE PATTERNS
+# דפוסים מרכזיים (CORE)
 
-Universal bug patterns — these appear in **all three** source documents (Noa_Leads, EmailFlow, and the 8-projects set) across different stacks, projects, and timeframes. They reflect personal habits and reasoning gaps, not project quirks. **Apply these to every new project regardless of stack.**
+דפוסי באגים אוניברסליים — אלה מופיעים ב**כל שלושת** מסמכי המקור (Noa_Leads, EmailFlow, וסט 8-הפרויקטים) על stacks שונים, פרויקטים שונים וטווחי זמן שונים. הם משקפים הרגלים אישיים וחוסרי שיקול דעת, לא בעיות ספציפיות לפרויקט. **החל אותם על כל פרויקט חדש, ללא קשר ל-stack.**
 
-For each pattern: real commits cited, a generic detection rule, false positives, and recommended enforcement mode.
+לכל דפוס: commits אמיתיים מצוטטים, כלל זיהוי גנרי, false positives, ומצב אכיפה מומלץ.
 
 ---
 
 ## U1. Race conditions / async TOCTOU
 
-**Frequency:** 3/3 sources, ~15 instances
-**Projects:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, Markdown-Academy, routine
-**Severity:** HIGH
+**תדירות:** 3/3 מקורות, ~15 מופעים
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, Markdown-Academy, routine
+**חומרה:** HIGH
 
-### What it looks like
-Concurrent code paths read shared state, branch on it, and then write — without atomicity. Manifests as:
-- Duplicates from parallel webhooks / queue workers / cron + beat scheduler.
-- Missing `await` making coroutines always truthy.
-- Lock check performed *outside* the lock it's supposed to gate.
-- Stale cursors / CAS using `=` instead of `IS NULL` on nullable columns.
+### איך זה נראה
+נתיבי קוד concurrent קוראים מצב משותף, מסתעפים לפיו, ואז כותבים — בלי atomicity. מתבטא כ:
+- כפילויות מ-webhooks / queue workers / cron + beat scheduler מקבילים.
+- `await` חסר שגורם ל-coroutines להיות truthy תמיד.
+- בדיקת lock שמתבצעת *מחוץ* ל-lock שהיא אמורה לשמור.
+- Cursors / CAS שמשתמשים ב-`=` במקום `IS NULL` על עמודות nullable.
 
-### Pattern variants
-Same root cause, different presentations. Both are fixed by `UNIQUE` constraint + transaction lock (or CAS), but naming the specific variant helps when debugging:
+### וריאציות של הדפוס
+אותו root cause, מופעים שונים. כולם נפתרים על ידי UNIQUE constraint + transaction lock (או CAS), אבל זיהוי הוריאציה הספציפית עוזר ב-debug:
 
-- **(a) DB row not created before external call** — code calls `await client.X()` (Gmail draft, SMS send, payment, webhook emit) *before* inserting the local "intent" row with a `UNIQUE` constraint. At-least-once delivery (Pub/Sub, retries, parallel workers) creates orphans on the external side.
-- **(b) Check-then-act gap between read and write** — code does `SELECT ... WHERE status='pending'`, branches, then does `UPDATE ... WHERE id=:id`. Two runners both pass the read, both run the update, both perform the action.
-- **(c) Cursor / CAS column not advanced atomically** — webhook reads `sync_token`, calls external API, writes back `next_sync_token` in a separate statement. Two webhooks race on the cursor; both apply the same deltas.
-- **(d) Missing `await` on async predicate** — async function called in a boolean context (`if foo():`); coroutine is always truthy, so the gate never blocks.
+- **(a) שורת DB לא נוצרת לפני external call** — הקוד קורא ל-`await client.X()` (Gmail draft, SMS, payment, webhook emit) *לפני* הכנסת שורת "intent" מקומית עם UNIQUE constraint. at-least-once delivery (Pub/Sub, retries, parallel workers) יוצרת orphans בצד החיצוני.
+- **(b) פער check-then-act בין קריאה לכתיבה** — הקוד עושה `SELECT ... WHERE status='pending'`, מסתעף, ואז `UPDATE ... WHERE id=:id`. שני runners עוברים את הקריאה, שניהם מריצים את ה-update, שניהם מבצעים את הפעולה.
+- **(c) Cursor / CAS column לא מתקדם atomically** — webhook קורא `sync_token`, קורא ל-API חיצוני, וכותב חזרה `next_sync_token` ב-statement נפרד. שני webhooks מתחרים על ה-cursor; שניהם מחילים את אותם deltas.
+- **(d) `await` חסר על predicate async** — פונקציה async נקראת בהקשר בוליאני (`if foo():`); ה-coroutine תמיד truthy, אז ה-gate אף פעם לא חוסם.
 
-When debugging, identify the variant first — the fix is the same family (CAS / `UNIQUE` / lock), but the right placement differs.
+ב-debug — זהה קודם את הוריאציה. התיקון מאותה משפחה (CAS / UNIQUE / lock), אבל המיקום הנכון שונה.
 
-### Real examples
-- **Noa (`33af59e`):** Two parallel Google Calendar webhooks read the same `sync_token`, applied deltas → duplicate Activity rows. Fix: optimistic lock + CAS (`WHERE history_id = expected_old`).
-- **Noa (`cf99698`):** CAS on `WHERE history_id = expected_old` didn't handle `NULL` in Postgres → cursor stuck forever.
-- **EmailFlow (`f847a44`):** Nine parallel Pub/Sub workers each created a Gmail draft before one committed → 9 orphaned drafts. Fix: INSERT locally with `UNIQUE` *before* the Gmail call.
-- **Shipment-bot (`457eea1`):** `SELECT ... WHERE status='PENDING'` then `UPDATE`; beat scheduler and `send_message.delay()` both picked the row → OTP sent twice. Fix: atomic `UPDATE ... WHERE status='PENDING' RETURNING id`, check rowcount.
-- **Shipment-bot (`f1e0fbb`):** `_is_ip_blocked()` became async, caller didn't add `await` → coroutine always truthy → every webhook returned 429.
-- **Facebook-Leads-New (`5823724`):** `_check_daily_limit()` ran outside the `scan_lock` → two concurrent calls both passed, both ran scans.
-- **Markdown-Academy (`7c955f1`):** Server startup called seed multiple times in parallel without guard → lessons created twice.
+### דוגמאות אמיתיות
+- **Noa (`33af59e`):** שני webhooks מקבילים של Google Calendar קראו את אותו `sync_token`, החילו deltas → שורות Activity כפולות. תיקון: optimistic lock + CAS (`WHERE history_id = expected_old`).
+- **Noa (`cf99698`):** CAS על `WHERE history_id = expected_old` לא טיפל ב-`NULL` ב-Postgres → cursor תקוע לנצח.
+- **EmailFlow (`f847a44`):** תשעה Pub/Sub workers מקבילים יצרו Gmail draft לפני שאחד הספיק לעשות commit → 9 drafts יתומים. תיקון: INSERT מקומי עם `UNIQUE` *לפני* הקריאה ל-Gmail.
+- **Shipment-bot (`457eea1`):** `SELECT ... WHERE status='PENDING'` ואז `UPDATE`; ה-beat scheduler ו-`send_message.delay()` שניהם בחרו את השורה → ה-OTP נשלח פעמיים. תיקון: atomic `UPDATE ... WHERE status='PENDING' RETURNING id`, בדיקת rowcount.
+- **Shipment-bot (`f1e0fbb`):** `_is_ip_blocked()` הפך ל-async, אבל הקורא לא הוסיף `await` → ה-coroutine תמיד truthy → כל webhook החזיר 429.
+- **Facebook-Leads-New (`5823724`):** `_check_daily_limit()` רץ מחוץ ל-`scan_lock` → שתי קריאות מקבילות עברו את הבדיקה, שתיהן הריצו scans.
+- **Markdown-Academy (`7c955f1`):** עליית השרת קראה ל-seed כמה פעמים במקביל בלי הגנה → שיעורים נוצרו פעמיים.
 
-### Detection rule (paste into CLAUDE.md / bugbot)
-Flag any one of:
-1. `await session.commit()` followed by `await client.X()` (external irreversible call) without a preceding INSERT with `UNIQUE` constraint or row lock.
-2. `SELECT` / ORM `.scalar()` returning state, then branch, then `UPDATE` on the same row without `WHERE` on the read value (no CAS).
-3. `async def` function called without `await` and used in a boolean context (`if foo():`).
-4. Lock-protected critical section where a precondition is checked *before* the lock acquisition.
-5. CAS / cursor compared with `=` when the value can be `NULL` (Postgres: `col = NULL` is `NULL`, not `TRUE` — must branch on `IS NULL`).
+### כלל לזיהוי (להעתקה ל-CLAUDE.md / bugbot)
+דווח על כל אחד מהבאים:
+1. `await session.commit()` ולאחריו `await client.X()` (קריאה חיצונית בלתי הפיכה) בלי INSERT מקדים עם UNIQUE constraint או row lock.
+2. `SELECT` / ORM `.scalar()` שמחזיר state, ואז סעיף, ואז `UPDATE` על אותה שורה בלי `WHERE` על הערך שנקרא (אין CAS).
+3. פונקציית `async def` שנקראת בלי `await` ושימוש בה בהקשר בוליאני (`if foo():`).
+4. critical section מוגן ב-lock שבו precondition נבדק *לפני* רכישת ה-lock.
+5. CAS / cursor שמושווה עם `=` כשהערך יכול להיות `NULL` (Postgres: `col = NULL` הוא `NULL`, לא `TRUE` — חייב להסתעף עם `IS NULL`).
 
 ### False positives
-- Read-only external calls (status fetch, analytics fire-and-forget) — no reserve needed.
-- Single-process script with no concurrent runners — race theoretical.
-- Write uses `INSERT ... ON CONFLICT` or `UNIQUE` already catches duplicates.
-- Read happens inside `SELECT FOR UPDATE` block.
+- קריאות חיצוניות read-only (status fetch, analytics fire-and-forget) — אין צורך ב-reserve.
+- script של תהליך יחיד בלי runners concurrent — race תיאורטי.
+- כתיבה משתמשת ב-`INSERT ... ON CONFLICT` או UNIQUE שכבר תופס כפילויות.
+- הקריאה מתבצעת בתוך בלוק `SELECT FOR UPDATE`.
 
-### Recommended mode
-**Strict** for webhook handlers, queue/Celery tasks, cron jobs, payment / messaging / OTP flows.
-**Warning** for internal admin tools and single-runner scripts.
+### מצב מומלץ
+**strict** ל-webhook handlers, queue/Celery tasks, cron jobs, payment / messaging / OTP flows.
+**warning** לכלי admin פנימיים ו-scripts בריצה יחידה.
 
-### See also
-- `BY-STACK/webhooks.md` — Pub/Sub at-least-once, signature, idempotency
-- `BY-STACK/async-orm.md` — SQLAlchemy CAS, advisory locks
-- `BY-STACK/cron-jobs.md` — cron + beat-scheduler races
-- `bugbot-rules/race-toctou.md` — standalone prompt
+### ראה גם
+- `BY-STACK/webhooks.md` — ספציפיות Pub/Sub at-least-once, signature, idempotency
+- `BY-STACK/async-orm.md` — דפוסי CAS ב-SQLAlchemy, advisory locks
+- `BY-STACK/cron-jobs.md` — race conditions בצד ה-cron
+- `bugbot-rules/race-toctou.md` — prompt עצמאי
 
 ---
 
-## U2. React state sync / stale closure
+## U2. סנכרון state ב-React / stale closure
 
-**Frequency:** 3/3 sources, ~6 instances
-**Projects:** Noa_Leads (React frontend), EmailFlow (React frontend), routine, Web
-**Severity:** MEDIUM (UX-breaking; data-corruption when status sent to backend)
+**תדירות:** 3/3 מקורות, ~6 מופעים
+**פרויקטים:** Noa_Leads (frontend), EmailFlow (frontend), routine, Web
+**חומרה:** MEDIUM (שובר UX; data corruption כשה-status נשלח חזרה ל-backend)
 
-### What it looks like
-Local `useState` initialized from a prop that changes is not re-synced; or a callback captures a stale variable; or hooks are called after an early return, violating Rules of Hooks.
+### איך זה נראה
+`useState` מקומי שמאותחל מ-prop שמשתנה, ולא מסונכרן מחדש; או callback שתופס משתנה ישן; או hooks שנקראים אחרי early return ושוברים את Rules of Hooks.
 
-### Real examples
-- **Noa (`3fc0ec6`):** `useEffect` dep on an object reference re-triggered and overwrote user edits.
-- **Noa (`b360c66`):** Async `renderTemplate` without checking a cancelled flag → stale preview overwrote the UI.
-- **EmailFlow (`e968135`):** `useState` after early `return` → hook count varied → React crash.
-- **EmailFlow (`02f633a`):** Missing `key={conversationId}` on `ReplyBox` → state carried over to a different conversation.
-- **EmailFlow (`d84daca` + `3987818`):** Status dropdown synced only on `leadId`; list refetch updated DB status but dropdown stuck on old value → save sent wrong `expected_status` → pipeline reverted.
-- **routine (`259c2a3`):** `activeChildId` missing from `useCallback` deps → after switching child, action affected the previous child.
-- **Web (`2e5c480`):** After email verification only `token` updated in `localStorage`; `refreshToken` stayed stale → reauth broke.
+### דוגמאות אמיתיות
+- **Noa (`3fc0ec6`):** `useEffect` עם dep על reference של אובייקט הופעל מחדש ודרס edits של המשתמש.
+- **Noa (`b360c66`):** `renderTemplate` async ללא בדיקת cancelled flag → preview ישן דרס את ה-UI.
+- **EmailFlow (`e968135`):** `useState` אחרי `return` מוקדם → ספירת hooks משתנה → React crash.
+- **EmailFlow (`02f633a`):** חסר `key={conversationId}` ב-`ReplyBox` → state עבר משיחה לשיחה.
+- **EmailFlow (`d84daca` + `3987818`):** dropdown של status סונכרן רק על `leadId`; refetch של רשימה עדכן status ב-DB אבל ה-dropdown נשאר על ערך ישן → save שלח `expected_status` שגוי → pipeline חזר אחורה.
+- **routine (`259c2a3`):** `activeChildId` חסר מ-deps של `useCallback` → אחרי החלפת ילד, פעולה השפיעה על הילד הקודם.
+- **Web (`2e5c480`):** אחרי email verification רק `token` עודכן ב-`localStorage`; `refreshToken` נשאר ישן → reauth נשבר.
 
-### Detection rule
-Flag any one of:
-1. `const [s, setS] = useState(props.X)` where `props.X` can change, AND no `useEffect([props.X])` resync AND no `key={...}` on the component.
-2. `useState` / `useEffect` / `useCallback` / `useMemo` called after `if (...) return null;` or any conditional return.
-3. `useCallback` / `useMemo` whose body references a prop or state variable not in the dependency array.
-4. Partial state update of a multi-field value (e.g., update `token` without `refreshToken`).
-5. `setState` after `await` without a cancellation-flag check.
+### כלל לזיהוי
+דווח על כל אחד מהבאים:
+1. `const [s, setS] = useState(props.X)` כש-`props.X` יכול להשתנות, וגם אין `useEffect([props.X])` resync וגם אין `key={...}` על הקומפוננטה.
+2. `useState` / `useEffect` / `useCallback` / `useMemo` שנקראים אחרי `if (...) return null;` או כל early return.
+3. `useCallback` / `useMemo` שגוף הפונקציה שלהם מתייחס ל-prop או state שלא נמצא ב-dependency array.
+4. עדכון חלקי של ערך multi-field (למשל עדכון `token` בלי `refreshToken`).
+5. `setState` אחרי `await` בלי בדיקת cancellation flag.
 
 ### False positives
-- Local-only state (modal open/closed, theme toggle) — not tied to external data.
-- Uncontrolled inputs with `defaultValue` — intentional.
-- Component receives prop once at mount (e.g., `user.id`) — no sync needed.
-- Dep array intentionally excludes an unstable identity (TanStack mutation object) — comment should explain.
+- state מקומי בלבד (modal פתוח/סגור, theme toggle) — לא תלוי בנתונים חיצוניים.
+- inputs uncontrolled עם `defaultValue` — מכוון.
+- קומפוננטה שמקבלת prop פעם אחת ב-mount (למשל `user.id`) — אין צורך ב-sync.
+- ה-dep array מדלג בכוונה על identity לא יציב (למשל אובייקט mutation של TanStack) — כדאי שתהיה הערת תיעוד מסבירה.
 
-### Recommended mode
-**Warning** (strict mode generates high noise for legitimate local-only state).
+### מצב מומלץ
+**warning** (strict מייצר רעש גבוה על state מקומי לגיטימי).
 
-### See also
-- `BY-STACK/react-frontend.md` — deep-dive with three resync patterns
+### ראה גם
+- `BY-STACK/react-frontend.md` — deep-dive עם שלושת דפוסי ה-resync
 - `bugbot-rules/react-stale-state-on-prop.md`
 
 ---
 
-## U3. External input / boundary validation
+## U3. ולידציה של external input / boundary
 
-**Frequency:** 3/3 sources, ~12 instances
-**Projects:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, routine
-**Severity:** MEDIUM (crashes on real traffic) / HIGH (when paired with SQL or eval)
+**תדירות:** 3/3 מקורות, ~12 מופעים
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, routine
+**חומרה:** MEDIUM (קריסות בטראפיק אמיתי) / HIGH (כשמשולב עם SQL או eval)
 
-### What it looks like
-Code assumes external input (API responses, webhook payloads, AI output, environment variables) has the expected shape — no `isinstance` guard, no NaN/Inf check, regex over-matches, SDK exception subclass not caught.
+### איך זה נראה
+הקוד מניח שקלט חיצוני (תשובות API, payloads של webhook, output של AI, משתני סביבה) במבנה הצפוי — אין `isinstance` guard, אין בדיקת NaN/Inf, regex תופס יותר מדי, subclass של exception ב-SDK לא נתפס.
 
-### Real examples
-- **Noa (`c128115`):** `_complete` caught only `RateLimitError` + `_RETRYABLE`; other `anthropic.APIError` subtypes (NotFound, BadRequest, Auth) propagated uncaught.
-- **Noa (`95dcce6`):** Domain blacklist used exact-match on email host → `mail.mailchimp.com` not blocked.
-- **Noa (`f27adc1`):** Greedy regex `\{.*\}` on AI JSON response broke on trailing `}` in prose.
-- **Noa (`7001892`):** `LeadDraft.service_category` as `StrEnum` rejected unknown value → loss of full_name + phone on that one field.
-- **EmailFlow (`6b7dbeb`):** `headers["list-unsubscribe"].strip()` crashed when value was non-str (corrupt MIME).
-- **EmailFlow (`46d05f7`):** `parsed_json.get(...)` crashed because `parsed_json` was a list, not dict.
-- **EmailFlow (`55b4328`):** `parse_webhook` received `messages: None` instead of list.
-- **EmailFlow (`e432866`):** `setTimeout(fn, delay)` with NaN value → React crash.
-- **Shipment-bot (`97bf0bc`):** `AmountValidator` didn't check NaN/Inf; `NaN < 0` is `False`, `NaN > max` is `False` → NaN entered wallet as amount.
-- **Facebook-Leads-New (`fadc0dc`):** `\b` in triple-quoted Python string is backspace, not word boundary → regex didn't fire.
-- **routine (`e5c26ad` / `2571c91`):** Malformed VAPID keys / missing `mailto:` prefix → uncaught exception in `setVapidDetails` → server crash on startup.
+### דוגמאות אמיתיות
+- **Noa (`c128115`):** `_complete` תפס רק `RateLimitError` + `_RETRYABLE`; subtypes אחרים של `anthropic.APIError` (NotFound, BadRequest, Auth) עברו בלי טיפול.
+- **Noa (`95dcce6`):** domain blacklist השתמש ב-exact match על host של email → `mail.mailchimp.com` לא נחסם.
+- **Noa (`f27adc1`):** regex חמדן `\{.*\}` על תגובת JSON של AI נשבר על `}` סוגר ב-prose.
+- **Noa (`7001892`):** `LeadDraft.service_category` כ-`StrEnum` דחה ערך לא מוכר → אובדן full_name + phone באותו שדה.
+- **EmailFlow (`6b7dbeb`):** `headers["list-unsubscribe"].strip()` קרס כשהערך לא היה str (MIME מקולקל).
+- **EmailFlow (`46d05f7`):** `parsed_json.get(...)` קרס כי `parsed_json` היה רשימה, לא dict.
+- **EmailFlow (`55b4328`):** `parse_webhook` קיבל `messages: None` במקום רשימה.
+- **EmailFlow (`e432866`):** `setTimeout(fn, delay)` עם NaN → React crash.
+- **Shipment-bot (`97bf0bc`):** `AmountValidator` לא בדק NaN/Inf; `NaN < 0` הוא `False`, `NaN > max` הוא `False` → NaN נכנס לארנק כסכום.
+- **Facebook-Leads-New (`fadc0dc`):** `\b` ב-Python triple-quoted string הוא backspace, לא word boundary → ה-regex לא רץ.
+- **routine (`e5c26ad` / `2571c91`):** מפתחות VAPID פגומים / חסר prefix של `mailto:` → exception לא נתפס ב-`setVapidDetails` → השרת קורס בעלייה.
 
-### Detection rule
-Before every `.get()`, `.append()`, `.strip()`, `[key]`, or iteration on an external value, require:
-1. `isinstance(obj, dict)` if expecting dict.
-2. `isinstance(items, list)` if expecting list.
-3. `isinstance(value, str)` before `.strip() / .lower() / .split()`.
-4. For numbers: `isinstance(n, (int, float))` + `math.isfinite(n)` + range check.
-5. For regex on external text: use raw strings (`r"..."`) and word boundaries; prefer `json.JSONDecoder().raw_decode()` over regex for embedded JSON.
-6. For SDK calls: catch the SDK's base class (`anthropic.APIError`, `googleapiclient.errors.HttpError`), order `except` blocks subclass-before-superclass.
-7. For startup-time config (VAPID keys, env vars, OAuth secrets): wrap initialization in try/except + validate format on boot.
+### כלל לזיהוי
+לפני כל `.get()`, `.append()`, `.strip()`, `[key]`, או iteration על ערך חיצוני, חייב:
+1. `isinstance(obj, dict)` אם מצפים ל-dict.
+2. `isinstance(items, list)` אם מצפים לרשימה.
+3. `isinstance(value, str)` לפני `.strip() / .lower() / .split()`.
+4. למספרים: `isinstance(n, (int, float))` + `math.isfinite(n)` + בדיקת טווח.
+5. ל-regex על טקסט חיצוני: raw strings (`r"..."`) ו-word boundaries; עדיף `json.JSONDecoder().raw_decode()` על regex ל-JSON משובץ.
+6. לקריאות SDK: לתפוס את ה-base class של ה-SDK (`anthropic.APIError`, `googleapiclient.errors.HttpError`), לסדר את ה-`except` subclass-לפני-superclass.
+7. לאתחול SDK בזמן startup (VAPID keys, env vars, OAuth secrets): לעטוף את האתחול ב-try/except + לוודא פורמט ב-boot.
 
 ### False positives
-- Internal data freshly created by our code (Pydantic-validated FastAPI input is already isinstance-checked).
-- `logger.debug` paths that won't run in production.
-- Narrow `except` for intentional propagation (e.g., `AppException` reaching FastAPI).
+- מבני נתונים פנימיים שנוצרו על ידי הקוד שלנו (קלט FastAPI שעבר ולידציית Pydantic כבר נבדק ב-isinstance).
+- נתיבי `logger.debug` שלא ירוצו בפרודקשן.
+- `except` צר ב-propagation מכוון (למשל `AppException` שמגיע ל-FastAPI).
 
-### Recommended mode
-**Warning** for 2 weeks on existing code, then **strict** for new code at module boundaries.
+### מצב מומלץ
+**warning** במשך שבועיים על קוד קיים, ואז **strict** לקוד חדש בגבולות מודולים.
 
-### See also
+### ראה גם
 - `BY-STACK/external-sdk.md`
 - `bugbot-rules/external-input-isinstance.md`
 - `bugbot-rules/sdk-error-completeness.md`
@@ -154,133 +154,133 @@ Before every `.get()`, `.append()`, `.strip()`, `[key]`, or iteration on an exte
 
 ## U4. SQL / Postgres edge cases
 
-**Frequency:** 3/3 sources, ~8 instances
-**Projects:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, routine
-**Severity:** MEDIUM–HIGH
+**תדירות:** 3/3 מקורות, ~8 מופעים
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, routine
+**חומרה:** MEDIUM–HIGH
 
-### What it looks like
-Postgres / SQLAlchemy / generic-SQL semantics surprise the developer:
-- `col = NULL` returns `NULL`, not `TRUE`.
-- `VARCHAR(N)` too small for a new enum string value → INSERT fails in prod, not in dev SQLite.
-- `Integer` column too small for IDs from external systems (Telegram, Stripe).
-- `ORDER BY` on a non-unique column has unspecified order for ties → pagination skips/duplicates.
-- `LIKE` matches `_` and `%` as wildcards in user-supplied prefixes.
-- SQLAlchemy `postgresql_ops` misused as sort direction.
-- `ANY(:ids)` with string array on UUID column fails without cast.
+### איך זה נראה
+סמנטיקה של Postgres / SQLAlchemy / SQL כללי מפתיעה את המפתח:
+- `col = NULL` מחזיר `NULL`, לא `TRUE`.
+- `VARCHAR(N)` קטן מדי לערך enum חדש → INSERT נכשל בפרודקשן, לא ב-SQLite של dev.
+- עמודת `Integer` קטנה מדי ל-IDs ממערכות חיצוניות (Telegram, Stripe).
+- `ORDER BY` על עמודה לא ייחודית = סדר לא מוגדר ב-ties → דפדוף מדלג/מכפיל.
+- `LIKE` מתאים `_` ו-`%` כ-wildcards ב-prefix שהמשתמש סיפק.
+- `postgresql_ops` ב-SQLAlchemy בשימוש שגוי ככיוון מיון.
+- `ANY(:ids)` עם מערך מחרוזות על עמודת UUID נכשל בלי cast.
 
-### Real examples
-- **Noa (`cf99698`):** CAS `WHERE col = NULL` doesn't match NULL — needs `IS NULL` branch.
-- **Noa (`2c8263a`):** `VARCHAR(20)` too small for new `StrEnum` value → INSERT failed.
-- **Noa (`98e8d18`):** `postgresql_ops={"col": "DESC"}` is wrong (it's for operator classes); use `desc("col")`.
-- **Noa (`244286d`):** `ANY(:ids)` with string array on UUID column failed without cast.
-- **EmailFlow (`d84daca`):** `Lead.order_by(updated_at.desc())` only — leads with same timestamp got random order → pagination cycles.
-- **EmailFlow (`dfdf975`):** `.strip()` on a Column expression didn't execute in SQL; needed `func.trim(...)`.
-- **Shipment-bot (`b16b99f`):** `entity_id` as `Integer`; Telegram IDs exceed 2³¹ → INSERT failed.
-- **Shipment-bot (`c0c1b74`):** Audit log pagination sorted only by timestamp → entries reordered between pages.
-- **Facebook-Leads-New (`2f45eca`):** `LIKE 'test_key%'` matched `testXkey` because `_` is a wildcard.
+### דוגמאות אמיתיות
+- **Noa (`cf99698`):** CAS `WHERE col = NULL` לא תופס NULL — צריך הסתעפות `IS NULL`.
+- **Noa (`2c8263a`):** `VARCHAR(20)` קטן מדי לערך חדש של `StrEnum` → INSERT נכשל.
+- **Noa (`98e8d18`):** `postgresql_ops={"col": "DESC"}` שגוי (זה למחלקות אופרטור); להשתמש ב-`desc("col")`.
+- **Noa (`244286d`):** `ANY(:ids)` עם מערך מחרוזות על עמודת UUID נכשל בלי cast.
+- **EmailFlow (`d84daca`):** `Lead.order_by(updated_at.desc())` בלבד — leads עם אותו timestamp קיבלו סדר אקראי → דפדוף בלולאה.
+- **EmailFlow (`dfdf975`):** `.strip()` על Column expression לא רץ ב-SQL; היה צריך `func.trim(...)`.
+- **Shipment-bot (`b16b99f`):** `entity_id` כ-`Integer`; IDs של Telegram חורגים מ-2³¹ → INSERT נכשל.
+- **Shipment-bot (`c0c1b74`):** דפדוף audit log מוין רק לפי timestamp → שורות התערבבו בין דפים.
+- **Facebook-Leads-New (`2f45eca`):** `LIKE 'test_key%'` תפס `testXkey` כי `_` הוא wildcard.
 
-### Detection rule
-1. In CAS / `UPDATE ... WHERE col = :val` where `col` is nullable: branch on `is None` → use `col.is_(None)`.
-2. Any `String(N)` / `VARCHAR(N)` column populated from an enum: enforce `N >= max(len(v) for v in EnumClass)` (CI check or test).
-3. Telegram / external IDs → `BigInteger` (`BIGINT`).
-4. Every `ORDER BY` that's followed by `LIMIT`/`OFFSET` or cursor pagination must have a secondary tiebreaker, typically the primary key (`.id`).
-5. Every `LIKE` with user-supplied prefix must escape `_` and `%`, or use exact / `=`.
-6. Python string ops (`.strip()`, `.lower()`) on `Column` expressions → use `func.trim()`, `func.lower()`.
+### כלל לזיהוי
+1. ב-CAS / `UPDATE ... WHERE col = :val` כש-`col` nullable: הסתעפות `is None` → להשתמש ב-`col.is_(None)`.
+2. כל עמודת `String(N)` / `VARCHAR(N)` שמתמלאת מ-enum: לאכוף `N >= max(len(v) for v in EnumClass)` (בדיקת CI או טסט).
+3. IDs של Telegram / חיצוניים → `BigInteger` (`BIGINT`).
+4. כל `ORDER BY` שאחריו `LIMIT`/`OFFSET` או cursor pagination חייב tiebreaker שני, בדרך כלל המפתח הראשי (`.id`).
+5. כל `LIKE` עם prefix מהמשתמש חייב לברוח מ-`_` ו-`%`, או להשתמש ב-`=` מדויק.
+6. פעולות מחרוזת של Python (`.strip()`, `.lower()`) על Column expressions → להשתמש ב-`func.trim()`, `func.lower()`.
 
 ### False positives
-- Aggregations (`GROUP BY` + `SUM`) — pagination tiebreaker not needed.
-- Single-row `.first()` on `UNIQUE` column.
-- ORM updates via `session.merge` — not raw SQL.
+- אגרגציות (`GROUP BY` + `SUM`) — אין צורך ב-tiebreaker לדפדוף.
+- `.first()` של שורה יחידה על עמודה ייחודית.
+- עדכוני ORM דרך `session.merge` — לא raw SQL.
 
-### Recommended mode
-**Strict** for nullability, `LIKE` escaping, and column-size checks.
-**Warning** for missing pagination tiebreakers in non-paginated queries.
+### מצב מומלץ
+**strict** ל-nullability, escape של `LIKE`, ובדיקות גודל עמודות.
+**warning** ל-tiebreaker חסר בדפדוף ב-queries לא מדפדפים.
 
-### See also
-- `BY-STACK/postgres.md` — full SQL/Alembic/pagination coverage
+### ראה גם
+- `BY-STACK/postgres.md` — כיסוי מלא של SQL/Alembic/דפדוף
 - `bugbot-rules/postgres-null-cas.md`, `pagination-tiebreaker.md`, `like-wildcard-injection.md`
 
 ---
 
-## U5. Partial atomic updates / linked-field drift
+## U5. עדכוני atomic חלקיים / סטייה ב-linked fields
 
-**Frequency:** 3/3 sources, ~10 instances
-**Projects:** Noa_Leads, EmailFlow, Shipment-bot, routine, Web
-**Severity:** HIGH (silent data corruption + downstream consumers depend on the cascade)
+**תדירות:** 3/3 מקורות, ~10 מופעים
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, routine, Web
+**חומרה:** HIGH (שחיתות נתונים שקטה + צרכנים downstream תלויים ב-cascade)
 
-### What it looks like
-A logical operation requires updating N coupled fields atomically. The code updates `N-1` and forgets the rest. The "missed" field is later read by cron, dashboard, or another flow → silent inconsistency.
+### איך זה נראה
+פעולה לוגית דורשת עדכון של N שדות מקושרים atomically. הקוד מעדכן `N-1` ושוכח את השאר. השדה ה"שכוח" נקרא מאוחר יותר על ידי cron, dashboard, או flow אחר → אי-עקביות שקטה.
 
-### Real examples
-- **Noa (`bd2b105`):** Chip set `PROPOSAL_SENT` and bypassed the `ProposalSentConfirmModal` flow.
-- **Noa (`75b430a`):** Chip set `PROPOSAL_SENT` without writing `proposal_sent_at` → `check_stuck_proposals` broke.
-- **Noa (`df530f3`):** `apply_chip` updated status but forgot `last_outbound_at` + `last_activity_type`.
-- **Noa (`4cc5a09`):** `apply_chip` didn't close old tasks in `AUTO_CLOSE_TASK_TYPES` + no dedup.
-- **Noa (`04cb101`):** `_apply_reschedule` `rowcount=0` left booking without activity log → cron treated it as never happened.
-- **EmailFlow (`f847a44`):** Pub/Sub draft created externally before local DB commit → orphans on partial failure.
-- **EmailFlow (`75c0a47`):** Audit row written before `client.send_draft()` — if send failed, compliance trail lied.
-- **routine (`01c61ac`):** `handleMorningTimeChange` sent only `hour`, not `enabled` flag; concurrent requests overwrote each other.
-- **Web (`2e5c480`):** Only `token` updated in `localStorage`; `refreshToken` stayed from signup → reauth broke.
+### דוגמאות אמיתיות
+- **Noa (`bd2b105`):** chip קבע `PROPOSAL_SENT` ועקף את ה-`ProposalSentConfirmModal` flow.
+- **Noa (`75b430a`):** chip קבע `PROPOSAL_SENT` בלי לכתוב `proposal_sent_at` → `check_stuck_proposals` נשבר.
+- **Noa (`df530f3`):** `apply_chip` עדכן status אבל שכח `last_outbound_at` + `last_activity_type`.
+- **Noa (`4cc5a09`):** `apply_chip` לא סגר tasks ישנים ב-`AUTO_CLOSE_TASK_TYPES` + אין dedup.
+- **Noa (`04cb101`):** `_apply_reschedule` עם `rowcount=0` השאיר booking בלי activity log → cron התייחס לזה כאילו לא קרה.
+- **EmailFlow (`f847a44`):** Pub/Sub draft נוצר חיצונית לפני commit מקומי → orphans בכשל חלקי.
+- **EmailFlow (`75c0a47`):** audit row נכתב לפני `client.send_draft()` — אם השליחה נכשלה, ה-compliance trail שיקר.
+- **routine (`01c61ac`):** `handleMorningTimeChange` שלח רק `hour`, לא את ה-`enabled` flag; בקשות מקבילות דרסו זו את זו.
+- **Web (`2e5c480`):** רק `token` עודכן ב-`localStorage`; `refreshToken` נשאר מההרשמה → reauth נשבר.
 
-### Detection rule
-For any function that updates an entity's status / "phase" / lifecycle column, verify the **canonical sibling list** is also updated in the same transaction. Project-specific examples:
-- Status change → `last_outbound_at`, `last_activity_type`, `proposal_sent_at`, close `AUTO_CLOSE_TASK_TYPES`, log activity, invalidate cache.
-- External call → either `INSERT` locally first with `UNIQUE` *before* the call, or write the audit log with `metadata.applied=false` on failure.
-- Token refresh → both `access` and `refresh` tokens in one atomic write (`localStorage.setItem` is per-key; use one JSON blob or both writes in a transaction).
-- Partial form submit → either send full object or use server-side merge with explicit field mask.
+### כלל לזיהוי
+לכל פונקציה שמעדכנת status / "phase" / lifecycle column של ישות, ודא שגם **רשימת השדות האחים הקנונית** מתעדכנת באותה טרנזקציה. דוגמאות ספציפיות לפרויקט:
+- שינוי status → `last_outbound_at`, `last_activity_type`, `proposal_sent_at`, סגירת `AUTO_CLOSE_TASK_TYPES`, log activity, ביטול cache.
+- קריאה חיצונית → או INSERT מקומי קודם עם `UNIQUE` *לפני* הקריאה, או כתיבת audit log עם `metadata.applied=false` בכשל.
+- רענון token → גם `access` וגם `refresh` בכתיבה atomic אחת (`localStorage.setItem` הוא per-key; השתמש ב-JSON blob אחד או בשתי כתיבות בטרנזקציה).
+- submit חלקי של טופס → שלח אובייקט מלא או השתמש ב-server-side merge עם field mask מפורש.
 
 ### False positives
-- Migrations / backfill scripts (one-shot, not transactional touchpoints).
-- Read-only paths.
-- Single-field updates that are genuinely independent (e.g., `last_viewed_at` not tied to anything).
+- migrations / scripts של backfill (one-shot, לא touchpoints טרנזקציוניים).
+- נתיבים read-only.
+- עדכוני שדה יחיד שבאמת עצמאיים (למשל `last_viewed_at` לא קשור לכלום).
 
-### Recommended mode
-**Strict** within `apply_chip` / `mark_*_sent` / state-machine entry points.
-**Warning** elsewhere.
+### מצב מומלץ
+**strict** בתוך `apply_chip` / `mark_*_sent` / נקודות כניסה של state-machine.
+**warning** במקומות אחרים.
 
-### See also
-- `BY-STACK/state-machine.md` — touchpoint completeness checklist
-- `BY-STACK/webhooks.md` — reserve-then-fill pattern
+### ראה גם
+- `BY-STACK/state-machine.md` — checklist של שלמות touchpoint
+- `BY-STACK/webhooks.md` — דפוס reserve-then-fill
 - `bugbot-rules/linked-field-atomicity.md`
 
 ---
 
-## U6. Migration / schema drift
+## U6. סטייה בין migration ל-schema
 
-**Frequency:** 3/3 sources, ~6 instances
-**Projects:** Noa_Leads, EmailFlow, Shipment-bot, Markdown-Academy, routine
-**Severity:** MEDIUM (breaks fresh deploys; survives in CI if tests use migrated DB only)
+**תדירות:** 3/3 מקורות, ~6 מופעים
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Markdown-Academy, routine
+**חומרה:** MEDIUM (שובר deploys טריים; שורד ב-CI אם הטסטים משתמשים רק ב-DB ממוגרר)
 
-### What it looks like
-Schema changes live in two places: Alembic / Knex migration AND SQLAlchemy / ORM model `__table_args__`. The two drift; fresh DB (test, dev, prod-from-scratch) ends up with a different schema than the production DB after incremental migrations.
+### איך זה נראה
+שינויי schema חיים בשני מקומות: migration של Alembic / Knex וגם `__table_args__` של מודל SQLAlchemy / ORM. שני המקומות נסחפים; DB טרי (test, dev, prod-from-scratch) מסתיים עם schema שונה מ-DB של פרודקשן אחרי migrations הדרגתיים.
 
-### Real examples
-- **Noa (`2c8263a`):** Migration added new enum value but column `VARCHAR(20)` too short.
-- **EmailFlow (`40f855d`):** FTS index in migration only, not in model `__table_args__` → fresh DB build missing index.
-- **EmailFlow (`a3a3134`):** Alembic revision id longer than `VARCHAR(32)` of `alembic_version.version_num` → migration failed on fresh Render deploy.
-- **EmailFlow (`f143e1c`):** Migration has `DROP COLUMN` but code still uses it.
-- **EmailFlow (`3f43d91`):** `CHECK` constraint sorted differently in migration vs. model.
-- **routine (`80c1fc4`):** Migration used `ADD COLUMN IF NOT EXISTS` — not supported in MySQL.
-- **routine (`7a4e879`):** Migration ran `ALTER TABLE` on non-existent table in first deploy.
-- **routine (`230e0c1`):** Duplicate migration file + missing SSL config.
-- **Shipment-bot (`b16b99f`):** Schema column type mismatch (`Integer` too small for Telegram IDs).
+### דוגמאות אמיתיות
+- **Noa (`2c8263a`):** migration הוסיף ערך enum חדש אבל העמודה `VARCHAR(20)` קצרה מדי.
+- **EmailFlow (`40f855d`):** FTS index רק ב-migration, לא ב-`__table_args__` של המודל → DB טרי בלי index.
+- **EmailFlow (`a3a3134`):** revision id של Alembic ארוך יותר מ-`VARCHAR(32)` של `alembic_version.version_num` → migration נכשל ב-deploy טרי של Render.
+- **EmailFlow (`f143e1c`):** migration עם `DROP COLUMN` אבל הקוד עדיין משתמש בה.
+- **EmailFlow (`3f43d91`):** `CHECK` constraint ממוין שונה ב-migration לעומת המודל.
+- **routine (`80c1fc4`):** migration השתמש ב-`ADD COLUMN IF NOT EXISTS` — לא נתמך ב-MySQL.
+- **routine (`7a4e879`):** migration רץ `ALTER TABLE` על טבלה לא קיימת ב-deploy ראשון.
+- **routine (`230e0c1`):** קובץ migration כפול + חסר SSL config.
+- **Shipment-bot (`b16b99f`):** אי-התאמת טיפוס עמודה (`Integer` קטן מדי ל-Telegram IDs).
 
-### Detection rule
-1. Every `Index(...)`, `CheckConstraint(...)`, `UniqueConstraint(...)` in a migration must appear identically in the model's `__table_args__`.
-2. `DROP COLUMN` in a PR that still has references to that column elsewhere → flag.
-3. Alembic revision id length ≤ 32.
-4. MySQL projects: no `IF NOT EXISTS` on `ADD COLUMN` (PG-only syntax); no `ADD COLUMN IF NOT EXISTS`.
-5. `String(N)` / `VARCHAR(N)` columns populated from an enum → CI test asserts `N >= max(len(value) for value in Enum)`.
-6. Migrations are additive when old code still uses the column — destructive change goes in a *separate* later migration after the code is removed.
+### כלל לזיהוי
+1. כל `Index(...)`, `CheckConstraint(...)`, `UniqueConstraint(...)` ב-migration חייב להופיע זהה ב-`__table_args__` של המודל.
+2. `DROP COLUMN` ב-PR שעוד יש בו הפניות לעמודה במקומות אחרים → דווח.
+3. אורך revision id של Alembic ≤ 32.
+4. פרויקטי MySQL: בלי `IF NOT EXISTS` ב-`ADD COLUMN` (syntax של PG בלבד); בלי `ADD COLUMN IF NOT EXISTS`.
+5. עמודות `String(N)` / `VARCHAR(N)` שמתמלאות מ-enum → טסט CI שבודק `N >= max(len(value) for value in Enum)`.
+6. migrations הם additive כשהקוד הישן עדיין משתמש בעמודה — שינוי הרסני בא ב-migration *נפרד* מאוחר יותר אחרי שהקוד הוסר.
 
 ### False positives
-- Data-only migrations (backfill, fixup) — no schema change.
-- Test fixtures with `extend_existing=True`.
+- migrations של data בלבד (backfill, fixup) — אין שינוי schema.
+- test fixtures עם `extend_existing=True`.
 
-### Recommended mode
-**Strict** for migration ↔ model parity.
-**Warning** for revision id length and MySQL syntax (caught by CI run anyway).
+### מצב מומלץ
+**strict** להתאמה בין migration ל-model.
+**warning** לאורך revision id ול-syntax של MySQL (CI תופס בכל מקרה).
 
-### See also
-- `BY-STACK/postgres.md` — full migration coverage
+### ראה גם
+- `BY-STACK/postgres.md` — כיסוי מלא של migrations
 - `bugbot-rules/migration-model-drift.md`

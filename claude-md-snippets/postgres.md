@@ -1,23 +1,23 @@
-# Postgres / SQL patterns (paste into CLAUDE.md)
+# דפוסי Postgres / SQL (להעתקה ל-CLAUDE.md)
 
-1. **`col = NULL` is NULL, not TRUE.** CAS / `UPDATE WHERE col=:val` doesn't match `NULL` rows. Branch in app code: `col.is_(None)` when value is `None`.
+1. **`col = NULL` הוא NULL, לא TRUE.** CAS / `UPDATE WHERE col=:val` לא תופס שורות `NULL`. הסתעפות בקוד אפליקציה: `col.is_(None)` כשהערך הוא `None`.
 
-2. **`VARCHAR(N)` ≥ max enum value length** — verified by CI test. SQLite (dev) doesn't enforce length, Postgres does.
+2. **`VARCHAR(N)` ≥ אורך ערך ה-enum המקסימלי** — מאומת על ידי טסט CI. SQLite (dev) לא אוכף אורך, Postgres כן.
 
-3. **External IDs need `BigInteger`.** Telegram, Discord, Stripe, GitHub IDs exceed 2³¹.
+3. **IDs חיצוניים צריכים `BigInteger`.** Telegram, Discord, Stripe, GitHub IDs חורגים מ-2³¹.
 
-4. **Every `ORDER BY` paired with `LIMIT` / `OFFSET` / cursor needs a tiebreaker** — usually `Model.id.desc()` after the semantic field. Otherwise pagination duplicates / skips rows with identical primary values.
+4. **כל `ORDER BY` משולב עם `LIMIT` / `OFFSET` / cursor צריך tiebreaker** — בדרך כלל `Model.id.desc()` אחרי השדה הסמנטי. אחרת דפדוף מכפיל / מדלג על שורות עם ערכים ראשיים זהים.
 
-5. **`LIKE` on user input:** `column.startswith(value, autoescape=True)` (SQLAlchemy) or escape `_` and `%` manually + `LIKE :p ESCAPE '\'`. Or use `=`.
+5. **`LIKE` על קלט משתמש:** `column.startswith(value, autoescape=True)` (SQLAlchemy) או escape ל-`_` ו-`%` ידנית + `LIKE :p ESCAPE '\'`. או השתמש ב-`=`.
 
-6. **`ANY(:ids)` / `IN` type cast:** Postgres won't implicitly cast string array to UUID. Convert in Python or `cast(col, String) == any_(...)`.
+6. **`ANY(:ids)` / `IN` cast של טיפוס:** Postgres לא יבצע cast מרומז ממערך מחרוזות ל-UUID. המר ב-Python או `cast(col, String) == any_(...)`.
 
-7. **Python string ops (`.strip()`, `.lower()`) on `Column` are no-ops in SQL.** Use `func.trim(col)`, `func.lower(col)`.
+7. **פעולות מחרוזת של Python (`.strip()`, `.lower()`) על `Column` הן no-ops ב-SQL.** השתמש ב-`func.trim(col)`, `func.lower(col)`.
 
-8. **Truthy on DB strings:** whitespace `"  "` is truthy in Python but blank in edit flow. Use `(val or "").strip()` before checks.
+8. **Truthy על מחרוזות DB:** רווח לבן `"  "` הוא truthy ב-Python אבל ריק ב-flow של עריכה. השתמש ב-`(val or "").strip()` לפני בדיקות.
 
-9. **Migrations:** every `Index` / `CheckConstraint` / `UniqueConstraint` in migration MUST mirror in model `__table_args__`. Alembic revision id ≤ 30 chars. MySQL has no `ADD COLUMN IF NOT EXISTS`. `DROP COLUMN` goes in a separate migration after code stops referencing the column.
+9. **Migrations:** כל `Index` / `CheckConstraint` / `UniqueConstraint` ב-migration חייב לשקף ב-`__table_args__` של המודל. revision id של Alembic ≤ 30 chars. ל-MySQL אין `ADD COLUMN IF NOT EXISTS`. `DROP COLUMN` הולך ב-migration נפרד אחרי שהקוד הפסיק להתייחס לעמודה.
 
-10. **`postgresql_ops` is for operator classes, NOT sort direction.** Use `desc("col")` for indexed-descending.
+10. **`postgresql_ops` הוא למחלקות אופרטור, לא כיוון מיון.** השתמש ב-`desc("col")` ל-index יורד.
 
-See `BY-STACK/postgres.md`.
+ראה `BY-STACK/postgres.md`.

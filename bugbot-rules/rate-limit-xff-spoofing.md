@@ -1,37 +1,37 @@
 # rate-limit-xff-spoofing
 
-**CRITICAL — security control bypass**
+**CRITICAL — עקיפת בקרת אבטחה**
 
-Detect rate-limiter, abuse-detection, or any security decision that reads `X-Forwarded-For` (or `X-Real-IP`, `Forwarded`) directly without validating that the immediate peer is a trusted proxy.
+זהה rate-limiter, abuse-detection, או כל החלטת security שקוראת `X-Forwarded-For` (או `X-Real-IP`, `Forwarded`) ישירות בלי לוודא שה-peer המיידי הוא proxy אמין.
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. Code reads one of:
+1. הקוד קורא אחד מ:
    - `request.headers["x-forwarded-for"]` / `req.headers["x-forwarded-for"]`
    - `request.headers["x-real-ip"]`
    - `request.headers["forwarded"]`
-   - Manual parsing of `X-Forwarded-For` taking the leftmost / rightmost segment
-2. The value is used for:
-   - Rate-limit key
-   - Abuse / block list lookup
-   - Audit / fraud-detection logs
-   - IP-based authentication / allowlisting
-3. The framework / app has NOT been configured with an explicit trusted-proxy list:
-   - FastAPI / Starlette: no `ProxyHeadersMiddleware(app, trusted_hosts="...")` configured with specific values.
-   - Express: no `app.set('trust proxy', <specific value>)`.
-   - Flask: no `ProxyFix(app, x_for=N)` with a specific hop count.
+   - ניתוח ידני של `X-Forwarded-For` שלוקח את הסגמנט השמאלי / ימני ביותר
+2. הערך משמש ל:
+   - מפתח של rate-limit
+   - חיפוש ברשימת abuse / block
+   - logs של audit / fraud-detection
+   - אימות / allowlisting מבוסס-IP
+3. ה-framework / app *אינו* מוגדר עם רשימת trusted-proxy מפורשת:
+   - FastAPI / Starlette: אין `ProxyHeadersMiddleware(app, trusted_hosts="...")` מוגדר עם ערכים ספציפיים.
+   - Express: אין `app.set('trust proxy', <specific value>)`.
+   - Flask: אין `ProxyFix(app, x_for=N)` עם hop count ספציפי.
 
-## Fix
+## תיקון
 
-Configure middleware first, then read `request.client.host` / `req.ip` (which the middleware has corrected to the real client IP).
+הגדר middleware קודם, ואז קרא `request.client.host` / `req.ip` (שה-middleware תיקן ל-IP האמיתי של הלקוח).
 
-If no proxy fronts the service, do NOT read the header at all — use `request.client.host` directly.
+אם אין proxy מקדים לשירות, *אל* תקרא את ה-header בכלל — השתמש ב-`request.client.host` ישירות.
 
 ## False positives
 
-- Internal-only routes behind authenticated VPN where IP doesn't gate anything.
-- Diagnostic / logging-only use (still flag for review — these often slip into security decisions later).
+- routes פנימיים בלבד מאחורי VPN מאומת שבהם IP לא מגביל כלום.
+- שימוש לוגינג / debug בלבד (עדיין דווח לסקירה — אלה לרוב מחליקים להחלטות security מאוחר יותר).
 
-## Severity
+## חומרה
 
-CRITICAL — bypasses the entire rate limiter; attacker spoofs the header per-request and faces no limit.
+CRITICAL — עוקף את כל ה-rate limiter; תוקף מזייף את ה-header לכל בקשה ונתקל בלי limit.

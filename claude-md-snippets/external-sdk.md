@@ -1,21 +1,21 @@
-# External SDK patterns (paste into CLAUDE.md)
+# דפוסי External SDK (להעתקה ל-CLAUDE.md)
 
-1. **Catch the SDK's base class, refine inside.** `except anthropic.APIError` (not just `RateLimitError`); subclass `except` blocks ordered subclass-before-superclass.
+1. **תפוס את ה-base class של ה-SDK, עדן בפנים.** `except anthropic.APIError` (לא רק `RateLimitError`); בלוקי `except` של subclasses מסודרים subclass-לפני-superclass.
 
-2. **`asyncio.gather(return_exceptions=True)` result checks use `isinstance(r, BaseException)`**, not `Exception` (CancelledError is BaseException, not Exception since Python 3.8).
+2. **בדיקות תוצאה של `asyncio.gather(return_exceptions=True)` משתמשות ב-`isinstance(r, BaseException)`**, לא `Exception` (CancelledError הוא BaseException, לא Exception מאז Python 3.8).
 
-3. **Startup-time SDK init wrapped in try/except + format validation.** Bad VAPID keys / missing `mailto:` prefix / malformed OAuth secret must degrade the feature, not crash the boot.
+3. **אתחול SDK בזמן startup עטוף ב-try/except + ולידציית פורמט.** מפתחות VAPID פגומים / חסר prefix של `mailto:` / OAuth secret פגום חייבים להוריד את הפיצ'ר, לא לקרוס את ה-boot.
 
-4. **isinstance guards on every external response.** Before `.get()`, `.append()`, `.strip()`, iteration on data from `response.json()` / webhook body / AI output: `isinstance(obj, dict/list/str)`. Numbers: `isfinite()` + range.
+4. **isinstance guards על כל תגובה חיצונית.** לפני `.get()`, `.append()`, `.strip()`, iteration על נתונים מ-`response.json()` / body של webhook / output של AI: `isinstance(obj, dict/list/str)`. מספרים: `isfinite()` + טווח.
 
-5. **Regex on AI/SDK JSON output:** raw strings (`r"..."`), word boundaries (`\b`). Prefer `json.JSONDecoder().raw_decode(s[s.find("{"):])` over greedy `\{.*\}` (breaks on prose).
+5. **regex על JSON של AI/SDK:** raw strings (`r"..."`), word boundaries (`\b`). עדיף `json.JSONDecoder().raw_decode(s[s.find("{"):])` על `\{.*\}` חמדן (נשבר על prose).
 
-6. **Pydantic enums from external sources:** use `str | None` with idempotent validation, NOT a strict `StrEnum` — strict rejection drops the entire payload (including valid sibling fields).
+6. **enums של Pydantic ממקורות חיצוניים:** השתמש ב-`str | None` עם ולידציה idempotent, לא `StrEnum` strict — דחייה strict זורקת את כל ה-payload (כולל שדות אחים תקפים).
 
-7. **SDK env flags:** document and respect (e.g., `OAUTHLIB_RELAX_TOKEN_SCOPE=1` for Google scope drift, `STRIPE_API_VERSION` to pin).
+7. **env flags של SDK:** תעד וכבד (למשל `OAUTHLIB_RELAX_TOKEN_SCOPE=1` לסטיית scope של Google, `STRIPE_API_VERSION` ל-pin).
 
-8. **Walrus + truthy on env vars:** `if override := os.environ.get("X"):` treats `""` as falsy. Use `if override is not None:` and `.strip()`.
+8. **Walrus + truthy על env vars:** `if override := os.environ.get("X"):` מתייחס ל-`""` כ-falsy. השתמש ב-`if override is not None:` ו-`.strip()`.
 
-9. **Implement `__bool__` on result objects** (or check `isinstance(r, SendResult) and r.ok` — never `r is True`).
+9. **ממש `__bool__` על אובייקטי תוצאה** (או בדוק `isinstance(r, SendResult) and r.ok` — לעולם לא `r is True`).
 
-See `BY-STACK/external-sdk.md`.
+ראה `BY-STACK/external-sdk.md`.

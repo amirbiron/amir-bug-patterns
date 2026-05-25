@@ -2,46 +2,46 @@
 
 **CRITICAL — DOM XSS**
 
-Detect DOM insertion of externally-sourced strings through unsafe sinks (`innerHTML`, `dangerouslySetInnerHTML`, `v-html`, `outerHTML`, `document.write`, jQuery `.html(...)`).
+זהה הכנסת מחרוזות ממקור חיצוני ל-DOM דרך sinks לא בטוחים (`innerHTML`, `dangerouslySetInnerHTML`, `v-html`, `outerHTML`, `document.write`, jQuery `.html(...)`).
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. Code assigns to one of these sinks:
+1. הקוד משייך לאחד מה-sinks האלה:
    - `.innerHTML = ...`
    - `.outerHTML = ...`
    - JSX `dangerouslySetInnerHTML={{ __html: ... }}`
    - Vue `v-html="..."`
-   - jQuery `.html(...)`, `.before/after(...)` with string args
+   - jQuery `.html(...)`, `.before/after(...)` עם args של מחרוזת
    - `document.write(...)`
-2. The right-hand side is composed (concatenation, template literal) with a value sourced from:
-   - API response (`response.json()`, `useQuery` data)
-   - DB row (server-rendered into template)
+2. הצד הימני מורכב (concatenation, template literal) עם ערך שמקורו ב:
+   - תגובת API (`response.json()`, נתוני `useQuery`)
+   - שורת DB (server-rendered ל-template)
    - URL parameters / hash / search
    - `localStorage` / `sessionStorage` / cookies
-   - Postmessage / WebSocket / SSE payloads
-   - User input from any form / input
-   - External provider names / display names (Facebook, Google, OAuth profile)
-3. The value is NOT passed through `DOMPurify.sanitize(...)` (or `sanitize-html`, or framework-equivalent) immediately before assignment, in the same expression / line.
+   - payload של postmessage / WebSocket / SSE
+   - קלט משתמש מכל טופס / input
+   - שמות / display names של ספקים חיצוניים (Facebook, Google, OAuth profile)
+3. הערך *אינו* עובר דרך `DOMPurify.sanitize(...)` (או `sanitize-html`, או שווה ערך ב-framework) מיד לפני ההשמה, באותו expression / שורה.
 
-## Fix patterns
+## דפוסי תיקון
 
-- Default to `textContent` / JSX text nodes.
-- If HTML is genuinely required, sanitize inline:
+- ברירת מחדל ל-`textContent` / טקסט ב-JSX.
+- אם HTML באמת נדרש, sanitize ב-inline:
   ```js
   element.innerHTML = DOMPurify.sanitize(externalValue, { ALLOWED_TAGS: ["b","i","em","strong"] });
   ```
-- For React lists: render with text nodes, not `dangerouslySetInnerHTML`.
+- לרשימות React: רנדר עם text nodes, לא `dangerouslySetInnerHTML`.
 
-## Defense reminder
+## תזכורת הגנה
 
-"Only admins see this panel" is **not** a defense — admins are exactly the targets attackers want.
+"רק admins רואים את הפאנל הזה" *אינה* הגנה — admins הם בדיוק היעדים שתוקפים רוצים.
 
 ## False positives
 
-- Static / hardcoded HTML strings with no template-substituted variables.
-- Markdown rendered by a vetted library (e.g., `marked` with `breaks: true, sanitize: true`) — verify the sanitizer is on.
-- `innerText` / `textContent` writes (safe).
+- מחרוזות HTML סטטיות / קשיחות בלי משתנים של template substitution.
+- Markdown שמרונדר על ידי ספרייה בדוקה (למשל `marked` עם `breaks: true, sanitize: true`) — ודא שה-sanitizer פעיל.
+- כתיבות `innerText` / `textContent` (בטוחות).
 
-## Severity
+## חומרה
 
-CRITICAL — full DOM XSS in admin panels can chain into session theft, privilege use, and CSRF.
+CRITICAL — DOM XSS מלא בפאנלי admin יכול להוביל לגניבת session, שימוש בהרשאות, ו-CSRF.

@@ -1,86 +1,86 @@
-# Migration Notes — Meta-Analysis
+# הערות מ-Migration — Meta-Analysis
 
-Notes I wrote *after* cross-referencing the three source documents. Useful for calibrating future pattern-mining: what surprised me, what didn't translate the way I expected, and what to grab on day one of a new project.
-
----
-
-## 1. Patterns I expected to be universal but weren't
-
-### State-machine completeness
-**Where it lives:** Heavy in Noa_Leads (P1 status transitions, P6 touchpoints, P9 activity log). Partial in EmailFlow (P1 reserve-then-fill has overlap). **Almost absent** in the 8-projects scan — most of those projects don't have explicit state machines, they have one-shot transactions or simpler CRUD shapes.
-
-**Takeaway:** State-machine completeness is a Noa-specific intensity, but the *underlying principle* (atomically update all coupled fields) generalizes — that's why it's CORE U5 ("partial atomic updates / linked-field drift") rather than a Noa-only entry. The CRM context just makes the failure mode visible faster.
-
-### Cron infinite loops
-**Where it lives:** Central in Noa (P5 — repeatedly). Doesn't appear in EmailFlow (which uses Pub/Sub, not cron). The 8-projects scan has "loops" but they're routing/UI loops (C20 driver-secretary, C27 admin reset), not cron filters.
-
-**Takeaway:** "Cron lacks terminal state" is unique to projects with scheduled retry loops over DB rows. I gave it its own `BY-STACK/cron-jobs.md` despite single-source frequency because the impact is severe and the pattern is sticky (every cron-using project will hit it).
-
-### Pydantic schema defaults overriding caller intent
-**Where it lives:** Only Noa (P4). Felt like a general "Python type-hints aren't actually type checks" pattern, but only Noa exercises Pydantic heavily on the API surface.
-
-**Takeaway:** Stack-specific. Lives in `BY-STACK/external-sdk.md` and `state-machine.md` as a side note, not in CORE.
-
-### React hooks ordering / Rules of Hooks violations
-**Where it lives:** EmailFlow P2 explicitly. Noa mentions useEffect issues but doesn't formalize. 8-projects has stale closures (C22, C33) which are related but not exactly the same.
-
-**Takeaway:** This made it into CORE U2 because the *family* of bugs (state sync, stale closure, hooks ordering) shows in all 3 sources even when the specific framing differs.
+הערות שכתבתי *אחרי* הצלבת שלושת מסמכי המקור. שימושיות לכיול חיפוש דפוסים עתידיים: מה הפתיע אותי, מה לא תרגם כפי שציפיתי, ומה לתפוס מיום ראשון בפרויקט חדש.
 
 ---
 
-## 2. Surprising connections I didn't expect
+## 1. דפוסים שציפיתי שיהיו אוניברסליים — והם לא
+
+### שלמות state-machine
+**איפה זה חי:** כבד ב-Noa_Leads (P1 status transitions, P6 touchpoints, P9 activity log). חלקי ב-EmailFlow (P1 reserve-then-fill יש לו חפיפה). **כמעט לא קיים** בסריקת 8-הפרויקטים — רוב הפרויקטים האלה לא בנויים סביב state machines מפורשות, יש להם טרנזקציות one-shot או צורות CRUD פשוטות יותר.
+
+**מסקנה:** שלמות state-machine היא עוצמה ספציפית ל-Noa, אבל ה-*עקרון הבסיסי* (לעדכן atomically את כל השדות המקושרים) מכליל — וזו הסיבה שזה CORE U5 ("partial atomic updates / linked-field drift") ולא ערך ספציפי ל-Noa בלבד. ההקשר של CRM פשוט גורם למצב הכשל להיות יותר ברור.
+
+### לולאות אינסופיות של Cron
+**איפה זה חי:** מרכזי ב-Noa (P5 — שוב ושוב). לא מופיע ב-EmailFlow (שמשתמש ב-Pub/Sub, לא ב-cron). סריקת 8-הפרויקטים יש בה "לולאות" אבל הן לולאות routing/UI (C20 driver-secretary, C27 admin reset), לא filters של cron.
+
+**מסקנה:** "ל-cron אין terminal state" ייחודי לפרויקטים עם לולאות retry מתוזמנות על שורות DB. נתתי לזה `BY-STACK/cron-jobs.md` משלו למרות תדירות חד-מקורית כי ההשפעה חמורה והדפוס דביק (כל פרויקט שמשתמש ב-cron יפגע בזה).
+
+### Pydantic schema defaults דורסים את הכוונה של ה-caller
+**איפה זה חי:** רק Noa (P4). נראה לי כמו דפוס כללי של Python "type hints לא באמת בודקות types", אבל רק Noa משתמש ב-Pydantic בכבדות בגבולות API.
+
+**מסקנה:** ספציפי ל-stack. חי ב-`BY-STACK/external-sdk.md` וב-`state-machine.md` כהערת צד, לא ב-CORE.
+
+### שגיאות סדר hooks ב-React / Rules of Hooks
+**איפה זה חי:** EmailFlow P2 מפורש. Noa מזכיר בעיות useEffect אבל לא מסדר אותן בצורה פורמלית. ל-8-projects יש stale closures (C22, C33) שקשורות אבל לא בדיוק אותו דבר.
+
+**מסקנה:** זה נכנס ל-CORE U2 כי ה-*משפחה* של באגים (state sync, stale closure, hooks ordering) מופיעה בכל 3 המקורות גם אם הניסוח הספציפי שונה.
+
+---
+
+## 2. חיבורים מפתיעים שלא ציפיתי להם
 
 ### "Reserve-then-fill" ≡ "TOCTOU duplicate sends"
-EmailFlow framed P1 around Pub/Sub at-least-once delivery and compensating transactions. Shipment-bot framed C5 around Celery beat scheduler + `.delay()` racing on `SELECT ... PENDING`. **Same root cause** — write to DB before the irreversible external action without a UNIQUE constraint or atomic CAS. The vocabularies diverged but the fix is identical:
+EmailFlow מסגר את P1 סביב at-least-once delivery של Pub/Sub וטרנזקציות מפצות. Shipment-bot מסגר את C5 סביב beat scheduler של Celery + `.delay()` שמתחרים על `SELECT ... PENDING`. **אותו root cause** — כתיבה ל-DB לפני הפעולה החיצונית הבלתי הפיכה בלי UNIQUE constraint או CAS atomic. אוצר המילים שונה, התיקון זהה:
 ```
 INSERT INTO ... (with UNIQUE) BEFORE the external call
 ```
-This is why CORE U1 is so broad: race conditions, missing await, reserve-then-fill, TOCTOU duplicate sends, and check-outside-lock are all manifestations of the same underlying error.
+זו הסיבה ש-CORE U1 כל כך רחב: race conditions, missing await, reserve-then-fill, TOCTOU duplicate sends, ו-check-outside-lock הם כולם מופעים של אותה שגיאה בסיסית.
 
 ### "Activity log as source of truth" ≡ "Audit log lifecycle"
-Noa P9 said: when `UPDATE` fails (rowcount=0 due to CAS rejection), still log the activity with `metadata.applied=false`, because cron and dashboards consume the log. EmailFlow P1 said: audit logs must record *intent*, not just *completion*, otherwise compliance shows a "send" that never happened. **Same principle** — log the intent before the side effect, log the result after, never lose the event signal in between.
+Noa P9 אמר: כש-`UPDATE` נכשל (rowcount=0 בגלל דחיית CAS), עדיין לוג את ה-activity עם `metadata.applied=false`, כי cron ו-dashboards צורכים את הלוג. EmailFlow P1 אמר: audit logs חייבים לתעד *intent*, לא רק *completion*, אחרת compliance מראה "שליחה" שלעולם לא קרתה. **אותו עקרון** — לוג את ה-intent לפני side-effect, לוג את התוצאה אחרי, לעולם אל תאבד את ה-event signal בין לבין.
 
-### "VARCHAR(20) too small for enum" ≡ "Integer too small for Telegram ID"
-Noa (`2c8263a`) added a new `StrEnum` value longer than `VARCHAR(20)`. Shipment-bot (`b16b99f`) discovered Telegram IDs exceed 2³¹. **Same root cause** — column type chosen too narrow for the actual value space, only caught when a real value hits prod. Both are subsumed under CORE U4 (Postgres/SQL edges) and U6 (migration drift).
+### "VARCHAR(20) קטן מדי ל-enum" ≡ "Integer קטן מדי ל-Telegram ID"
+Noa (`2c8263a`) הוסיף ערך `StrEnum` חדש ארוך מ-`VARCHAR(20)`. Shipment-bot (`b16b99f`) גילה ש-Telegram IDs חורגים מ-2³¹. **אותו root cause** — טיפוס עמודה שנבחר צר מדי ל-value space האמיתי, נתפס רק כשערך אמיתי פוגע ב-prod. שניהם נכנסים ל-CORE U4 (Postgres/SQL edges) ו-U6 (migration drift).
 
-### "Stale closure" ≡ "useEffect dep on object reference"
-8-projects C22 (`activeChildId` missing from `useCallback` deps) and Noa P3's React fragment (`useEffect` deps on an object reference triggering re-renders that overwrite edits) are the same React-closure-staleness family. Different framings, one CORE entry (U2).
-
----
-
-## 3. Top-3 patterns to catch from day 1 in a new project
-
-Ordered by frequency-in-sources × severity:
-
-### #1 — CORE U1: Async race conditions
-**Why first:** 15+ instances across all 3 sources. By far the single largest bug class in my work.
-**Day-1 action:** Before writing the first webhook handler, queue worker, or cron job:
-1. Decide the idempotency strategy per endpoint (UNIQUE constraint? Idempotency key in header? Advisory lock?).
-2. Wire `INSERT ... ON CONFLICT` or `SELECT FOR UPDATE` or CAS template into a project utility.
-3. Add a "race-conditions checklist" item to PR templates: "what concurrent writes are protected by what mechanism?"
-
-### #2 — CORE U2: React state sync from props
-**Why second:** Affects every React project the moment it has a form or dropdown synced to backend data. Recovery from this bug is expensive (silent data corruption — wrong `expected_status` sent to backend).
-**Day-1 action:** Decide a project-wide convention:
-- Default: `<Child key={id} />` on every component that takes data from `useQuery`.
-- Or: explicit `useEffect([id])` resync.
-- Or: derived state (no local `useState` at all).
-Pick one, write it into `CLAUDE.md`, and apply from the first form.
-
-### #3 — CORE U3: External input validation
-**Why third:** Crashes appear within weeks of real traffic. Test/sandbox/prod always diverge on shape (Gmail/Meta/Stripe), and the crash is at the worst time (a single user with a malformed payload takes down the worker).
-**Day-1 action:** Before *any* `.get()`, `.append()`, `.strip()` on external data:
-1. `isinstance` guard.
-2. NaN/Inf check for numbers.
-3. Raw string + word boundaries for regex on external text.
-4. SDK base-class `except` ordered subclass-before-superclass.
-
-Also: every startup-time SDK init (VAPID, OAuth, Stripe) wrapped in try/except — otherwise one bad env var crashes the boot.
+### "Stale closure" ≡ "useEffect dep על reference של object"
+8-projects C22 (`activeChildId` חסר מ-deps של `useCallback`) ו-Noa P3 React fragment (`useEffect` deps על reference של object שמפעיל re-renders שדורסים edits) הם אותה משפחה של stale-closure-staleness ב-React. ניסוחים שונים, ערך CORE אחד (U2).
 
 ---
 
-## Process notes for next time
+## 3. Top-3 דפוסים לתפוס מיום ראשון בפרויקט חדש
 
-- **Source-doc structure matters.** EmailFlow's doc was the most useful — explicit P1..P7 list with code commits, false positives, and recommended mode. The 8-projects doc had richer breadth but flatter structure; harder to cross-reference. **Future docs: use EmailFlow's template.**
-- **Severity vs frequency should be split from the start.** I initially conflated them in the plan, and the user (correctly) pushed back. Add a `severity` field to every documented pattern from day one so cross-referencing doesn't lose information.
-- **One source ≠ unimportant.** The 8-projects security cluster (OAuth takeover, XSS, rate-limit spoofing, hash leak, panel exposure) all came from one source. Promoting them to CRITICAL anyway is correct — frequency is a noisy proxy for severity.
+מסודר לפי תדירות במקורות × חומרה:
+
+### #1 — CORE U1: race conditions async
+**למה ראשון:** 15+ מופעים בכל 3 המקורות. בפער ניכר ה-class הגדול ביותר של באגים בעבודה שלי.
+**Day-1 action:** לפני כתיבת ה-webhook handler / queue worker / cron job הראשון:
+1. החלט על אסטרטגיית idempotency לכל endpoint (UNIQUE constraint? Idempotency key ב-header? Advisory lock?).
+2. חבר תבנית `INSERT ... ON CONFLICT` או `SELECT FOR UPDATE` או CAS ל-utility של הפרויקט.
+3. הוסף item ל-PR template: "אילו כתיבות concurrent מוגנות על ידי איזה מנגנון?"
+
+### #2 — CORE U2: סנכרון state ב-React מ-props
+**למה שני:** משפיע על כל פרויקט React ברגע שיש לו טופס או dropdown שמסונכרן עם נתוני backend. ההתאוששות מהבאג הזה יקרה (שחיתות נתונים שקטה — `expected_status` שגוי נשלח ל-backend).
+**Day-1 action:** החלט על convention לכל הפרויקט:
+- ברירת מחדל: `<Child key={id} />` על כל קומפוננטה שמקבלת נתונים מ-`useQuery`.
+- או: `useEffect([id])` resync מפורש.
+- או: derived state (בלי `useState` מקומי בכלל).
+בחר אחד, כתוב ל-`CLAUDE.md`, והחל מהטופס הראשון.
+
+### #3 — CORE U3: ולידציה של external input
+**למה שלישי:** קריסות מופיעות תוך שבועות מהגעת טראפיק אמיתי. test/sandbox/prod תמיד נסחפים על צורה (Gmail/Meta/Stripe), והקריסה היא בזמן הגרוע ביותר (משתמש יחיד עם payload פגום מפיל את ה-worker).
+**Day-1 action:** לפני *כל* `.get()`, `.append()`, `.strip()` על נתון חיצוני:
+1. isinstance guard.
+2. בדיקת NaN/Inf למספרים.
+3. raw string + word boundaries ל-regex על טקסט חיצוני.
+4. SDK base-class `except` מסודר subclass-לפני-superclass.
+
+גם: כל אתחול SDK בזמן startup (VAPID, OAuth, Stripe) עטוף ב-try/except — אחרת env var רע אחד מפיל את ה-boot.
+
+---
+
+## הערות תהליך לפעם הבאה
+
+- **מבנה מסמך המקור משנה.** המסמך של EmailFlow היה הכי שימושי — רשימה מפורשת P1..P7 עם commits, false positives, ו-mode מומלץ. למסמך 8-projects יש breadth עשירה יותר אבל מבנה שטוח יותר; קשה יותר להצליב. **מסמכים עתידיים: השתמש בתבנית של EmailFlow.**
+- **חומרה vs תדירות צריכים להיות מופרדים מההתחלה.** התחלתי לערבב אותם בתוכנית, ואתה (בצדק) דחפת חזרה. הוסף שדה `severity` לכל דפוס מתועד מיום ראשון כדי שהצלבה לא תאבד מידע.
+- **מקור אחד ≠ לא חשוב.** האשכול של 8-projects של אבטחה (OAuth takeover, XSS, rate-limit spoofing, hash leak, panel exposure) כולם הגיעו ממקור אחד. קידום שלהם ל-CRITICAL בכל זאת הוא נכון — תדירות היא proxy רועש לחומרה.

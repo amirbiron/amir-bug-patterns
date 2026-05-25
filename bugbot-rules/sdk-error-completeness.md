@@ -1,25 +1,25 @@
 # sdk-error-completeness
 
-Detect external-SDK calls where the exception handler is too narrow, mis-orders subclass-vs-superclass, or fails to catch async-task cancellation properly.
+זהה קריאות SDK חיצוני שבהן exception handler צר מדי, מסדר שגוי subclass-מול-superclass, או נכשל לתפוס נכון cancellation של task async.
 
-## Flag when ANY apply
+## דווח כשמתקיים אחד מהבאים
 
-1. **Narrow base in `except`.** SDK call wrapped in `try/except SpecificError` where `SpecificError` is a subclass of the SDK's documented base class (`anthropic.APIError`, `googleapiclient.errors.HttpError`, `stripe.error.StripeError`, `requests.HTTPError`). Untied SDK exception types propagate uncaught.
+1. **Base צר ב-`except`.** קריאת SDK עטופה ב-`try/except SpecificError` כאשר `SpecificError` הוא subclass של ה-base class המתועד של ה-SDK (`anthropic.APIError`, `googleapiclient.errors.HttpError`, `stripe.error.StripeError`, `requests.HTTPError`). טיפוסי exception לא קשורים של ה-SDK עוברים בלי טיפול.
 
-2. **Wrong subclass order.** `except APIError` placed BEFORE `except RateLimitError` (where `RateLimitError` is a subclass) — the subclass branch never runs.
+2. **סדר subclass שגוי.** `except APIError` ממוקם לפני `except RateLimitError` (כש-`RateLimitError` הוא subclass) — branch של ה-subclass לעולם לא רץ.
 
-3. **`asyncio.gather(return_exceptions=True)` result check uses `isinstance(r, Exception)`.** Since Python 3.8, `asyncio.CancelledError` inherits from `BaseException`, not `Exception` → cancelled tasks miscounted as success. Use `isinstance(r, BaseException)`.
+3. **בדיקת תוצאה של `asyncio.gather(return_exceptions=True)` משתמשת ב-`isinstance(r, Exception)`.** מאז Python 3.8, `asyncio.CancelledError` יורש מ-`BaseException`, לא `Exception` → tasks מבוטלים נספרים בטעות כהצלחה. השתמש ב-`isinstance(r, BaseException)`.
 
-4. **Startup-time SDK init at module / import scope without try/except.** `webpush.set_vapid_details(...)`, `stripe.api_key = ...`, OAuth client init. Malformed keys → uncaught exception → server crashes on boot. Wrap, validate, degrade the feature.
+4. **אתחול SDK בזמן startup ב-module / import scope בלי try/except.** `webpush.set_vapid_details(...)`, `stripe.api_key = ...`, אתחול OAuth client. מפתחות פגומים → exception לא נתפס → השרת קורס ב-boot. עטוף, ולידציה, הורד את הפיצ'ר.
 
-5. **`isinstance(r, Exception)` vs `r is True`** on SDK result objects. SDK return values may be objects with `__bool__` not defined; identity comparison with `True` never matches.
+5. **`isinstance(r, Exception)` מול `r is True`** על אובייקטי תוצאה של SDK. ערכי החזרה של SDK עשויים להיות אובייקטים בלי `__bool__` מוגדר; השוואת identity עם `True` לעולם לא מתאימה.
 
 ## False positives
 
-- Narrow `except` for intentional propagation (e.g., re-raising an `AppException` that FastAPI handles globally).
-- Catching `Exception` in CLI scripts where any failure should print + exit.
-- Tests with mocks that always succeed.
+- `except` צר ל-propagation מכוון (למשל זריקה מחדש של `AppException` ש-FastAPI מטפל בה גלובלית).
+- תפיסת `Exception` ב-scripts CLI שבהם כל כשל צריך להדפיס + לצאת.
+- טסטים עם mocks שתמיד מצליחים.
 
-## Severity
+## חומרה
 
-MEDIUM — production crashes on init, silent miscount on async batch results, retry storms when expected error types aren't recognized.
+MEDIUM — קריסות בפרודקשן ב-init, מספור שגוי שקט על תוצאות batch async, סופות retry כשטיפוסי שגיאה צפויים לא מזוהים.

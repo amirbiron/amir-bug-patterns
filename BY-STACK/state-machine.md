@@ -1,79 +1,79 @@
 # BY-STACK: State machines
 
-## Relevance — copy this file if your project has...
-- ✅ Status enums driving lifecycle (`Lead.status`, `Order.status`, `Booking.status`, `Conversation.state`)
-- ✅ "Touchpoint" operations: a single action that must update multiple coupled fields atomically (status + last_outbound_at + last_activity_type + close-related-task + log-activity)
-- ✅ Activity / audit logs that downstream cron / dashboards depend on
-- ✅ State transitions with cascade requirements (status → side effects on related rows)
-- ⏭ Skip if: pure CRUD without lifecycle semantics
+## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+- ✅ Status enums שמובילים lifecycle (`Lead.status`, `Order.status`, `Booking.status`, `Conversation.state`)
+- ✅ פעולות "touchpoint": פעולה אחת שחייבת לעדכן atomically כמה שדות מקושרים (status + last_outbound_at + last_activity_type + סגירת task קשור + log-activity)
+- ✅ Activity / audit logs שצרכנים downstream (cron / dashboards) תלויים בהם
+- ✅ state transitions עם דרישות cascade (status → side effects על שורות קשורות)
+- ⏭ דלג אם: CRUD טהור בלי סמנטיקת lifecycle
 
 ---
 
-## Pattern 1 — Status transition forgets coupled side-effects (CORE U5)
+## דפוס 1 — שינוי status שוכח side-effects מקושרים (CORE U5)
 
-**Severity:** HIGH — silent data corruption; downstream cron / UI breaks
+**חומרה:** HIGH — שחיתות נתונים שקטה; cron / UI downstream נשברים
 
-### What it looks like
+### איך זה נראה
 ```python
 def apply_chip(lead, target_status):
-  lead.status = target_status  # ❌ what else needs to update?
+  lead.status = target_status  # ❌ מה עוד צריך להתעדכן?
   await session.commit()
 ```
 
-A status change in this codebase usually requires:
-1. `lead.status` = new value
-2. `lead.last_outbound_at` = UTC now (if it's an outbound touchpoint)
-3. `lead.last_activity_type` = matching `ActivityType.<X>.value`
-4. Close any open tasks in `AUTO_CLOSE_TASK_TYPES`
-5. Create a new task with `assigned_to = lead.owner_id`, `due_at` in UTC, unique `origin_rule`
-6. `log_activity(...)` row
-7. `sync_lead_next_action_cache(...)` after flush
+שינוי status ב-codebase הזה דורש בדרך כלל:
+1. `lead.status` = ערך חדש
+2. `lead.last_outbound_at` = UTC עכשיו (אם זה touchpoint יוצא)
+3. `lead.last_activity_type` = `ActivityType.<X>.value` תואם
+4. סגירת tasks פתוחים ב-`AUTO_CLOSE_TASK_TYPES`
+5. יצירת task חדש עם `assigned_to = lead.owner_id`, `due_at` ב-UTC, `origin_rule` ייחודי
+6. שורת `log_activity(...)`
+7. `sync_lead_next_action_cache(...)` אחרי flush
 
-### Detection rule
-Maintain a project-level **canonical sibling list** per status / per touchpoint type. For every function that updates a status / lifecycle column, verify the sibling list is also touched in the same transaction.
+### כלל לזיהוי
+שמור **רשימת אחים קנונית** ברמת הפרויקט לכל status / לכל סוג touchpoint. לכל פונקציה שמעדכנת עמודת status / lifecycle, ודא שגם רשימת האחים נוגעת באותה טרנזקציה.
 
-Pattern names to flag: `apply_chip`, `mark_*_sent`, `perform_action`, anything that creates `TEMPLATE_MARKED_SENT` / `PROPOSAL_SENT` / similar terminal activities.
+שמות דפוס שיש לדווח עליהם: `apply_chip`, `mark_*_sent`, `perform_action`, כל דבר שיוצר activities סופיות כמו `TEMPLATE_MARKED_SENT` / `PROPOSAL_SENT` / דומה.
 
-### Real commits
-- Noa `bd2b105` — chip set `PROPOSAL_SENT` bypassed `ProposalSentConfirmModal`.
-- Noa `75b430a` — chip set `PROPOSAL_SENT` without `proposal_sent_at` → `check_stuck_proposals` broke.
-- Noa `df530f3` — `apply_chip` forgot `last_outbound_at` + `last_activity_type`.
-- Noa `4cc5a09` — `apply_chip` didn't close old tasks in `AUTO_CLOSE_TASK_TYPES`.
-- Noa `3312957` — chip-created task missing `assigned_to` → not visible in owner-scoped views.
-- Noa `c99a47a` — `LECTURE_INQUIRY` missing from canonical `AUTO_CLOSE` list.
+### Commits אמיתיים
+- Noa `bd2b105` — chip קבע `PROPOSAL_SENT` ועקף את `ProposalSentConfirmModal`.
+- Noa `75b430a` — chip קבע `PROPOSAL_SENT` בלי `proposal_sent_at` → `check_stuck_proposals` נשבר.
+- Noa `df530f3` — `apply_chip` שכח `last_outbound_at` + `last_activity_type`.
+- Noa `4cc5a09` — `apply_chip` לא סגר tasks ישנים ב-`AUTO_CLOSE_TASK_TYPES`.
+- Noa `3312957` — task שנוצר מ-chip חסר `assigned_to` → לא נראה ב-views של owner-scoped.
+- Noa `c99a47a` — `LECTURE_INQUIRY` חסר מהרשימה הקנונית `AUTO_CLOSE`.
 
 ### False positives
-- Migrations / backfill scripts.
-- Read-only views.
-- Single-field updates genuinely independent (e.g., `last_viewed_at`).
+- migrations / scripts של backfill.
+- views read-only.
+- עדכוני שדה יחיד שבאמת עצמאיים (למשל `last_viewed_at`).
 
-### Recommended mode
-**Strict** for known touchpoint functions; **warning** elsewhere.
-
----
-
-## Pattern 2 — Transition that requires cascading row creation/deletion
-
-`Lead.status = BOOKING_PENDING` or `BOOKED` is supposed to be tied 1:1 with a `Booking` row. Setting the status without creating/managing the booking row leaves the system in an impossible state.
-
-### Detection rule
-For every status target in `{BOOKING_PENDING, BOOKED}`: a `Booking` row must exist or `ValidationError` must be raised.
-
-For `{WON, LOST, ARCHIVED}`: must go through `close_lead(...)`, not direct assignment.
-
-For `{BOOKING_PENDING, BOOKED}` → other status: existing active `Booking` must be cascaded (`REJECT` / `CANCEL`) or user must be notified.
-
-### Real commits
-- Noa `3312957` — chip set `BOOKING_PENDING`/`BOOKED` without `Booking` row → stuck.
-- Noa `75b384a` — `apply_chip` didn't block `BOOKED` + approved booking → orphan Calendar event.
+### מצב מומלץ
+**strict** לפונקציות touchpoint ידועות; **warning** במקומות אחרים.
 
 ---
 
-## Pattern 3 — Activity log as source of truth (Noa P9)
+## דפוס 2 — Transition שדורש יצירה/מחיקה של שורה cascading
 
-**Source:** Noa-unique, but the principle generalizes (EmailFlow P1 audit-log-lifecycle is the same idea).
+`Lead.status = BOOKING_PENDING` או `BOOKED` אמור להיות מקושר 1:1 עם שורת `Booking`. הצבת ה-status בלי ליצור/לנהל את שורת ה-booking משאירה את המערכת ב-state בלתי אפשרי.
 
-When an UPDATE can fail (CAS rejection, race, filter rejection), the activity log must still record the *intent* with `metadata.applied=false`. Otherwise downstream consumers (cron, dashboard, sorting) think the event never happened.
+### כלל לזיהוי
+לכל יעד status ב-`{BOOKING_PENDING, BOOKED}`: שורת `Booking` חייבת להתקיים או `ValidationError` חייב להיזרק.
+
+ל-`{WON, LOST, ARCHIVED}`: חייב לעבור דרך `close_lead(...)`, לא השמה ישירה.
+
+ל-`{BOOKING_PENDING, BOOKED}` → status אחר: `Booking` פעיל קיים חייב לעשות cascade (`REJECT` / `CANCEL`) או שצריך להודיע למשתמש.
+
+### Commits אמיתיים
+- Noa `3312957` — chip קבע `BOOKING_PENDING`/`BOOKED` בלי שורת `Booking` → תקוע.
+- Noa `75b384a` — `apply_chip` לא חסם `BOOKED` + booking מאושר → orphan Calendar event.
+
+---
+
+## דפוס 3 — Activity log כמקור אמת (Noa P9)
+
+**מקור:** ייחודי ל-Noa, אבל העקרון מכליל (EmailFlow P1 audit-log-lifecycle זה אותו רעיון).
+
+כש-UPDATE יכול להיכשל (דחיית CAS, race, דחיית filter), ה-activity log עדיין חייב לתעד את ה-*intent* עם `metadata.applied=false`. אחרת צרכנים downstream (cron, dashboard, מיון) חושבים שה-event מעולם לא קרה.
 
 ```python
 result = await session.execute(update(Lead).where(...).values(...))
@@ -83,79 +83,79 @@ else:
   await log_activity(type="rescheduled", metadata={"applied": True})
 ```
 
-Also: `last_activity_type` on the entity must match the `type` written into the activity log (string equality after `.value`). If activity log writes `MEETING_CANCELED` but the column reads `meeting_rejected`, downstream filters break.
+גם: `last_activity_type` על הישות חייב להתאים ל-`type` שנכתב ב-activity log (שוויון מחרוזת אחרי `.value`). אם activity log כותב `MEETING_CANCELED` אבל העמודה קוראת `meeting_rejected`, filters downstream נשברים.
 
-### Real commits
-- Noa `04cb101` — `_apply_reschedule` rowcount=0 → cron created task early.
-- Noa `0aff4a1` — webhook empty changes, sync_token not persisted → infinite loop.
-- Noa `0aff4a1` (variant) — `last_activity_type` mismatched activity log `type`.
+### Commits אמיתיים
+- Noa `04cb101` — `_apply_reschedule` rowcount=0 → cron יצר task מוקדם.
+- Noa `0aff4a1` — webhook עם changes ריקים, sync_token לא נשמר → לולאה אינסופית.
+- Noa `0aff4a1` (וריאציה) — `last_activity_type` לא תאם ל-`type` של activity log.
 
 ---
 
-## Pattern 4 — Pydantic schema default overriding caller intent (Noa P4)
+## דפוס 4 — Pydantic schema default דורס את הכוונה של ה-caller (Noa P4)
 
-**Source:** Noa-unique (Pydantic-heavy). 1-source signal — apply if your project uses Pydantic at API boundaries.
+**מקור:** ייחודי ל-Noa (Pydantic-heavy). סיגנל חד-מקורי — החל אם הפרויקט שלך משתמש ב-Pydantic בגבולות API.
 
 ```python
 class LeadCreate(BaseModel):
   preferred_contact: ContactChannel = ContactChannel.WHATSAPP  # default ❌
   ...
 
-# Email intake flow:
-lead = await create_lead(LeadCreate(full_name=..., phone=...))  # caller omits preferred_contact
-# → lead gets WHATSAPP default, even though source was email
+# Flow של email intake:
+lead = await create_lead(LeadCreate(full_name=..., phone=...))  # ה-caller השמיט preferred_contact
+# → ה-lead מקבל WHATSAPP default, למרות שהמקור היה email
 ```
 
-### Detection rule
-For every Pydantic `BaseModel` with a default:
-1. Find all callers creating instances **without** the field.
-2. For each caller, verify the default matches the source intent (WhatsApp UI default ≠ email-intake default).
-3. For enum fields nullable in DB but non-nullable in Pydantic: report schema mismatch.
-4. For enum from external source (AI, webhook): consider whether rejecting unknown values = data loss. Sometimes `str | None` + idempotent validation in caller is better than a strict enum.
-5. Walrus + truthy on env: use explicit `is not None` and `.strip()` to distinguish `""` from `None`.
+### כלל לזיהוי
+לכל Pydantic `BaseModel` עם default:
+1. מצא את כל ה-callers שיוצרים instances **בלי** השדה.
+2. לכל caller, ודא שה-default תואם לכוונה של המקור (default של WhatsApp UI ≠ default של email-intake).
+3. לשדות enum nullable ב-DB אבל non-nullable ב-Pydantic: דווח על אי-התאמת schema.
+4. ל-enum ממקור חיצוני (AI, webhook): שקול אם דחיית ערכים לא מוכרים = אובדן נתונים. לפעמים `str | None` + ולידציה idempotent ב-caller עדיף מ-enum strict.
+5. Walrus + truthy על env: השתמש ב-`is not None` מפורש ו-`.strip()` כדי להבחין `""` מ-`None`.
 
-### Real commits
-- Noa `3203410` — `LeadCreate.preferred_contact` default WHATSAPP applied to email-sourced lead.
-- Noa `7001892` — `LeadDraft.service_category` `StrEnum` rejected unknown → lost full_name + phone.
-- Noa `f6293e3` — `LeadDraft.full_name` required; AI returned `null` → unnecessary manual review.
-- Noa `dc24922` — `TodayActionItem.service_category` required but Lead nullable → validation fails in `/dashboard`.
-- Noa `236b072` — walrus `if override := env.get(...)` treated `""` as falsy.
-
----
-
-## Pattern 5 — State-machine routing loops
-
-When users have multiple roles or when "back" navigation isn't tied to explicit state, infinite loops emerge.
-
-### Real commits
-- Shipment-bot `ea648a0` — driver-secretary "back to driver menu" detected secretary role → returned to secretary menu → infinite loop.
-- Shipment-bot `9bd99c1` — stale state check filtered `user.role != SENDER` → admins with `SENDER.*` state hit reset loop.
-- Shipment-bot `9bd99c1` (variant) — dict comprehension filtered `None` values (`if admin_ctx.get(k) is not None`) → legitimate `original_approval_status=None` was deleted, breaking backtrack.
-
-### Detection rule
-For every menu / state-transition handler that branches on user role:
-1. Check the *target state*, not just the role (a user can be in `SENDER.SHIPPING_FORM` while also being an admin).
-2. Distinguish "missing" from "None" — use explicit key presence (`k in d`), not `is not None`, when None is a valid value.
+### Commits אמיתיים
+- Noa `3203410` — `LeadCreate.preferred_contact` default WHATSAPP הוחל על lead שמקורו email.
+- Noa `7001892` — `LeadDraft.service_category` `StrEnum` דחה ערך לא מוכר → אובדן full_name + phone.
+- Noa `f6293e3` — `LeadDraft.full_name` נדרש; AI החזיר `null` → manual review מיותר.
+- Noa `dc24922` — `TodayActionItem.service_category` נדרש אבל Lead nullable → ולידציה נכשלת ב-`/dashboard`.
+- Noa `236b072` — walrus `if override := env.get(...)` התייחס ל-`""` כ-falsy.
 
 ---
 
-## Pattern 6 — Partial state update on multi-field entity
+## דפוס 5 — לולאות routing של state-machine
 
-Touching one field of a logically atomic state object.
+כשמשתמשים יש תפקידים מרובים או כש-"back" navigation לא קשור ל-state מפורש, לולאות אינסופיות מתפתחות.
 
-### Real commits
-- Web `2e5c480` — only `token` updated in localStorage; `refreshToken` stayed stale.
-- routine `01c61ac` — `handleMorningTimeChange` sent only `hour`, not `enabled` flag → concurrent requests overwrote each other.
-- routine `259c2a3` (token balance) — global query instead of per-child query → all children shared one balance.
+### Commits אמיתיים
+- Shipment-bot `ea648a0` — "back to driver menu" של driver-secretary זיהה תפקיד secretary → חזר ל-secretary menu → לולאה אינסופית.
+- Shipment-bot `9bd99c1` — בדיקת state ישן סיננה `user.role != SENDER` → admins עם state `SENDER.*` נכנסו ללולאת reset.
+- Shipment-bot `9bd99c1` (וריאציה) — dict comprehension סיננה ערכי `None` (`if admin_ctx.get(k) is not None`) → `original_approval_status=None` לגיטימי נמחק, שובר backtrack.
 
-### Rule
-Token pairs, role + permissions, status + last_*_at, etc., must be updated together. Use a single JSON blob in localStorage, a single API request body, or wrap multi-field updates in a transaction.
+### כלל לזיהוי
+לכל handler של menu / state-transition שמסתעף לפי תפקיד משתמש:
+1. בדוק את ה-*target state*, לא רק את התפקיד (משתמש יכול להיות ב-`SENDER.SHIPPING_FORM` תוך כדי שהוא גם admin).
+2. הבדל "missing" מ-"None" — השתמש ב-`k in d:` מפורש, לא `is not None`, כש-None הוא ערך תקף.
 
 ---
 
-## Cross-references
+## דפוס 6 — עדכון state חלקי על ישות multi-field
 
-- **CORE U5** — partial atomic updates (this file is the deep-dive)
-- **CORE U1** — race conditions also affect state machines (CAS on status column)
-- **BY-STACK/async-orm.md** — CAS template + audit-log-on-failure pattern
+נגיעה בשדה אחד של אובייקט state שלוגית atomic.
+
+### Commits אמיתיים
+- Web `2e5c480` — רק `token` עודכן ב-localStorage; `refreshToken` נשאר ישן.
+- routine `01c61ac` — `handleMorningTimeChange` שלח רק `hour`, לא את ה-`enabled` flag → בקשות concurrent דרסו זו את זו.
+- routine `259c2a3` (token balance) — query גלובלי במקום per-child → כל הילדים שיתפו balance אחד.
+
+### כלל
+Token pairs, תפקיד + הרשאות, status + last_*_at, וכו', חייבים להתעדכן יחד. השתמש ב-JSON blob יחיד ב-localStorage, body יחיד של API request, או עטוף עדכוני multi-field בטרנזקציה.
+
+---
+
+## הפניות צולבות
+
+- **CORE U5** — partial atomic updates (הקובץ הזה הוא ה-deep-dive)
+- **CORE U1** — race conditions משפיעים גם על state machines (CAS על עמודת status)
+- **BY-STACK/async-orm.md** — תבנית CAS + דפוס audit-log-on-failure
 - **`bugbot-rules/linked-field-atomicity.md`**

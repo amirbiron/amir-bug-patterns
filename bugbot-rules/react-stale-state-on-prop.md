@@ -1,28 +1,28 @@
 # react-stale-state-on-prop
 
-Detect React components where local `useState` is initialized from a prop that can change, without a resync mechanism. Symptom: UI shows the old value after the parent refetches; user actions are taken against stale data.
+זהה קומפוננטות React שבהן `useState` מקומי מאותחל מ-prop שיכול להשתנות, בלי מנגנון resync. סימפטום: ה-UI מציג את הערך הישן אחרי refetch של ה-parent; פעולות משתמש מבוצעות מול נתונים ישנים.
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. `useState` is initialized with a value derived from `props.X` or destructured prop.
-2. `props.X` is plausibly mutable (comes from a parent's query result, route param, or external state — not a one-time mount value).
-3. Neither of these is present:
-   - A `key={X}` on the component in its parent (forces remount on change).
-   - A `useEffect([X], () => setState(X))` that resyncs.
-4. The component sends the local state back to a server (form submit, mutation), where staleness causes corruption.
+1. `useState` מאותחל עם ערך שמקורו ב-`props.X` או prop מ-destructure.
+2. `props.X` הוא mutable באופן סביר (מגיע מתוצאת query של parent, route param, או state חיצוני — לא ערך one-time של mount).
+3. אף אחד מהבאים לא נוכח:
+   - `key={X}` על הקומפוננטה ב-parent (force remount בשינוי).
+   - `useEffect([X], () => setState(X))` שעושה resync.
+4. הקומפוננטה שולחת את ה-state המקומי בחזרה לשרת (submit של טופס, mutation), כש-state ישן גורם לשחיתות.
 
-## Also flag
+## דווח גם
 
-- Any `useState` / `useEffect` / `useCallback` / `useMemo` called AFTER an early `return null;` / conditional return (Rules of Hooks violation).
-- `useCallback` / `useMemo` whose body references a prop/state variable not in its dependency array.
+- כל `useState` / `useEffect` / `useCallback` / `useMemo` שנקרא אחרי `if (...) return null;` / conditional return מוקדם (הפרת Rules of Hooks).
+- `useCallback` / `useMemo` שגוף הפונקציה שלהם מתייחס ל-prop/state שלא ב-dependency array שלהם.
 
 ## False positives
 
-- Local-only state (modal open/closed, theme toggle, tab selection).
-- Uncontrolled inputs with `defaultValue`.
-- Mount-only props (e.g., `user.id` that never changes during the component's lifetime).
-- Dep intentionally excludes an unstable reference (TanStack mutation object); a comment should explain why.
+- state מקומי בלבד (modal פתוח/סגור, theme toggle, tab selection).
+- inputs uncontrolled עם `defaultValue`.
+- props רק ב-mount (למשל `user.id` שלעולם לא משתנה במהלך חיי הקומפוננטה).
+- ה-dep מדלג בכוונה על reference לא יציב (אובייקט mutation של TanStack); הערה צריכה להסביר למה.
 
-## Severity
+## חומרה
 
-MEDIUM — silent data corruption when stale state is sent back to the server.
+MEDIUM — שחיתות נתונים שקטה כשה-state הישן נשלח חזרה לשרת.

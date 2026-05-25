@@ -1,30 +1,30 @@
 # postgres-null-cas
 
-Detect Postgres CAS / `UPDATE ... WHERE col = :value` patterns that silently fail on `NULL` because `col = NULL` evaluates to `NULL` (not `TRUE`).
+זהה דפוסי CAS / `UPDATE ... WHERE col = :value` ב-Postgres שנכשלים בשקט על `NULL` כי `col = NULL` מוערך כ-`NULL` (לא `TRUE`).
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. An `UPDATE` (or `DELETE`) statement uses a `WHERE` clause that includes `col = :param` (CAS / optimistic-lock pattern).
-2. `col` is nullable in the schema (or could be NULL based on the model definition / migrations).
-3. The application code can pass `None` / `null` for `:param`.
-4. There is no branching `if value is None: where = col.is_(None)` / `IS NULL` fallback.
+1. statement של `UPDATE` (או `DELETE`) משתמש בסעיף `WHERE` שכולל `col = :param` (דפוס CAS / optimistic-lock).
+2. `col` הוא nullable ב-schema (או יכול להיות NULL לפי הגדרת ה-model / migrations).
+3. קוד האפליקציה יכול להעביר `None` / `null` ל-`:param`.
+4. אין הסתעפות `if value is None: where = col.is_(None)` / fallback של `IS NULL`.
 
-## SQLAlchemy-specific patterns
+## דפוסים ספציפיים ל-SQLAlchemy
 
-- `update(M).where(M.col == :value)` — flag.
-- Fix: `M.col.is_(None) if value is None else M.col == value`.
+- `update(M).where(M.col == :value)` — דווח.
+- תיקון: `M.col.is_(None) if value is None else M.col == value`.
 
-## Other Postgres NULL gotchas in scope
+## Gotchas אחרים של Postgres NULL ב-scope
 
-- `NOT IN (NULL, ...)` returns NULL (treated as FALSE) — exclude NULL via `WHERE col IS NOT NULL AND col NOT IN (...)`.
-- `WHERE col = ANY(:array)` doesn't match NULL elements of the array.
+- `NOT IN (NULL, ...)` מחזיר NULL (מטופל כ-FALSE) — הוצא NULL דרך `WHERE col IS NOT NULL AND col NOT IN (...)`.
+- `WHERE col = ANY(:array)` לא תופס אלמנטים של NULL במערך.
 
 ## False positives
 
-- Column is `NOT NULL` in schema and migrations.
-- ORM `session.merge(...)` operations (not raw CAS).
-- The CAS branch is intentional (e.g., "only update when previously set" — should be documented).
+- העמודה היא `NOT NULL` ב-schema וב-migrations.
+- פעולות ORM `session.merge(...)` (לא CAS גולמי).
+- ה-CAS branch הוא מכוון (למשל "עדכן רק כשהוגדר קודם" — צריך להיות מתועד).
 
-## Severity
+## חומרה
 
-HIGH — CAS stuck in a loop, cursor never advances, infinite retries.
+HIGH — CAS תקוע בלולאה, cursor לעולם לא מתקדם, retries אינסופיים.

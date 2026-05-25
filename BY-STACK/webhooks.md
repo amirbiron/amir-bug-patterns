@@ -1,54 +1,54 @@
-# BY-STACK: Webhooks ("someone calls me")
+# BY-STACK: Webhooks ("מישהו קורא אליי")
 
-## Relevance — copy this file if your project has...
-- ✅ Incoming webhooks from external services (Google Calendar, Gmail, Meta, Stripe, Twilio, Telegram)
-- ✅ Pub/Sub / SQS / Kafka consumers (at-least-once delivery)
-- ✅ Inbound rate-limit logic that reads `X-Forwarded-For` or similar
-- ✅ Long-running deltas / sync tokens / cursors that advance with each call
-- ⏭ Skip if: outbound-only system, no inbound HTTP
+## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+- ✅ webhooks נכנסים משירותים חיצוניים (Google Calendar, Gmail, Meta, Stripe, Twilio, Telegram)
+- ✅ Consumers של Pub/Sub / SQS / Kafka (at-least-once delivery)
+- ✅ לוגיקת rate-limit נכנסת שקוראת `X-Forwarded-For` או דומה
+- ✅ deltas / sync tokens / cursors שמתקדמים בכל קריאה
+- ⏭ דלג אם: מערכת outbound-only, בלי HTTP נכנס
 
-> Cross-link: **CRITICAL K2 (rate-limiter bypass via XFF)** is required reading. **CORE U1** (race conditions) and **U5** (partial atomic updates) are the underlying principles.
-
----
-
-## Mental model
-
-A webhook handler is a function that runs **concurrently with arbitrary other invocations of itself**. Every assumption that holds in a single-process script is wrong here:
-- Same request body can arrive 9 times.
-- Two requests can race on the same row.
-- The signature header can be forged.
-- The IP header can be spoofed.
-- The delivery system can deliver out of order.
-
-Design every webhook handler around: **identify the caller, dedupe the request, persist intent before side effects, advance the cursor on every call (even empty)**.
+> Cross-link: **CRITICAL K2 (עקיפת rate-limiter דרך XFF)** הוא חובת קריאה. **CORE U1** (race conditions) ו-**U5** (partial atomic updates) הם העקרונות הבסיסיים.
 
 ---
 
-## Pattern 1 — Reserve-then-fill (EmailFlow P1, generalized in CORE U1)
+## מודל מנטלי
 
-**Severity:** HIGH — orphaned external state, financial / compliance impact
+webhook handler הוא פונקציה שרצה **concurrent עם invocations שרירותיים אחרים של עצמה**. כל הנחה שמחזיקה ב-script של תהליך יחיד שגויה כאן:
+- אותו body של בקשה יכול להגיע 9 פעמים.
+- שתי בקשות יכולות להתחרות על אותה שורה.
+- ה-signature header יכול להיות מזויף.
+- ה-IP header יכול להיות מזויף.
+- מערכת ה-delivery יכולה לספק לא בסדר.
 
-### What it looks like
+עצב כל webhook handler סביב: **זהה את ה-caller, dedupe את ה-request, התמד ב-intent לפני side effects, הקדם את ה-cursor בכל קריאה (גם ריקה)**.
+
+---
+
+## דפוס 1 — Reserve-then-fill (EmailFlow P1, הוכלל ב-CORE U1)
+
+**חומרה:** HIGH — state חיצוני יתום, השפעה פיננסית / compliance
+
+### איך זה נראה
 ```python
 @app.post("/pubsub/gmail")
 async def handle_gmail(req: Request):
   # parse
   msg = parse_pubsub(req)
-  # external action FIRST
+  # פעולה חיצונית קודם
   draft = await gmail.drafts.create(body=msg.body)  # ❌
-  # then commit locally
+  # ואז commit מקומי
   session.add(Draft(gmail_id=draft.id, ...))
   await session.commit()
 ```
 
-Pub/Sub delivers at-least-once. Nine parallel workers each call `gmail.drafts.create` before any of them commits the local row → 9 orphaned Gmail drafts.
+Pub/Sub מספק at-least-once. תשעה workers מקבילים כל אחד קורא ל-`gmail.drafts.create` לפני שאחד מהם עושה commit לשורה מקומית → 9 Gmail drafts יתומים.
 
-### Fix
+### תיקון
 ```python
 @app.post("/pubsub/gmail")
 async def handle_gmail(req: Request):
   msg = parse_pubsub(req)
-  # 1. Reserve locally with UNIQUE constraint
+  # 1. רזרבציה מקומית עם UNIQUE constraint
   try:
     draft_row = Draft(idempotency_key=msg.message_id, status="reserved")
     session.add(draft_row)
@@ -56,7 +56,7 @@ async def handle_gmail(req: Request):
   except IntegrityError:
     return Response(status_code=200)  # duplicate, ignore
 
-  # 2. Then make the external call
+  # 2. ואז קריאה חיצונית
   try:
     gmail_draft = await gmail.drafts.create(body=msg.body)
     draft_row.gmail_id = gmail_draft.id
@@ -68,36 +68,36 @@ async def handle_gmail(req: Request):
     raise
 ```
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `f847a44`, `401f179`, `cc7e81a`, `75c0a47`, `0fdd247`.
 
 ---
 
-## Pattern 2 — Parallel webhook race on shared cursor (Noa P3)
+## דפוס 2 — race של webhook מקבילי על cursor משותף (Noa P3)
 
-**Severity:** HIGH — duplicate activity rows, broken sync
+**חומרה:** HIGH — שורות activity כפולות, sync שבור
 
-### What it looks like
+### איך זה נראה
 ```python
 async def handle_calendar_webhook(channel_id):
   sub = await session.get(Subscription, channel_id)
   changes = await google_api.events.list(sync_token=sub.sync_token)
   for change in changes.items:
     await apply_change(change)
-  sub.sync_token = changes.next_sync_token  # ❌ another webhook just did this
+  sub.sync_token = changes.next_sync_token  # ❌ webhook אחר בדיוק עשה את זה
   await session.commit()
 ```
 
-Two webhooks arrive nearly simultaneously, both read the same `sync_token`, both call `google_api.events.list(...)`, both apply the same deltas → duplicate activities. Both write the same `next_sync_token`, but the deltas they applied may differ.
+שני webhooks מגיעים כמעט בו זמנית, שניהם קוראים את אותו `sync_token`, שניהם קוראים ל-`google_api.events.list(...)`, שניהם מחילים את אותם deltas → activities כפולות. שניהם כותבים את אותו `next_sync_token`, אבל ה-deltas שהם החילו עשויים להיות שונים.
 
-### Fix — CAS on the cursor
+### תיקון — CAS על ה-cursor
 ```python
 async def handle_calendar_webhook(channel_id):
   sub = await session.get(Subscription, channel_id)
   old_token = sub.sync_token
   changes = await google_api.events.list(sync_token=old_token)
 
-  # CAS update — only advance if cursor hasn't moved
+  # CAS update — להתקדם רק אם ה-cursor לא זז
   if old_token is None:
     where_clause = Subscription.sync_token.is_(None)
   else:
@@ -108,120 +108,120 @@ async def handle_calendar_webhook(channel_id):
       .values(sync_token=changes.next_sync_token)
   )
   if result.rowcount == 0:
-    # another webhook beat us — its deltas are already applied; don't re-apply ours
+    # webhook אחר הקדים אותנו — ה-deltas שלו כבר מוחלים; אל תחיל מחדש את שלנו
     return
   for change in changes.items:
     await apply_change(change)
   await session.commit()
 ```
 
-### Real commits
-- Noa `33af59e` — two parallel Google Calendar webhooks → duplicate activities.
-- Noa `cf99698` — CAS broke on `NULL` initial value (Postgres `col = NULL` is NULL).
+### Commits אמיתיים
+- Noa `33af59e` — שני webhooks מקבילים של Google Calendar → activities כפולות.
+- Noa `cf99698` — CAS נשבר על ערך התחלתי `NULL` (Postgres `col = NULL` הוא NULL).
 
 ---
 
-## Pattern 3 — Empty webhook response not advancing cursor (Noa P9)
+## דפוס 3 — תגובת webhook ריקה לא מקדמת cursor (Noa P9)
 
-**Severity:** HIGH — infinite loop, exhausts API quota
+**חומרה:** HIGH — לולאה אינסופית, מצריכת מכסת API
 
-### What it looks like
+### איך זה נראה
 ```python
 async def handle(req):
   changes = await google.list(sync_token=sub.sync_token)
   if not changes.items:
-    return  # ❌ next_sync_token never persisted, next webhook reads same cursor
+    return  # ❌ next_sync_token מעולם לא נשמר, ה-webhook הבא קורא אותו cursor
   ...
 ```
 
-### Fix
-Even on empty changes, persist `next_sync_token` if the API provides one.
+### תיקון
+גם על changes ריקים, התמד ב-`next_sync_token` אם ה-API מספק אחד.
 
-### Real commits
+### Commits אמיתיים
 - Noa `0aff4a1`.
 
 ---
 
-## Pattern 4 — Rate limiter trusts spoofable IP header (CRITICAL K2)
+## דפוס 4 — rate limiter סומך על IP header שניתן לזיוף (CRITICAL K2)
 
 ```python
 ip = request.headers["x-forwarded-for"].split(",")[0]  # ❌
 if rate_limiter.is_blocked(ip): return 429
 ```
 
-Attacker sets `X-Forwarded-For: 1.2.3.4` → every request has a different "IP" → rate limit never triggers.
+התוקף קובע `X-Forwarded-For: 1.2.3.4` → לכל בקשה יש "IP" שונה → rate limit לעולם לא נורה.
 
-### Fix
-Configure trusted-proxy middleware at the framework level:
+### תיקון
+הגדר middleware של trusted-proxy ברמת ה-framework:
 - FastAPI / Starlette: `app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="<comma-separated-proxy-ips>")`.
 - Express: `app.set('trust proxy', <hop-count or array>)`.
 - Flask: `ProxyFix(app, x_for=N)`.
 
-Then read `request.client.host` (already corrected by the middleware).
+ואז קרא את `request.client.host` (כבר תוקן על ידי ה-middleware).
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `11e7379`, routine `06ca796`.
 
 ---
 
-## Pattern 5 — Webhook signature verification missing or wrong
+## דפוס 5 — אימות signature של webhook חסר או שגוי
 
-Every inbound webhook from an external provider must verify the signature **before any processing**:
+כל webhook נכנס מספק חיצוני חייב לוודא signature **לפני כל processing**:
 - Stripe: `stripe.Webhook.construct_event(payload, sig_header, webhook_secret)`.
-- Meta: HMAC-SHA256 over body, compare with `X-Hub-Signature-256`.
-- GitHub: HMAC-SHA1 / SHA256 over body, compare with `X-Hub-Signature-256`.
+- Meta: HMAC-SHA256 על ה-body, השוואה עם `X-Hub-Signature-256`.
+- GitHub: HMAC-SHA1 / SHA256 על ה-body, השוואה עם `X-Hub-Signature-256`.
 
-Common errors:
-- Reading the body as text and re-encoding — breaks signature. Use raw bytes.
-- Comparing with `==` (timing attack). Use `hmac.compare_digest`.
-- Forgetting to verify on retry / replay endpoints.
+טעויות נפוצות:
+- קריאת ה-body כטקסט ו-encoding מחדש — שובר signature. השתמש ב-bytes גולמיים.
+- השוואה עם `==` (timing attack). השתמש ב-`hmac.compare_digest`.
+- שכחת אימות ב-endpoints של retry / replay.
 
-(No specific commit cited — defensive baseline. Add to every webhook from day one.)
+(לא צוטט commit ספציפי — baseline הגנתי. הוסף לכל webhook מיום ראשון.)
 
 ---
 
-## Pattern 6 — Acquiring a rate-limit slot before verifying work is real
+## דפוס 6 — רכישת slot של rate-limit לפני אימות שהעבודה אמיתית
 
 ```python
 limiter.acquire(channel)
 result = await classify(message)
 if not result.is_business:
-  return  # ❌ slot wasted on spam
+  return  # ❌ slot בוזבז על spam
 ```
 
-If the limit is a global cap on real work, acquire **after** the work-validity check:
+אם ה-limit הוא cap גלובלי על עבודה אמיתית, רכוש **אחרי** בדיקת תקפות העבודה:
 ```python
 if not (await classify(message)).is_business:
   return
 limiter.acquire(channel)
 ```
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `401f179`, `cc7e81a`.
 
 ---
 
-## Pattern 7 — Beat scheduler + `delay()` race (CORE U1 specialization)
+## דפוס 7 — race של beat scheduler + `delay()` (CORE U1 specialization)
 
-A beat (cron) trigger and a `.delay()` queue dispatcher can both pick the same row marked `PENDING`. Both send the message.
+beat (cron) trigger ו-`.delay()` של queue dispatcher יכולים שניהם לבחור את אותה שורה מסומנת `PENDING`. שניהם שולחים את ההודעה.
 
-### Fix
-Atomic CAS update:
+### תיקון
+CAS update atomic:
 ```sql
 UPDATE messages SET status='PROCESSING' WHERE id=:id AND status='PENDING' RETURNING id;
 ```
-Check rowcount before sending.
+בדוק rowcount לפני שליחה.
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `457eea1`.
 
 ---
 
-## Cross-references
+## הפניות צולבות
 
-- **CORE U1** — race conditions (general theory)
-- **CORE U5** — linked-field atomicity (reserve-then-fill is a special case)
+- **CORE U1** — race conditions (תיאוריה כללית)
+- **CORE U5** — atomicity של linked-field (reserve-then-fill הוא מקרה פרטי)
 - **CRITICAL K2** — XFF spoofing
-- **CRITICAL K9** — credential dispatch before storage
-- **BY-STACK/async-orm.md** — CAS templates
-- **BY-STACK/cron-jobs.md** — beat-scheduler race
+- **CRITICAL K9** — שליחת credential לפני storage
+- **BY-STACK/async-orm.md** — תבניות CAS
+- **BY-STACK/cron-jobs.md** — race של beat-scheduler
