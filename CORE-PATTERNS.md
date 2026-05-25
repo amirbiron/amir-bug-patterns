@@ -19,6 +19,16 @@ Concurrent code paths read shared state, branch on it, and then write — withou
 - Lock check performed *outside* the lock it's supposed to gate.
 - Stale cursors / CAS using `=` instead of `IS NULL` on nullable columns.
 
+### Pattern variants
+Same root cause, different presentations. Both are fixed by `UNIQUE` constraint + transaction lock (or CAS), but naming the specific variant helps when debugging:
+
+- **(a) DB row not created before external call** — code calls `await client.X()` (Gmail draft, SMS send, payment, webhook emit) *before* inserting the local "intent" row with a `UNIQUE` constraint. At-least-once delivery (Pub/Sub, retries, parallel workers) creates orphans on the external side.
+- **(b) Check-then-act gap between read and write** — code does `SELECT ... WHERE status='pending'`, branches, then does `UPDATE ... WHERE id=:id`. Two runners both pass the read, both run the update, both perform the action.
+- **(c) Cursor / CAS column not advanced atomically** — webhook reads `sync_token`, calls external API, writes back `next_sync_token` in a separate statement. Two webhooks race on the cursor; both apply the same deltas.
+- **(d) Missing `await` on async predicate** — async function called in a boolean context (`if foo():`); coroutine is always truthy, so the gate never blocks.
+
+When debugging, identify the variant first — the fix is the same family (CAS / `UNIQUE` / lock), but the right placement differs.
+
 ### Real examples
 - **Noa (`33af59e`):** Two parallel Google Calendar webhooks read the same `sync_token`, applied deltas → duplicate Activity rows. Fix: optimistic lock + CAS (`WHERE history_id = expected_old`).
 - **Noa (`cf99698`):** CAS on `WHERE history_id = expected_old` didn't handle `NULL` in Postgres → cursor stuck forever.
