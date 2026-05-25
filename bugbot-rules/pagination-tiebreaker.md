@@ -1,28 +1,28 @@
 # pagination-tiebreaker
 
-Detect `ORDER BY` clauses that lack a secondary tiebreaker, leading to non-deterministic row order on ties. In paginated queries (LIMIT/OFFSET or cursor), this causes rows to be duplicated or skipped between pages.
+זהה סעיפי `ORDER BY` שחסר להם tiebreaker משני, מה שמוביל לסדר שורות לא דטרמיניסטי על ties. ב-queries מדפדפים (LIMIT/OFFSET או cursor), זה גורם לשורות להיות כפולות או להידלג בין דפים.
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. A SQL or ORM query uses `ORDER BY` (or `.order_by()`) with **only one** expression (usually a timestamp like `created_at`, `updated_at`, or a score / rank field).
-2. The query is followed by `LIMIT` / `OFFSET`, or used in cursor-based pagination, or used in a CAS query with "latest" semantics.
-3. The ordering column is NOT a `UNIQUE` constraint (timestamps can tie, scores can tie).
+1. query של SQL או ORM משתמש ב-`ORDER BY` (או `.order_by()`) עם **רק expression אחת** (בדרך כלל timestamp כמו `created_at`, `updated_at`, או שדה score / rank).
+2. ה-query נמצא אחרי `LIMIT` / `OFFSET`, או בשימוש בדפדוף מבוסס-cursor, או בשימוש ב-query של CAS עם סמנטיקת "latest".
+3. עמודת ה-ordering אינה constraint של `UNIQUE` (timestamps יכולים להיות שווים, scores יכולים להיות שווים).
 
-## Fix
+## תיקון
 
-Add the primary key as a secondary expression:
+הוסף את המפתח הראשי כ-expression משנית:
 ```python
 .order_by(Model.created_at.desc(), Model.id.desc())
 ```
 
-For CAS queries with "latest" semantics, the selector and the verifier MUST use the same multi-expression tuple.
+ל-queries של CAS עם סמנטיקת "latest", ה-selector וה-verifier חייבים להשתמש באותו tuple של multi-expression.
 
 ## False positives
 
-- Queries without `LIMIT` / `OFFSET` (full result set, order on ties less critical).
-- Aggregations (`GROUP BY` + `SUM`) — `ORDER BY` over an aggregate doesn't need PK tiebreaker.
-- Single-row queries (`.first()`, `.scalar_one_or_none()`) where the ordering column is `UNIQUE`.
+- queries בלי `LIMIT` / `OFFSET` (סט תוצאות מלא, סדר על ties פחות קריטי).
+- אגרגציות (`GROUP BY` + `SUM`) — `ORDER BY` על אגרגט לא צריך tiebreaker של PK.
+- queries של שורה יחידה (`.first()`, `.scalar_one_or_none()`) שבהן עמודת ה-ordering היא `UNIQUE`.
 
-## Severity
+## חומרה
 
-MEDIUM — pagination shows duplicate rows on one page and missing on the next; users see "moving" lists.
+MEDIUM — דפדוף מציג שורות כפולות בדף אחד וחסרות בבא; משתמשים רואים רשימות "זזות".

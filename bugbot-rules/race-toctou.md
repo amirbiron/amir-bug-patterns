@@ -1,27 +1,27 @@
 # race-toctou
 
-Detect Time-Of-Check-Time-Of-Use patterns in concurrent / async code that risk duplicates, stale state, or missed updates.
+זהה דפוסי Time-Of-Check-Time-Of-Use בקוד concurrent / async שמסכנים בכפילויות, state ישן, או עדכונים שמתפספסים.
 
-## Flag when ANY of these apply
+## דווח כשמתקיים אחד מהבאים
 
-1. A read of a row's status / state column (`SELECT`, ORM `.get()`, `.scalar()`), followed by a conditional branch, followed by an `UPDATE` or external call on the same row — without a `WHERE` clause referencing the read value (no CAS), without `SELECT FOR UPDATE`, and without a `UNIQUE` / `ON CONFLICT` constraint.
+1. קריאה של עמודת status / state של שורה (`SELECT`, ORM `.get()`, `.scalar()`), ולאחריה הסתעפות מותנית, ולאחר מכן `UPDATE` או קריאה חיצונית על אותה שורה — בלי סעיף `WHERE` שמתייחס לערך שנקרא (אין CAS), בלי `SELECT FOR UPDATE`, ובלי constraint של `UNIQUE` / `ON CONFLICT`.
 
-2. An `async def` function called without `await` and used in a boolean context (`if foo():`) — coroutines are truthy, so the check always passes.
+2. פונקציית `async def` שנקראת בלי `await` ומשמשת בהקשר בוליאני (`if foo():`) — coroutines הם truthy, אז הבדיקה תמיד עוברת.
 
-3. A precondition / validity check that runs BEFORE the lock that's supposed to protect the resource.
+3. בדיקת precondition / תקפות שרצה לפני ה-lock שאמור להגן על המשאב.
 
-4. `commit()` / DB write that runs AFTER an irreversible external call (HTTP POST, email/SMS send, payment API) — no UNIQUE row inserted as "reservation" before the external call.
+4. `commit()` / כתיבת DB שרצה אחרי קריאה חיצונית בלתי הפיכה (HTTP POST, שליחת email/SMS, payment API) — בלי שורת UNIQUE שמוכנסת כ-"רזרבציה" לפני הקריאה החיצונית.
 
-5. CAS / cursor update comparing a nullable column with `=` (in Postgres: `col = NULL` evaluates to NULL, not TRUE — must use `IS NULL` branch).
+5. עדכון CAS / cursor שמשווה עמודה nullable עם `=` (ב-Postgres: `col = NULL` מוערך כ-NULL, לא TRUE — חייב להשתמש בהסתעפות `IS NULL`).
 
 ## False positives
 
-- Single-process, single-threaded script with no concurrent runners.
-- Read happens inside `SELECT FOR UPDATE`.
-- Write uses `INSERT ... ON CONFLICT DO NOTHING` / `ON CONFLICT DO UPDATE`.
-- Read-only external call (status fetch, fire-and-forget analytics).
-- Tests with mocks.
+- script של תהליך יחיד, single-threaded, בלי runners concurrent.
+- הקריאה מתבצעת בתוך `SELECT FOR UPDATE`.
+- הכתיבה משתמשת ב-`INSERT ... ON CONFLICT DO NOTHING` / `ON CONFLICT DO UPDATE`.
+- קריאה חיצונית read-only (status fetch, analytics fire-and-forget).
+- טסטים עם mocks.
 
-## Severity
+## חומרה
 
-HIGH — duplicate side effects, financial / compliance impact, infinite loops.
+HIGH — side effects כפולים, השפעה פיננסית / compliance, לולאות אינסופיות.

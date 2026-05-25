@@ -1,23 +1,23 @@
-# Critical patterns (paste into CLAUDE.md — security/privacy/data-loss, always apply)
+# דפוסים קריטיים (להעתקה ל-CLAUDE.md — security/privacy/data-loss, חל תמיד)
 
-1. **OAuth password takeover.** "Set password" / "register" / "link account" endpoints accepting an email MUST reject the request if an account already exists via OAuth, unless authenticated as that user or proven via verified one-time link.
+1. **OAuth password takeover.** endpoints של "set password" / "register" / "link account" שמקבלים email חייבים לדחות את הבקשה אם חשבון קיים דרך OAuth, אלא אם מאומת כאותו משתמש או הוכח דרך קישור one-time מאומת שנשלח ל-email.
 
-2. **Rate limiter XFF spoofing.** Never read `X-Forwarded-For` directly for security decisions. Configure trusted-proxy middleware (`ProxyHeadersMiddleware`, `app.set('trust proxy', N)`) — then read `request.client.host`.
+2. **XFF spoofing ב-rate limiter.** לעולם אל תקרא `X-Forwarded-For` ישירות להחלטות security. הגדר middleware של trusted-proxy (`ProxyHeadersMiddleware`, `app.set('trust proxy', N)`) — ואז קרא `request.client.host`.
 
-3. **Auto-admin by unverified email.** Admin / staff / owner role grants happen only after email verification, or via an invite-link + token from an existing admin. Never trust `request.body.email == OWNER_EMAIL`.
+3. **Auto-admin לפי email לא מאומת.** הענקת תפקיד admin / staff / owner קורית רק אחרי email verification, או דרך קישור invite + token מ-admin קיים. לעולם אל תסמוך על `request.body.email == OWNER_EMAIL`.
 
-4. **XSS via innerHTML.** Default to `textContent` / JSX text. `innerHTML` / `dangerouslySetInnerHTML` / `v-html` with externally-sourced values requires `DOMPurify` (or equivalent) immediately before assignment. "Admin only" is not a defense.
+4. **XSS via innerHTML.** ברירת מחדל ל-`textContent` / טקסט ב-JSX. `innerHTML` / `dangerouslySetInnerHTML` / `v-html` עם ערכים ממקור חיצוני דורש `DOMPurify` (או שווה ערך) באותה שורה של ההשמה. "Admin only" אינה הגנה.
 
-5. **Network-exposed admin panel.** Server bound to `0.0.0.0` requires authentication middleware *before* any route runs, or a firewall. Otherwise bind `127.0.0.1`.
+5. **פאנל admin חשוף לרשת.** שרת שנקשר ל-`0.0.0.0` דורש middleware של אימות *לפני* שכל route רץ, או firewall. אחרת קשור `127.0.0.1`.
 
-6. **Secret in response.** User serialization goes through an explicit DTO/response model. Forbidden field names anywhere in API response: `password`, `passwordHash`, `salt`, `refresh_token`, `access_token`, `api_key`, `secret`. Exception messages at API surfaces must not include internal IDs / heuristic reasons.
+6. **Secret ב-response.** Serialization של משתמש עובר דרך DTO / response model מפורש. שמות שדות אסורים בכל מקום ב-response של API: `password`, `passwordHash`, `salt`, `refresh_token`, `access_token`, `api_key`, `secret`. הודעות exception בגבולות API לא יכולות לכלול IDs פנימיים / סיבות heuristic.
 
-7. **PII in logs.** Forbidden in `logger.*` and `HTTPException.detail`: `email`, `phone`, `from_email`, `to_email`, names, message bodies, tokens, API keys. Replace with email-domain only, hash, or own user_id. Generic localized error message for user-facing details.
+7. **PII בלוגים.** אסור ב-`logger.*` וב-`HTTPException.detail`: `email`, `phone`, `from_email`, `to_email`, שמות, body של הודעות, tokens, API keys. החלף ב-domain של email בלבד, hash, או user_id משלך. הודעת שגיאה מתורגמת גנרית לפרטים שמופיעים למשתמש.
 
-8. **LIKE wildcard injection.** User-supplied prefix in `LIKE` must escape `_` and `%`, or use `.startswith(value, autoescape=True)`, or exact `=`.
+8. **LIKE wildcard injection.** prefix של משתמש ב-`LIKE` חייב לברוח מ-`_` ו-`%`, או להשתמש ב-`.startswith(value, autoescape=True)`, או `=` מדויק.
 
-9. **Credential dispatch before storage.** Persist OTP / token / link (Redis SET / DB INSERT) BEFORE sending. If persist fails, do not send. No fallback "skip verification" path on storage failure — fail closed.
+9. **שליחת credential לפני storage.** התמד ב-OTP / token / link (Redis SET / DB INSERT) *לפני* השליחה. אם ההתמדה נכשלת, אל תשלח. אין נתיב fallback "דלג על verification" בכשל storage — fail closed.
 
-10. **500 ≠ "invalid credentials".** Login error handling branches: 401/403 → "Invalid credentials"; 5xx → "Service unavailable, try again"; 429 → "Too many attempts". Never collapse 5xx to auth error.
+10. **500 ≠ "invalid credentials".** טיפול בשגיאת login מסתעף: 401/403 → "Invalid credentials"; 5xx → "Service unavailable, try again"; 429 → "Too many attempts". לעולם אל תאחד 5xx ל-auth error.
 
-See `CRITICAL-PATTERNS.md` for full rationale and detection rules.
+ראה `CRITICAL-PATTERNS.md` להגיון מלא וכללי זיהוי.

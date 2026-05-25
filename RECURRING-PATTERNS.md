@@ -1,187 +1,187 @@
-# RECURRING PATTERNS
+# דפוסים חוזרים (RECURRING)
 
-Patterns that appear in **two of three** source documents — strong signal, but evidence base is narrower than CORE. Apply if your project matches the stack. Each entry lists the specific projects, so you can judge whether the pattern is likely to apply.
+דפוסים שהופיעו ב**שני מסמכי מקור מתוך שלושה** — סיגנל חזק, אבל בסיס הראיות צר יותר מ-CORE. החל אם הפרויקט שלך תואם ל-stack. כל ערך מציין את הפרויקטים הספציפיים, כדי שתוכל לשפוט אם הדפוס סביר להיות רלוונטי.
 
-> **Note on PII leakage:** It qualifies as RECURRING by frequency (EmailFlow + 8-Projects), but its severity promotes it to `CRITICAL-PATTERNS.md` K7. The full rule lives there; see also section here for cross-reference.
-
----
-
-## R1. SQLAlchemy async session lifecycle
-
-**Frequency:** 2/3 sources (EmailFlow + 8-Projects/Shipment-bot)
-**Severity:** MEDIUM — `MissingGreenlet` crashes, silent data corruption
-
-### What it looks like
-Async SQLAlchemy (`AsyncSession`, `async_sessionmaker`) has lifecycle rules that catch developers off guard:
-- ORM object attributes accessed *after* `await session.rollback()` raise `MissingGreenlet`.
-- One `AsyncSession` shared between concurrent tasks via `asyncio.gather` → race / corruption (sessions are not thread- or task-safe).
-- After `await session.commit()` in a loop, re-accessing the same ORM row returns stale attributes (commit refreshes only the PK; needs explicit `await session.refresh(row)`).
-- `joinedload` + `with_for_update` is incompatible (SQLAlchemy raises).
-- A singleton `Engine` bound to one event loop fails on the second Celery task (which gets a new loop).
-
-### Real examples
-- **EmailFlow (`0fdd247`):** `MissingGreenlet` accessing ORM attribute after session rollback.
-- **EmailFlow (`018b166`):** `asyncio.gather` sharing session across tasks → corruption.
-- **EmailFlow (`0e6dc85`):** Embedding job accessed stale attributes after in-loop commit.
-- **Shipment-bot (`85d7a8e`):** Loop over `expiring` deliveries after `db.commit()` — `MissingGreenlet`.
-- **Shipment-bot (`0f30963`):** Celery singleton engine tied to old event loop → second task always failed.
-- **Shipment-bot (`4352bac`):** `joinedload` + `with_for_update` raised.
-
-### Detection rule
-1. Never pass the same `AsyncSession` to multiple concurrent tasks via `asyncio.gather` / `asyncio.create_task` — each task opens its own via `async with sessionmaker() as session:`.
-2. After `await session.rollback()` (explicit or from exception): do not access ORM attributes. Extract `.id` / primitives **before** rollback, or `session.expunge(obj)` to detach.
-3. After `await session.commit()` inside a loop, call `await session.refresh(row)` before re-accessing attributes.
-4. `joinedload` with locking → use `contains_eager` instead.
-5. Celery tasks: create a fresh engine inside the task (or use a connection pool that re-binds to the current loop).
-
-### False positives
-- Sync SQLAlchemy (regular `sessionmaker`) — different rules entirely.
-- FastAPI dependency-scoped session per-request — safe as long as no `gather`.
-
-### Recommended mode
-**Strict** for code that does `await session.commit()` inside a loop or uses `asyncio.gather`.
-
-### See also
-- `BY-STACK/async-orm.md` — full coverage with code
+> **הערה על PII leakage:** הוא מסווג כ-RECURRING לפי תדירות (EmailFlow + 8-Projects), אבל החומרה מקדמת אותו ל-`CRITICAL-PATTERNS.md` K7. הכלל המלא חי שם; ראה גם הסעיף בסוף לקרוס-רפרנס.
 
 ---
 
-## R2. Pagination without secondary tiebreaker
+## R1. lifecycle של AsyncSession ב-SQLAlchemy
 
-**Frequency:** 2/3 sources (EmailFlow + 8-Projects/Shipment-bot)
-**Severity:** MEDIUM — pagination skips/duplicates rows, ranking non-deterministic
+**תדירות:** 2/3 מקורות (EmailFlow + 8-Projects/Shipment-bot)
+**חומרה:** MEDIUM — קריסות `MissingGreenlet`, שחיתות נתונים שקטה
 
-### What it looks like
-`ORDER BY ts.desc()` (or `score.desc()`) followed by `LIMIT` / `OFFSET` or cursor pagination. Rows with the same primary value get **unspecified** order in Postgres → between pages, ties reshuffle → a row can appear twice or be skipped.
+### איך זה נראה
+SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifecycle שתופסים מפתחים לא מוכנים:
+- attributes של אובייקט ORM שניגשים אליהם *אחרי* `await session.rollback()` זורקים `MissingGreenlet`.
+- `AsyncSession` אחד שמשותף בין tasks concurrent דרך `asyncio.gather` → race / שחיתות (sessions לא בטוחים ל-thread או ל-task).
+- אחרי `await session.commit()` בלולאה, גישה מחדש לאותה שורת ORM מחזירה attributes ישנים (commit מרענן רק את ה-PK; דורש `await session.refresh(row)` מפורש).
+- `joinedload` + `with_for_update` אינם תואמים (SQLAlchemy זורק).
+- `Engine` singleton שמקושר ל-event loop אחד נכשל ב-Celery task השני (שמקבל loop חדש).
 
-### Real examples
-- **EmailFlow (`d84daca`):** `Lead.order_by(updated_at.desc())` only → leads with same timestamp got random order → pagination cycles.
-- **EmailFlow (`3987818`):** CAS query needed `(timestamp, created_at)` tuple to match the selector.
-- **EmailFlow (`a0c4603`):** Drafter ranking without secondary key → non-deterministic ranking.
-- **Shipment-bot (`c0c1b74`):** Audit log paginated on timestamp only → entries reordered between pages.
+### דוגמאות אמיתיות
+- **EmailFlow (`0fdd247`):** `MissingGreenlet` בגישה ל-attribute של ORM אחרי rollback.
+- **EmailFlow (`018b166`):** `asyncio.gather` משתף session בין tasks → שחיתות.
+- **EmailFlow (`0e6dc85`):** embedding job ניגש ל-attributes ישנים אחרי commit בתוך לולאה.
+- **Shipment-bot (`85d7a8e`):** לולאה על `expiring` deliveries אחרי `db.commit()` — `MissingGreenlet`.
+- **Shipment-bot (`0f30963`):** Celery singleton engine קשור ל-event loop ישן → task שני תמיד נכשל.
+- **Shipment-bot (`4352bac`):** `joinedload` + `with_for_update` זרק.
 
-### Detection rule
-Every `order_by(...)` / raw `ORDER BY` followed by `LIMIT` / `OFFSET` / cursor pagination must include **at least two expressions**:
-1. The semantic field (`created_at.desc()`, `score.desc()`).
-2. The primary key as tiebreaker (`Model.id.desc()` or `.asc()`).
-
-For CAS with "latest" semantics, the tiebreaker must match between the selector and the verifier.
+### כלל לזיהוי
+1. לעולם אל תעביר את אותו `AsyncSession` ל-tasks concurrent מרובים דרך `asyncio.gather` / `asyncio.create_task` — כל task פותח את שלו עם `async with sessionmaker() as session:`.
+2. אחרי `await session.rollback()` (מפורש או מ-exception): אל תיגש ל-attributes של ORM. חלץ `.id` / primitives **לפני** rollback, או `session.expunge(obj)` כדי לנתק.
+3. אחרי `await session.commit()` בתוך לולאה, קרא ל-`await session.refresh(row)` לפני גישה מחדש ל-attributes.
+4. `joinedload` עם locking → השתמש ב-`contains_eager` במקום.
+5. Celery tasks: צור engine חדש בתוך ה-task (או השתמש ב-connection pool שמתחדש ל-loop הנוכחי).
 
 ### False positives
-- Queries without `LIMIT` — order less critical.
-- Aggregations (`GROUP BY` + `SUM`).
-- Single-row queries (`.first()`, `.scalar_one_or_none()`) on a `UNIQUE` column.
+- SQLAlchemy סינכרוני (`sessionmaker` רגיל) — כללים שונים לחלוטין.
+- session ב-FastAPI scope של dependency per-request — בטוח כל עוד אין `gather`.
 
-### Recommended mode
-**Warning** (strict mode adds `.id` to every query, including aggregations, generating noise).
+### מצב מומלץ
+**strict** לקוד שעושה `await session.commit()` בתוך לולאה או משתמש ב-`asyncio.gather`.
 
-### See also
+### ראה גם
+- `BY-STACK/async-orm.md` — כיסוי מלא עם קוד
+
+---
+
+## R2. דפדוף בלי tiebreaker משני
+
+**תדירות:** 2/3 מקורות (EmailFlow + 8-Projects/Shipment-bot)
+**חומרה:** MEDIUM — דפדוף מדלג/מכפיל שורות, ranking לא דטרמיניסטי
+
+### איך זה נראה
+`ORDER BY ts.desc()` (או `score.desc()`) ואחריו `LIMIT` / `OFFSET` או cursor pagination. שורות עם אותו ערך ראשי מקבלות סדר לא מוגדר ב-Postgres → בין דפים, ה-ties מתערבבים מחדש → שורה יכולה להופיע פעמיים או להידלג.
+
+### דוגמאות אמיתיות
+- **EmailFlow (`d84daca`):** `Lead.order_by(updated_at.desc())` בלבד → leads עם אותו timestamp קיבלו סדר אקראי → דפדוף בלולאה.
+- **EmailFlow (`3987818`):** CAS query דרש tuple `(timestamp, created_at)` כדי להתאים ל-selector.
+- **EmailFlow (`a0c4603`):** Drafter ranking בלי tiebreaker משני → ranking לא דטרמיניסטי.
+- **Shipment-bot (`c0c1b74`):** Audit log מדפדף לפי timestamp בלבד → שורות התערבבו בין דפים.
+
+### כלל לזיהוי
+כל `order_by(...)` / raw `ORDER BY` שאחריו `LIMIT` / `OFFSET` / cursor pagination חייב לכלול **לפחות שתי expressions**:
+1. השדה הסמנטי (`created_at.desc()`, `score.desc()`).
+2. המפתח הראשי כ-tiebreaker (`Model.id.desc()` או `.asc()`).
+
+ל-CAS עם סמנטיקה של "latest", ה-tiebreaker חייב להתאים בין ה-selector ל-verifier.
+
+### False positives
+- Queries בלי `LIMIT` — סדר פחות קריטי.
+- אגרגציות (`GROUP BY` + `SUM`).
+- queries של שורה יחידה (`.first()`, `.scalar_one_or_none()`) על עמודה ייחודית.
+
+### מצב מומלץ
+**warning** (strict מוסיף `.id` לכל query, כולל אגרגציות, ומייצר רעש).
+
+### ראה גם
 - `BY-STACK/postgres.md`
 - `bugbot-rules/pagination-tiebreaker.md`
 
 ---
 
-## R3. Browser API / DOM quirks
+## R3. quirks של Browser API / DOM
 
-**Frequency:** 2/3 sources (Noa + 8-Projects)
-**Severity:** MEDIUM — UX broken, occasional data-loss
+**תדירות:** 2/3 מקורות (Noa + 8-Projects)
+**חומרה:** MEDIUM — UX שבור, מדי פעם אובדן נתונים
 
-### What it looks like
-Browser APIs have non-obvious semantics that catch developers reading them as if they were Node APIs:
-- `window.open("mailto:...")` returns `null` in Chrome (system protocol handoff, **not** a popup blocker). Code interpreting `null` as "blocked" cancels the legitimate operation.
-- `navigator.clipboard.writeText(...)` requires HTTPS; throws on HTTP. No try/catch → console error + silent UX failure.
-- Tooltip / dropdown closes immediately on click because the click bubbles up to a parent that toggles state.
-- Global CSS reset (`* { margin: 0; padding: 0 }`) has higher specificity than Tailwind utility classes like `space-y-6`.
-- `URL.createObjectURL` leak — blob URL never revoked, accumulates per render.
-- `setTimeout(fn, delay)` with `delay = NaN` — React error / infinite delay.
+### איך זה נראה
+ל-APIs של הדפדפן יש סמנטיקה לא מובנת מאליה שתופסת מפתחים שקוראים אותן כאילו היו APIs של Node:
+- `window.open("mailto:...")` מחזיר `null` ב-Chrome (handoff של protocol מערכת, **לא** popup blocker). קוד שמפרש `null` כ-"חסום" מבטל את הפעולה הלגיטימית.
+- `navigator.clipboard.writeText(...)` דורש HTTPS; זורק על HTTP. בלי try/catch → שגיאת console + כשל UX שקט.
+- Tooltip / dropdown נסגר מיד על click כי ה-click מבעבע ל-parent שמחליף state.
+- CSS reset גלובלי (`* { margin: 0; padding: 0 }`) יש לו specificity גבוה יותר ממחלקות utility של Tailwind כמו `space-y-6`.
+- דליפת `URL.createObjectURL` — blob URL לעולם לא משוחרר, מצטבר לכל render.
+- `setTimeout(fn, delay)` עם `delay = NaN` — שגיאת React / delay אינסופי.
 
-### Real examples
-- **Noa (`f635304`):** `window.open("mailto:...")` returned `null` in Chrome; popup-blocker guard cancelled `mark_sent` flow.
-- **Noa (`f4769bf`):** `BOOKED` button shown after `slot_start + 30min` instead of `slot_end` — broke short meetings.
-- **Markdown-Academy (`b97d3f5`):** Copy button called `navigator.clipboard.writeText` without try/catch; broke on HTTP.
-- **Markdown-Academy (`315154e`):** Tooltip closed on click because parent caught propagation; needed `stopPropagation()`.
-- **Web (`c586691`):** Global CSS reset `* { margin: 0; padding: 0 }` overrode Tailwind utilities.
-- **Web (`f5cbaf9`):** Profile picture blob URL not revoked on unmount.
+### דוגמאות אמיתיות
+- **Noa (`f635304`):** `window.open("mailto:...")` החזיר `null` ב-Chrome; popup-blocker guard ביטל flow של `mark_sent`.
+- **Noa (`f4769bf`):** כפתור `BOOKED` הוצג אחרי `slot_start + 30min` במקום `slot_end` — שובר מפגשים קצרים.
+- **Markdown-Academy (`b97d3f5`):** כפתור Copy קרא ל-`navigator.clipboard.writeText` בלי try/catch; נשבר ב-HTTP.
+- **Markdown-Academy (`315154e`):** Tooltip נסגר על click כי parent תפס propagation; נדרש `stopPropagation()`.
+- **Web (`c586691`):** CSS reset גלובלי `* { margin: 0; padding: 0 }` דרס utilities של Tailwind.
+- **Web (`f5cbaf9`):** Blob URL של תמונת profile לא משוחרר על unmount.
 
-### Detection rule
-1. `window.open(url, ...)` followed by `if (!win)` cancel-flow → flag if `url` starts with `mailto:`, `tel:`, `sms:`, `file:`. For system protocols, use an `<a>` tag with `.click()` instead.
-2. `navigator.clipboard.*` without try/catch → flag.
-3. `URL.createObjectURL` without a matching `URL.revokeObjectURL` in the `useEffect` cleanup / `componentWillUnmount` / `addEventListener('unload', ...)`.
-4. `setTimeout(fn, delay)` / `setInterval(fn, delay)` / `new Date(value)` without `isFinite(delay)` guard for externally-sourced delay/value.
-5. Global `* { margin: 0; padding: 0 }` in a project using a utility CSS framework (Tailwind, UnoCSS) → flag.
+### כלל לזיהוי
+1. `window.open(url, ...)` ואחריו `if (!win)` שמבטל flow → דווח אם `url` מתחיל ב-`mailto:`, `tel:`, `sms:`, `file:`. ל-protocols מערכת, השתמש ב-`<a>` עם `.click()`.
+2. `navigator.clipboard.*` בלי try/catch → דווח.
+3. `URL.createObjectURL` בלי `URL.revokeObjectURL` מתאים ב-cleanup של `useEffect` / `componentWillUnmount` / `addEventListener('unload', ...)`.
+4. `setTimeout(fn, delay)` / `setInterval(fn, delay)` / `new Date(value)` בלי הגנת `isFinite(delay)` ל-delay/value ממקור חיצוני.
+5. `* { margin: 0; padding: 0 }` גלובלי בפרויקט שמשתמש ב-framework utility CSS (Tailwind, UnoCSS) → דווח.
 
-### Recommended mode
-**Warning** — most are UX bugs, not data-loss.
+### מצב מומלץ
+**warning** — רוב הבאגים הם UX, לא אובדן נתונים.
 
-### See also
+### ראה גם
 - `BY-STACK/browser-handoff.md`
 - `bugbot-rules/window-open-protocol-handoff.md`
 
 ---
 
-## R4. External SDK error completeness
+## R4. שלמות exception של External SDK
 
-**Frequency:** 2/3 sources (Noa + 8-Projects)
-**Severity:** MEDIUM — silent swallow / production crash on init
+**תדירות:** 2/3 מקורות (Noa + 8-Projects)
+**חומרה:** MEDIUM — בליעה שקטה / קריסת startup
 
-### What it looks like
-SDKs throw broad exception hierarchies, and `BaseException` subclasses (`asyncio.CancelledError`) don't sit under `Exception`. Code catches too narrow a base, lets some subclasses propagate, or swallows everything via `Exception` and miscounts.
+### איך זה נראה
+SDKs זורקים היררכיות exception רחבות, ו-subclasses של `BaseException` (`asyncio.CancelledError`) לא יושבים תחת `Exception`. הקוד תופס base צר מדי, נותן ל-subclasses לפרוץ, או בולע הכל דרך `Exception` ומונה לא נכון.
 
-### Real examples
-- **Noa (`c128115`):** `_complete` caught `RateLimitError` + `_RETRYABLE`; other `anthropic.APIError` subtypes (`NotFound`, `BadRequest`, `Auth`) propagated uncaught.
-- **Noa (`95dcce6`):** Fallback caught `RateLimitError` as generic `AIError` → caller didn't mark `pending_classification`.
-- **Noa (`95b82e5`):** OAuth scope drift treated as fatal; needed `OAUTHLIB_RELAX_TOKEN_SCOPE=1`.
-- **Shipment-bot (`e0f4d59`):** `isinstance(r, Exception)` didn't catch `CancelledError` (subclass of `BaseException`) → cancelled tasks counted as success.
-- **routine (`2571c91` / `e5c26ad`):** Malformed VAPID keys → uncaught exception in `setVapidDetails` → server crashed on startup.
+### דוגמאות אמיתיות
+- **Noa (`c128115`):** `_complete` תפס `RateLimitError` + `_RETRYABLE`; subtypes אחרים של `anthropic.APIError` (`NotFound`, `BadRequest`, `Auth`) עברו בלי טיפול.
+- **Noa (`95dcce6`):** Fallback תפס `RateLimitError` כ-`AIError` גנרי → ה-caller לא סימן `pending_classification`.
+- **Noa (`95b82e5`):** OAuth scope drift טופל כקטלני; נדרש `OAUTHLIB_RELAX_TOKEN_SCOPE=1`.
+- **Shipment-bot (`e0f4d59`):** `isinstance(r, Exception)` לא תפס `CancelledError` (subclass של `BaseException`) → tasks מבוטלים נספרו כהצלחה.
+- **routine (`2571c91` / `e5c26ad`):** מפתחות VAPID פגומים → exception לא נתפס ב-`setVapidDetails` → השרת קרס בעלייה.
 
-### Detection rule
-1. For every external SDK call, the `except` should catch the SDK's documented base class (`anthropic.APIError`, `googleapiclient.errors.HttpError`, `stripe.error.StripeError`).
-2. Order `except` blocks subclass-before-superclass (`RateLimitError` before `APIError`).
-3. For async-task collection results (`asyncio.gather(return_exceptions=True)`): check `isinstance(r, BaseException)`, not `Exception` (CancelledError is not Exception in 3.8+).
-4. Startup-time SDK init (VAPID keys, OAuth client, Stripe key) must be wrapped in try/except + format validation; failures degrade the relevant feature, not crash the whole server.
-5. Document and respect SDK env flags (`OAUTHLIB_RELAX_TOKEN_SCOPE`, `STRIPE_API_VERSION`, etc.).
+### כלל לזיהוי
+1. לכל קריאת SDK חיצוני, ה-`except` צריך לתפוס את ה-base class המתועד של ה-SDK (`anthropic.APIError`, `googleapiclient.errors.HttpError`, `stripe.error.StripeError`).
+2. סדר את בלוקי ה-`except` subclass-לפני-superclass (`RateLimitError` לפני `APIError`).
+3. לתוצאות של collection של tasks async (`asyncio.gather(return_exceptions=True)`): בדוק `isinstance(r, BaseException)`, לא `Exception` (CancelledError אינו Exception ב-3.8+).
+4. אתחול SDK בזמן startup (VAPID keys, OAuth client, Stripe key) חייב להיות עטוף ב-try/except + ולידציית פורמט; כשלים מורידים את הפיצ'ר הרלוונטי, לא קורסים את כל השרת.
+5. תעד וכבד env flags של SDK (`OAUTHLIB_RELAX_TOKEN_SCOPE`, `STRIPE_API_VERSION`, וכו').
 
-### Recommended mode
-**Strict** at all SDK boundaries.
+### מצב מומלץ
+**strict** בכל גבולות ה-SDK.
 
-### See also
+### ראה גם
 - `BY-STACK/external-sdk.md`
 - `bugbot-rules/sdk-error-completeness.md`
 
 ---
 
-## R5. Filter scope errors
+## R5. שגיאות scope של filter
 
-**Frequency:** 2/3 sources (Noa + 8-Projects/Facebook-Leads-New)
-**Severity:** MEDIUM — empty UI / cron infinite loop / blocked user still gets leads
+**תדירות:** 2/3 מקורות (Noa + 8-Projects/Facebook-Leads-New)
+**חומרה:** MEDIUM — UI ריק / cron בלולאה אינסופית / משתמש חסום שעדיין מקבל leads
 
-### What it looks like
-A filter (DB `WHERE`, regex, JS `.filter()`) is either too narrow (excludes legitimate cases) or applied in the wrong order (later filters override earlier ones).
+### איך זה נראה
+filter (DB `WHERE`, regex, JS `.filter()`) או צר מדי (מוציא מקרים לגיטימיים) או מופעל בסדר שגוי (filters מאוחרים דורסים מוקדמים).
 
-### Real examples
-- **Noa (`f635304`):** Manual list filtered to WhatsApp only; email-preferring lead saw empty list.
-- **Noa (`d526948`):** `channel + audience` filter together blocked valid templates.
-- **Noa (`95dcce6`):** Domain blacklist exact-match missed subdomains (`mail.mailchimp.com`).
-- **Noa (`c608a85`):** Cron retry filter on `lead_id IS NULL` caught spam/not_business rows that would never be assigned → infinite loop.
-- **Noa (`2b978aa`):** Cron filter `count < MAX` excluded rows stuck at `count==MAX` → stuck pending forever.
-- **Facebook-Leads-New (`24ad356`):** Blocked-publisher filter ran *after* `force_send` check → blocked publisher with `force_send` keyword still sent leads.
+### דוגמאות אמיתיות
+- **Noa (`f635304`):** רשימה ידנית סוננה ל-WhatsApp בלבד; lead שמעדיף email ראה רשימה ריקה.
+- **Noa (`d526948`):** סינון `channel + audience` ביחד חסם templates תקפים.
+- **Noa (`95dcce6`):** Domain blacklist עם exact-match פספס subdomains (`mail.mailchimp.com`).
+- **Noa (`c608a85`):** סינון retry של cron על `lead_id IS NULL` תפס שורות spam/not_business שלעולם לא יקבלו lead_id → לולאה אינסופית.
+- **Noa (`2b978aa`):** סינון cron `count < MAX` הוציא שורות תקועות ב-`count==MAX` → תקועות pending לנצח.
+- **Facebook-Leads-New (`24ad356`):** סינון blocked-publisher רץ *אחרי* בדיקת `force_send` → blocked publisher עם מילת מפתח `force_send` עדיין שלח leads.
 
-### Detection rule
-For every filter (`WHERE`, regex, `.filter()`):
-1. **Completeness:** does it cover all expected input variants? (channel filters missing email-pref; regex on emails missing RFC 2822 display name; domain blacklist with exact match instead of `endswith` for subdomains).
-2. **Terminal states for cron:** include explicit "done" columns (`processing_status`, `archived_at`), not "IS NULL" heuristics that catch terminal states which will never get filled.
-3. **Filter order:** security / block / deny filters run *first*, before any "force send / always include" overrides.
+### כלל לזיהוי
+לכל filter (`WHERE`, regex, `.filter()`):
+1. **שלמות:** האם הוא מכסה את כל ה-input variants הצפויים? (סינון channel שמפספס lead שמעדיף email; regex על email שמפספס RFC 2822 display name; domain blacklist עם exact match במקום `endswith` ל-subdomains).
+2. **States סופיים ל-cron:** כלול עמודות "done" מפורשות (`processing_status`, `archived_at`), לא heuristics של "IS NULL" שתופסות states סופיים שלעולם לא יתמלאו.
+3. **סדר filter:** filters של security / block / deny רצים *קודם*, לפני כל override "force send / always include".
 
-### Recommended mode
-**Strict** for cron filters that gate row reprocessing.
-**Warning** for UI filters (false positives common — sometimes scope reduction is the feature).
+### מצב מומלץ
+**strict** ל-filters של cron שמגדירים reprocessing של שורות.
+**warning** ל-filters של UI (false positives שכיחים — לפעמים צמצום scope הוא הפיצ'ר).
 
-### See also
-- `BY-STACK/cron-jobs.md` — terminal-state pattern
+### ראה גם
+- `BY-STACK/cron-jobs.md` — דפוס terminal-state
 - `bugbot-rules/filter-too-narrow.md`
 
 ---
 
-## See also (cross-tier)
+## ראה גם (cross-tier)
 
-- **K7 / PII in logs** — frequency-wise RECURRING (EmailFlow P5 + 8-Projects C6/C24/C57), but severity-wise CRITICAL. Full rule in `CRITICAL-PATTERNS.md`.
+- **K7 / PII בלוגים** — לפי תדירות זה RECURRING (EmailFlow P5 + 8-Projects C6/C24/C57), אבל לפי חומרה CRITICAL. הכלל המלא ב-`CRITICAL-PATTERNS.md`.

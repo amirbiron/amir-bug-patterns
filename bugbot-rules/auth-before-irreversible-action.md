@@ -1,39 +1,39 @@
 # auth-before-irreversible-action
 
-**CRITICAL — auth bypass / OAuth takeover / OTP misuse**
+**CRITICAL — auth bypass / OAuth takeover / שימוש לרעה ב-OTP**
 
-Detect authentication / authorization flows that dispatch an irreversible action (send OTP, link an account, set a password) before persisting the verification state, or that present a fallback path on storage failure.
+זהה flows של אימות / אישור שמשלחים פעולה בלתי הפיכה (שליחת OTP, קישור חשבון, קביעת סיסמה) לפני שמירת state ה-verification, או שמציגים נתיב fallback בכשל storage.
 
-## Flag when ANY apply
+## דווח כשמתקיים אחד מהבאים
 
-1. **Credential dispatch before storage.** Order of operations:
+1. **שליחת credential לפני storage.** סדר הפעולות:
    ```
    send_otp(user, code)  ❌
    redis.set(f"otp:{user}", code, ex=TTL)
    ```
-   If Redis fails after send, user has a code in hand but no verifier matches. Worse, if there's a "skip OTP on Redis miss" fallback path, attacker gains a bypass.
+   אם Redis נכשל אחרי send, למשתמש יש קוד ביד אבל אף verifier לא מתאים. גרוע יותר, אם יש נתיב fallback "דלג על OTP ב-Redis miss", התוקף מקבל עקיפה.
 
-   Correct order:
+   סדר נכון:
    ```
    redis.set(f"otp:{user}", code, ex=TTL)
    send_otp(user, code)
    ```
 
-2. **No-OTP fallback on storage failure.** Any code path that proceeds with authentication when verification storage is unreachable. Fail closed.
+2. **fallback ללא-OTP בכשל storage.** כל נתיב קוד שממשיך עם אימות כשאחסון verification לא בר השגה. fail closed.
 
-3. **"Set password" / "register" / "link account" endpoint accepting an email** without verifying the requester actually owns that email or OAuth identity. If an account already exists via OAuth (or any IdP), reject password-setting unless authenticated as that user, OR proven via a verified one-time link mailed to the OAuth-bound email.
+3. **endpoint של "set password" / "register" / "link account" שמקבל email** בלי לוודא שהמבקש באמת בעל ה-email או זהות ה-OAuth. אם חשבון כבר קיים דרך OAuth (או כל IdP), דחה את קביעת הסיסמה אלא אם מאומת כאותו משתמש, או הוכח דרך קישור one-time מאומת שנשלח ל-email המקושר ל-OAuth.
 
-4. **Login error handling collapses 5xx → "invalid credentials".** Branch:
-   - `401 / 403` → "Invalid credentials" (generic; doesn't leak whether email exists).
-   - `5xx` → "Service temporarily unavailable" + alert monitoring.
+4. **טיפול בשגיאת login מאחד 5xx → "invalid credentials".** הסתעפות:
+   - `401 / 403` → "Invalid credentials" (גנרי; לא דולף אם ה-email קיים).
+   - `5xx` → "Service temporarily unavailable" + התראה למוניטורינג.
    - `429` → "Too many attempts."
-   Never display "invalid credentials" for DB errors.
+   לעולם אל תציג "invalid credentials" לשגיאות DB.
 
 ## False positives
 
-- Synchronous storage where the dispatch and the persist are in one transaction (atomic).
-- Tests with mocked verification storage.
+- storage סינכרוני שבו ה-dispatch וה-persist בטרנזקציה אחת (atomic).
+- טסטים עם storage verification ב-mock.
 
-## Severity
+## חומרה
 
-CRITICAL — auth bypass, credential takeover, or denial-of-auth-availability masked as user error.
+CRITICAL — auth bypass, השתלטות על credential, או denial-of-auth-availability שמוצג כשגיאת משתמש.

@@ -1,28 +1,28 @@
 # linked-field-atomicity
 
-Detect partial atomic updates: code touches one of several coupled fields, forgetting the rest. The "missed" field is later read by another flow → silent inconsistency.
+זהה עדכוני atomic חלקיים: קוד נוגע באחד מכמה שדות מקושרים, שוכח את השאר. השדה ה"שכוח" נקרא מאוחר יותר על ידי flow אחר → אי-עקביות שקטה.
 
-## Flag when ANY apply
+## דווח כשמתקיים אחד מהבאים
 
-1. **Status / lifecycle change** without the coupled timestamps and activity log entries in the same transaction. Examples:
-   - `entity.status = "X"` without updating `entity.last_status_change_at` / `last_activity_type`.
-   - Moving to `PROPOSAL_SENT` without writing `proposal_sent_at`.
-   - Moving to a `BOOKED`-style state without creating / cancelling the related entity row.
+1. **שינוי status / lifecycle** בלי ה-timestamps המקושרים וערכי ה-activity log באותה טרנזקציה. דוגמאות:
+   - `entity.status = "X"` בלי עדכון `entity.last_status_change_at` / `last_activity_type`.
+   - מעבר ל-`PROPOSAL_SENT` בלי כתיבת `proposal_sent_at`.
+   - מעבר ל-state בסגנון `BOOKED` בלי יצירה / ביטול של שורת הישות הקשורה.
 
-2. **External irreversible action without compensating local state.** `await client.send(...)` or `payment.charge(...)` without a preceding INSERT to local DB (with `UNIQUE` constraint) marked "intent" — and follow-up update on success/failure.
+2. **פעולה חיצונית בלתי הפיכה בלי state מקומי מפצה.** `await client.send(...)` או `payment.charge(...)` בלי INSERT קודם ל-DB מקומי (עם `UNIQUE` constraint) מסומן "intent" — ועדכון follow-up על הצלחה/כשל.
 
-3. **Multi-field auth state updated partially.** Updating `access_token` without `refresh_token`. Updating `localStorage["token"]` without `localStorage["refreshToken"]`. Use one JSON blob or always write both.
+3. **state auth מרובה-שדות מתעדכן חלקית.** עדכון `access_token` בלי `refresh_token`. עדכון `localStorage["token"]` בלי `localStorage["refreshToken"]`. השתמש ב-JSON blob יחיד או תמיד כתוב את שניהם atomically.
 
-4. **Partial form-mutation request.** `PATCH /endpoint { hour: 8 }` without sending the `enabled` flag — concurrent requests overwrite each other.
+4. **בקשת mutation חלקית של טופס.** `PATCH /endpoint { hour: 8 }` בלי לשלוח את ה-`enabled` flag — בקשות concurrent דורסות זו את זו.
 
-5. **Audit log only on success path.** When the main `UPDATE` can fail (CAS rejection, race), failure branch must still call `log_activity(..., metadata={"applied": False})`. Otherwise downstream consumers (cron, dashboards) infer that the event never happened.
+5. **Audit log רק על נתיב הצלחה.** כש-`UPDATE` הראשי יכול להיכשל (דחיית CAS, race), branch הכשל עדיין חייב לקרוא ל-`log_activity(..., metadata={"applied": False})`. אחרת צרכנים downstream (cron, dashboards) מסיקים שה-event לא קרה.
 
 ## False positives
 
-- Migrations / backfill scripts (one-shot, not transactional touchpoints).
-- Read-only paths.
-- Single-field updates that are genuinely independent (e.g., `last_viewed_at` not tied to other fields).
+- migrations / scripts של backfill (one-shot, לא touchpoints טרנזקציוניים).
+- נתיבים read-only.
+- עדכוני שדה יחיד שבאמת עצמאיים (למשל `last_viewed_at` לא קשור לשדות אחרים).
 
-## Severity
+## חומרה
 
-HIGH — silent data corruption; downstream flows operate on inconsistent state.
+HIGH — שחיתות נתונים שקטה; flows downstream פועלים על state לא עקבי.

@@ -1,153 +1,153 @@
-# BY-STACK: Cron jobs / scheduled tasks ("I run on a timer")
+# BY-STACK: Cron jobs / scheduled tasks ("אני רץ לפי טיימר")
 
-## Relevance — copy this file if your project has...
-- ✅ Scheduled jobs (Celery beat, APScheduler, cron, node-cron, Render cron, Heroku scheduler)
-- ✅ Periodic queries that filter rows and process them in batch
-- ✅ Background workers that retry failures with attempt counters
-- ✅ Race possibilities between the scheduler and ad-hoc dispatchers (`.delay()`, manual triggers)
-- ⏭ Skip if: no periodic / scheduled work
+## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+- ✅ jobs מתוזמנים (Celery beat, APScheduler, cron, node-cron, Render cron, Heroku scheduler)
+- ✅ queries תקופתיים שמסננים שורות ומעבדים אותן ב-batch
+- ✅ workers ברקע שעושים retry לכשלים עם מוני attempts
+- ✅ אפשרויות race בין ה-scheduler ל-dispatchers ad-hoc (`.delay()`, triggers ידניים)
+- ⏭ דלג אם: בלי עבודה תקופתית / מתוזמנת
 
-> Cross-link: **CORE U1** (race conditions) applies when a cron coexists with webhook / queue dispatchers on the same rows. **R5** (filter scope errors) lives partially here.
-
----
-
-## Mental model
-
-A cron job is a function that repeatedly asks "which rows still need work?" and acts on them. Two things must hold for it to converge:
-1. **A row must leave the filter set after successful processing.** Otherwise it's reprocessed forever.
-2. **The filter set must not catch rows that will never be processable.** Otherwise the cron loops trying to handle them.
-
-Most cron bugs come from violating one of these.
+> Cross-link: **CORE U1** (race conditions) חל כש-cron מתקיים יחד עם dispatchers של webhook / queue על אותן שורות. **R5** (filter scope errors) חי כאן חלקית.
 
 ---
 
-## Pattern 1 — No terminal state → infinite loop (Noa P5)
+## מודל מנטלי
 
-**Severity:** HIGH — wasted compute, API quota burn, duplicate side effects
+cron job הוא פונקציה ששואלת שוב ושוב "אילו שורות עדיין צריכות עבודה?" ומפעילה עליהן פעולה. שני דברים חייבים להחזיק כדי שתתכנס:
+1. **שורה חייבת לעזוב את ה-filter set אחרי עיבוד מוצלח.** אחרת היא מעובדת לנצח.
+2. **ה-filter set לא חייב לתפוס שורות שלעולם לא יהיו ניתנות לעיבוד.** אחרת ה-cron נכנס ללולאה בניסיון לטפל בהן.
 
-### Variants
+רוב באגי ה-cron מגיעים מהפרה של אחד מהשניים.
 
-**Variant A — filter on `IS NULL` catches terminal states:**
+---
+
+## דפוס 1 — בלי terminal state → לולאה אינסופית (Noa P5)
+
+**חומרה:** HIGH — בזבוז compute, שריפת מכסת API, side effects כפולים
+
+### וריאציות
+
+**וריאציה A — filter על `IS NULL` תופס terminal states:**
 ```python
-# Cron: retry classifying leads where lead_id is null
+# Cron: retry classify של leads שבהם lead_id הוא null
 q = select(Inbound).where(Inbound.lead_id.is_(None))
 ```
-But the tagger marks some inbounds as `'spam'` or `'not_business'`, which legitimately have no `lead_id` and never will. They loop forever.
+אבל ה-tagger מסמן חלק מה-inbounds כ-`'spam'` או `'not_business'`, ולגיטימית אין להם `lead_id` ולעולם לא יהיה. הם בלולאה לנצח.
 
-**Variant B — `count < MAX` doesn't catch exhaustion:**
+**וריאציה B — `count < MAX` לא תופס מיצוי:**
 ```python
 q = select(Job).where(Job.attempts < MAX_ATTEMPTS, Job.status == "pending")
 ```
-A row stuck at `attempts == MAX_ATTEMPTS` exits the query → it stays `pending` forever, never moved to `failed`.
+שורה תקועה ב-`attempts == MAX_ATTEMPTS` יוצאת מה-query → היא נשארת `pending` לנצח, לעולם לא עוברת ל-`failed`.
 
-**Variant C — filter doesn't check post-action state:**
+**וריאציה C — filter לא בודק state אחרי הפעולה:**
 ```python
-# Cron: send warm followup
+# Cron: שלח warm followup
 q = select(Lead).where(Lead.status == "warm", Lead.last_outbound_at < now() - 7d)
 ```
-After the cron creates a follow-up task, `last_outbound_at` doesn't change (task isn't sent yet). Next hour, query catches the lead again, creates another task.
+אחרי שה-cron יוצר task של follow-up, `last_outbound_at` לא משתנה (ה-task עוד לא נשלח). השעה הבאה, ה-query תופס את ה-lead שוב, יוצר task נוסף.
 
-### Detection rule
-For every job in `jobs/` / `tasks/` / `cron/`:
-1. Identify the main query's `WHERE` clause.
-2. Ask: "When the action succeeds, which `WHERE` condition becomes False?"
-3. If the answer is heuristic (`lead_id IS NULL`, `count < MAX`, `status IN (...)`), verify the action writes a column that *guarantees* exit. If not, add a dedicated `processing_status` / `done_at` / `tag` column.
-4. For retry loops with attempt counters: when `attempts == MAX`, transition the row to a terminal state (`status='failed'`), don't leave it `pending`.
+### כלל לזיהוי
+לכל job ב-`jobs/` / `tasks/` / `cron/`:
+1. זהה את ה-`WHERE` הראשי של ה-query.
+2. שאל: "כשהפעולה מצליחה, איזה תנאי `WHERE` הופך False?"
+3. אם התשובה היא heuristic (`lead_id IS NULL`, `count < MAX`, `status IN (...)`), ודא שהפעולה כותבת עמודה ש*מבטיחה* יציאה. אם לא, הוסף עמודת `processing_status` / `done_at` / tag ייעודית.
+4. ללולאות retry עם מוני attempts: כש-`attempts == MAX`, עבור עם השורה ל-state סופי (`status='failed'`), אל תשאיר אותה `pending`.
 
-### Real commits
-- Noa `c608a85` — cron retry filter `lead_id IS NULL` caught spam/not_business → loop.
-- Noa `2b978aa` — cron filter `count < MAX` left exhausted rows pending.
-- Noa `1c4eb3a` — `check_warm_followups` didn't check "task created after last_outbound" → loop every hour.
-- Noa `8bfa977` — `detect_dormant` didn't skip leads with `FIRST_RESPONSE/RETRY_CALL` open → duplicate reminders.
+### Commits אמיתיים
+- Noa `c608a85` — filter retry של cron `lead_id IS NULL` תפס spam/not_business → לולאה.
+- Noa `2b978aa` — filter cron `count < MAX` השאיר שורות שמוצו pending.
+- Noa `1c4eb3a` — `check_warm_followups` לא בדק "task נוצר אחרי last_outbound" → לולאה כל שעה.
+- Noa `8bfa977` — `detect_dormant` לא דילג על leads עם `FIRST_RESPONSE/RETRY_CALL` פתוחים → תזכורות כפולות.
 
-### Recommended mode
-**Strict** — every cron query must filter on a column that the action explicitly writes.
+### מצב מומלץ
+**strict** — כל cron query חייב לסנן על עמודה שהפעולה כותבת במפורש.
 
 ### False positives
-- Reporting cron (logs only, no DB writes) — loops are fine.
-- One-shot job at startup (not periodic).
+- cron של reporting (logs בלבד, בלי כתיבות DB) — לולאות בסדר.
+- job one-shot ב-startup (לא תקופתי).
 
 ---
 
-## Pattern 2 — Filter too narrow / wrong order (R5)
+## דפוס 2 — filter צר מדי / סדר שגוי (R5)
 
-### Variants
+### וריאציות
 
-**Too narrow — excludes legitimate cases:**
+**צר מדי — מוציא מקרים לגיטימיים:**
 ```python
-q = select(Lead).where(Lead.channel == "whatsapp")  # ❌ misses email-pref leads
+q = select(Lead).where(Lead.channel == "whatsapp")  # ❌ מפספס leads שמעדיפים email
 ```
 
-**Wrong order — security filter runs after override:**
+**סדר שגוי — security filter רץ אחרי override:**
 ```python
 if message.contains(FORCE_SEND_KEYWORD):
   send(lead, message)
   return
 if blocked_publishers.contains(lead.publisher_id):
-  return  # ❌ never reaches this for force_send
+  return  # ❌ לעולם לא מגיע לכאן ל-force_send
 ```
 
-### Detection rule
-1. Check filter **completeness**: list all input variants the filter is supposed to cover (channels, statuses, source types). Walk through each.
-2. Check filter **order**: deny / block / security filters come **first**, then business-logic filters, then "force include" overrides.
+### כלל לזיהוי
+1. בדוק **שלמות** של filter: רשום את כל ה-variants של input שה-filter אמור לכסות (channels, statuses, source types). עבור על כל אחד.
+2. בדוק **סדר** של filter: filters של deny / block / security באים **קודם**, אחר כך filters של business-logic, ואז overrides של "force include".
 
-### Real commits
-- Noa `f635304`, `d526948`, `95dcce6`, `ad34858`, `76b20b3` — various filter exclusion bugs.
-- Facebook-Leads-New `24ad356` — blocked-publisher filter after `force_send`.
+### Commits אמיתיים
+- Noa `f635304`, `d526948`, `95dcce6`, `ad34858`, `76b20b3` — באגי filter exclusion שונים.
+- Facebook-Leads-New `24ad356` — filter blocked-publisher אחרי `force_send`.
 
 ---
 
-## Pattern 3 — Cron + beat-scheduler race (CORE U1 specialization)
+## דפוס 3 — race של cron + beat-scheduler (CORE U1 specialization)
 
-A periodic dispatcher (beat) and an ad-hoc `.delay()` both try to claim the same row.
+dispatcher תקופתי (beat) ו-`.delay()` ad-hoc שניהם מנסים לתבוע את אותה שורה.
 
-### Fix
-Atomic CAS:
+### תיקון
+CAS atomic:
 ```sql
 UPDATE messages SET status='processing'
   WHERE id=:id AND status='pending'
   RETURNING id;
 ```
-Check rowcount in the worker; only proceed if you got the row.
+בדוק rowcount ב-worker; המשך רק אם קיבלת את השורה.
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `457eea1`.
 
 ---
 
-## Pattern 4 — Singleton engine in Celery / async task runner
+## דפוס 4 — singleton engine ב-Celery / async task runner
 
-Module-level engine bound to import-time event loop fails when the next task gets a fresh loop.
+engine ברמת module שמקושר ל-event loop של זמן ה-import נכשל כשה-task הבא מקבל loop טרי.
 
-### Fix
-Lazy-create engine per task, or call `engine.dispose()` between tasks. See `BY-STACK/async-orm.md` Pattern 4.
+### תיקון
+יצירת engine lazy לכל task, או `engine.dispose()` בין tasks. ראה `BY-STACK/async-orm.md` דפוס 4.
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `0f30963`.
 
 ---
 
-## Pattern 5 — Blocking sync calls inside async event loop
+## דפוס 5 — קריאות sync חוסמות בתוך event loop async
 
 ```python
 async def my_cron():
-  result = send_lead(lead)  # ❌ sync call, blocks the loop for the duration
+  result = send_lead(lead)  # ❌ קריאה sync, חוסמת את ה-loop למשך הזמן
 ```
 
-If the cron is running inside `asyncio` (FastAPI background, APScheduler async, Render async), sync calls block all other tasks.
+אם ה-cron רץ בתוך `asyncio` (FastAPI background, APScheduler async, Render async), קריאות sync חוסמות את כל ה-tasks האחרים.
 
-### Fix
+### תיקון
 ```python
 result = await asyncio.to_thread(send_lead, lead)
-# or: await loop.run_in_executor(None, send_lead, lead)
+# או: await loop.run_in_executor(None, send_lead, lead)
 ```
 
-### Real commits
+### Commits אמיתיים
 - Facebook-Leads-New `35ac718`.
 
 ---
 
-## Pattern 6 — Distributed state seen as "still waiting" because cron module imports stale view
+## דפוס 6 — state מבוזר נראה "עדיין מחכה" כי module של cron מייבא view ישן
 
 ```python
 # scanner.py
@@ -156,23 +156,23 @@ def run_scan(): ...
 
 # panel.py
 from .scanner import scan_progress
-return {"progress": scan_progress["status"]}  # ❌ panel sees the import-time snapshot
+return {"progress": scan_progress["status"]}  # ❌ ה-panel רואה snapshot מזמן ה-import
 ```
 
-If `scanner.py` and `panel.py` run in different processes / imports, `scan_progress` diverges.
+אם `scanner.py` ו-`panel.py` רצים בתהליכים / imports שונים, `scan_progress` מתפצל.
 
-### Fix
-Single source of truth (DB row) that all callers read at request time, not module-level globals.
+### תיקון
+מקור אמת יחיד (שורת DB) שכל ה-callers קוראים בזמן הבקשה, לא globals ברמת module.
 
-### Real commits
+### Commits אמיתיים
 - Facebook-Leads-New `454e530`, `4cb5c37`.
 
 ---
 
-## Pattern 7 — Stale closure: `lastSentMap` grows without eviction
+## דפוס 7 — Stale closure: `lastSentMap` גדל בלי eviction
 
 ```js
-const lastSentMap = new Map();  // process lifetime; never evicted
+const lastSentMap = new Map();  // אורך חיי תהליך; לעולם לא מתפנה
 function push(userId) {
   if (Date.now() - lastSentMap.get(userId) < THROTTLE) return;
   send(userId);
@@ -180,32 +180,38 @@ function push(userId) {
 }
 ```
 
-Memory leak — after days, the map has every user who ever interacted.
+דליפת זיכרון — אחרי ימים, ה-map מכיל כל משתמש שאי פעם תיקשר.
 
-### Fix
-Add TTL / LRU eviction, or move dedup to Redis with `EXPIRE`.
+### תיקון
+הוסף TTL / LRU eviction, או הזז dedup ל-Redis עם `EXPIRE`.
 
-### Real commits
+### Commits אמיתיים
 - routine `4d91c5c`.
 
 ---
 
-## Pattern 8 — Time-edge bugs in periodic jobs
+## דפוס 8 — באגי קצוות זמן ב-jobs תקופתיים
 
-- `toLocaleTimeString({hour12: false})` can return `"24:00"` in some locales → 24-hour validation fails → midnight reminders never send (routine `4d91c5c`).
-- Negative `timedelta` from clock skew → "-3 minutes ago" display (Facebook-Leads-New `9b15e0b`).
-- Cron expression "every 5 minutes" + processing time of 6 minutes → overlapping runs.
+- `toLocaleTimeString({hour12: false})` יכול להחזיר `"24:00"` בלוקאלים מסוימים → ולידציית 24-hour נכשלת → תזכורות חצות לעולם לא נשלחות (routine `4d91c5c`).
+- `timedelta` שלילי מ-clock skew → תצוגת "-3 minutes ago" (Facebook-Leads-New `9b15e0b`).
+- ביטוי cron "כל 5 דקות" + זמן עיבוד של 6 דקות → ריצות חופפות.
 
-### Fix
-- Use `"00:00"` as canonical midnight; validate hours 0-23.
-- `max(timedelta(0), now - last_seen)` for "time since" display.
-- Acquire an advisory lock at the start of each cron run; skip if already held.
+### תיקון
+- השתמש ב-`"00:00"` כחצות קנוני; ולידציה לשעות 0-23.
+- `max(timedelta(0), now - last_seen)` לתצוגת "זמן מאז".
+- רכישת advisory lock בתחילת כל ריצת cron; דלג אם כבר מוחזק.
 
 ---
 
-## Cross-references
+## דפוס 9 — state במקום-יחיד-כמקור-אמת חי ב-DB, לא ב-globals ברמת module
 
-- **CORE U1** — race conditions (general theory)
-- **R5** — filter scope errors (this file is the deep-dive)
-- **BY-STACK/async-orm.md** — Celery singleton engine, in-loop commits
+cross-process imports מתפצלים.
+
+---
+
+## הפניות צולבות
+
+- **CORE U1** — race conditions (תיאוריה כללית)
+- **R5** — filter scope errors (הקובץ הזה הוא ה-deep-dive)
+- **BY-STACK/async-orm.md** — Celery singleton engine, commits בתוך לולאה
 - **`bugbot-rules/cron-terminal-state.md`**, **`filter-too-narrow.md`**

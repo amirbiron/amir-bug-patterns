@@ -1,28 +1,28 @@
-# BY-STACK: External SDKs (Anthropic, Google, Stripe, OAuth, push notifications)
+# BY-STACK: SDKs חיצוניים (Anthropic, Google, Stripe, OAuth, push notifications)
 
-## Relevance — copy this file if your project has...
-- ✅ Anthropic / OpenAI / other LLM SDK calls
-- ✅ Google APIs (Calendar, Gmail, OAuth, Sheets, FCM, web-push)
-- ✅ Stripe, Twilio, Telegram, Slack, Meta SDKs
-- ✅ Parsing API responses, webhook payloads, or AI-generated JSON
-- ✅ Startup-time SDK initialization with env vars / keys
-- ⏭ Skip if: project has no third-party integrations
+## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+- ✅ קריאות SDK של Anthropic / OpenAI / LLM אחר
+- ✅ APIs של Google (Calendar, Gmail, OAuth, Sheets, FCM, web-push)
+- ✅ SDKs של Stripe, Twilio, Telegram, Slack, Meta
+- ✅ ניתוח של תגובות API, payloads של webhook, או JSON שנוצר על ידי AI
+- ✅ אתחול SDK בזמן startup עם env vars / keys
+- ⏭ דלג אם: לפרויקט אין אינטגרציות צד שלישי
 
-> Cross-link: **CORE U3** (external input validation) is the general rule; this file covers SDK-specific manifestations. **R4** (SDK error completeness) lives here in depth.
-
----
-
-## Mental model
-
-Every external SDK is two boundaries:
-1. **Outgoing call** — your code → SDK → network. Can fail with the SDK's exception hierarchy, network errors, or timeout.
-2. **Incoming data** — SDK → your code. Can return different shapes in test/sandbox/prod, may include nulls/missing fields, and the SDK's type hints are aspirational.
-
-Defensive coding at both boundaries is the price of admission.
+> Cross-link: **CORE U3** (ולידציה של external input) הוא הכלל הכללי; הקובץ הזה מכסה מופעים ספציפיים ל-SDK. **R4** (שלמות exception של SDK) חי כאן לעומק.
 
 ---
 
-## Pattern 1 — Catching too-narrow exception base (R4)
+## מודל מנטלי
+
+כל SDK חיצוני הוא שני גבולות:
+1. **קריאה יוצאת** — הקוד שלך → SDK → רשת. יכול להיכשל עם היררכיית exceptions של ה-SDK, שגיאות רשת, או timeout.
+2. **נתונים נכנסים** — SDK → הקוד שלך. יכול להחזיר צורות שונות ב-test/sandbox/prod, יכול לכלול nulls/שדות חסרים, ו-type hints של ה-SDK הם שאפתניים.
+
+קוד הגנתי בשני הגבולות הוא מחיר הכניסה.
+
+---
+
+## דפוס 1 — תפיסת base צר מדי ב-`except` (R4)
 
 ```python
 try:
@@ -31,11 +31,11 @@ except RateLimitError:
   await asyncio.sleep(BACKOFF); retry
 except _RETRYABLE_ERRORS:
   retry
-# ❌ APIError subtypes (NotFound, BadRequest, Auth) propagate uncaught
+# ❌ subtypes של APIError (NotFound, BadRequest, Auth) עוברים בלי טיפול
 ```
 
-### Fix
-Catch the SDK's base class, then refine:
+### תיקון
+תפוס את ה-base class של ה-SDK, ואז עדן:
 ```python
 try:
   result = await anthropic.messages.create(...)
@@ -46,60 +46,60 @@ except APIError as e:
   else: raise
 ```
 
-Order `except` blocks subclass-before-superclass.
+סדר את בלוקי ה-`except` subclass-לפני-superclass.
 
-### Real commits
-- Noa `c128115` — Anthropic SDK error completeness.
-- Noa `95dcce6` — fallback swallowed `RateLimitError` as generic `AIError`.
+### Commits אמיתיים
+- Noa `c128115` — שלמות exception של Anthropic SDK.
+- Noa `95dcce6` — fallback בלע `RateLimitError` כ-`AIError` גנרי.
 
 ---
 
-## Pattern 2 — `CancelledError` not caught by `Exception` (Python ≥ 3.8)
+## דפוס 2 — `CancelledError` לא נתפס על ידי `Exception` (Python ≥ 3.8)
 
 ```python
 results = await asyncio.gather(*tasks, return_exceptions=True)
 for r in results:
-  if isinstance(r, Exception):  # ❌ misses CancelledError
+  if isinstance(r, Exception):  # ❌ מפספס CancelledError
     handle_error(r)
   else:
-    count_success += 1  # ❌ cancelled tasks counted as success
+    count_success += 1  # ❌ tasks מבוטלים נספרים כהצלחה
 ```
 
-`asyncio.CancelledError` inherits from `BaseException` (not `Exception`) since Python 3.8.
+`asyncio.CancelledError` יורש מ-`BaseException` (לא `Exception`) מאז Python 3.8.
 
-### Fix
+### תיקון
 ```python
 for r in results:
   if isinstance(r, BaseException):
     handle_error(r)
 ```
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `e0f4d59`.
 
 ---
 
-## Pattern 3 — `isinstance(r, SendResult)` vs `r is True`
+## דפוס 3 — `isinstance(r, SendResult)` מול `r is True`
 
 ```python
-if r is True: count_success += 1  # ❌ SendResult object, not bool
+if r is True: count_success += 1  # ❌ אובייקט SendResult, לא bool
 ```
 
-### Fix
-Implement `__bool__` on the result class, or compare explicitly:
+### תיקון
+ממש `__bool__` על מחלקת התוצאה, או השווה במפורש:
 ```python
 if isinstance(r, SendResult) and r.ok: count_success += 1
 ```
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `11e7379`.
 
 ---
 
-## Pattern 4 — Startup-time SDK init crashes the server (R4)
+## דפוס 4 — אתחול SDK בזמן startup קורס את השרת (R4)
 
 ```python
-# at import time
+# ב-import time
 webpush.set_vapid_details(
   subject=settings.VAPID_EMAIL,
   public_key=settings.VAPID_PUBLIC_KEY,
@@ -107,10 +107,10 @@ webpush.set_vapid_details(
 )
 ```
 
-If `VAPID_EMAIL` lacks the `mailto:` prefix, or keys are malformed, this throws on import → entire server crashes on boot. Same for OAuth client init, Stripe client init.
+אם `VAPID_EMAIL` חסר prefix של `mailto:`, או keys פגומים, זה זורק ב-import → כל השרת קורס ב-boot. אותו דבר ל-OAuth client init, Stripe client init.
 
-### Fix
-Wrap in try/except + validate format:
+### תיקון
+עטוף ב-try/except + ולידציית פורמט:
 ```python
 def init_push():
   try:
@@ -125,23 +125,23 @@ def init_push():
     return False
 ```
 
-Degrade the *feature*, not the whole server.
+הורד את ה-*פיצ'ר*, לא את כל השרת.
 
-### Real commits
+### Commits אמיתיים
 - routine `e5c26ad`, `2571c91`.
 
 ---
 
-## Pattern 5 — Regex on AI / SDK JSON response (CORE U3)
+## דפוס 5 — regex על JSON של AI / SDK (CORE U3)
 
 ```python
-match = re.search(r"\{.*\}", ai_response, re.DOTALL)  # ❌ greedy; breaks on trailing prose
+match = re.search(r"\{.*\}", ai_response, re.DOTALL)  # ❌ חמדן; נשבר על prose
 data = json.loads(match.group(0))
 ```
 
-`\{.*\}` is greedy. Trailing `}` in prose (`"... and finally }"`) bleeds into the match. Nested objects, escape sequences also break.
+`\{.*\}` חמדן. `}` סוגר ב-prose (`"... and finally }"`) דולף לתוך ה-match. אובייקטים מקוננים, escape sequences גם שוברים.
 
-### Fix
+### תיקון
 ```python
 decoder = json.JSONDecoder()
 start = ai_response.find("{")
@@ -149,19 +149,19 @@ if start < 0: raise ValueError("no JSON")
 data, _ = decoder.raw_decode(ai_response[start:])
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `f27adc1`.
 
 ---
 
-## Pattern 6 — isinstance guards on external responses (CORE U3)
+## דפוס 6 — isinstance guards על תגובות חיצוניות (CORE U3)
 
 ```python
 data = response.json()
-items = data.get("messages", [])  # ❌ if data is a list, .get crashes
+items = data.get("messages", [])  # ❌ אם data הוא רשימה, .get קורס
 ```
 
-### Fix
+### תיקון
 ```python
 data = response.json()
 if not isinstance(data, dict):
@@ -171,63 +171,63 @@ if not isinstance(items, list):
   raise ValueError("messages not a list")
 ```
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `6b7dbeb`, `46d05f7`, `55b4328`, `018b166`.
 
 ---
 
-## Pattern 7 — SDK env / config flags ignored
+## דפוס 7 — env / config flags של SDK שלא כובדו
 
-Some SDKs require env-var flags to handle real-world edge cases:
-- `OAUTHLIB_RELAX_TOKEN_SCOPE=1` — OAuth scope drift in Google libraries (Noa `95b82e5`).
-- `OAUTHLIB_INSECURE_TRANSPORT=1` — only for local dev (HTTP callbacks).
-- `STRIPE_API_VERSION` — pin to avoid silent breaking changes.
-- `ANTHROPIC_LOG=debug` — verbose logs.
+חלק מה-SDKs דורשים env-var flags כדי לטפל ב-edge cases של עולם אמיתי:
+- `OAUTHLIB_RELAX_TOKEN_SCOPE=1` — סטיית scope של OAuth בספריות Google (Noa `95b82e5`).
+- `OAUTHLIB_INSECURE_TRANSPORT=1` — רק ל-dev מקומי (HTTP callbacks).
+- `STRIPE_API_VERSION` — pin כדי למנוע שינויי-שבירה שקטים.
+- `ANTHROPIC_LOG=debug` — logs verbose.
 
-Document these in your project's settings and treat scope-drift / version-skew as expected operational events, not exceptions.
+תעד את אלה בהגדרות הפרויקט שלך והתייחס ל-scope-drift / version-skew כ-events תפעוליים צפויים, לא exceptions.
 
 ---
 
-## Pattern 8 — Pydantic schema mismatch on external enum (links to state-machine.md Pattern 4)
+## דפוס 8 — אי-התאמת Pydantic schema על enum חיצוני (מקושר ל-state-machine.md דפוס 4)
 
 ```python
 class LeadDraft(BaseModel):
-  service_category: ServiceCategoryEnum  # strict; rejects unknown
+  service_category: ServiceCategoryEnum  # strict; דוחה לא מוכר
 ```
-AI returns `"unknown"` → Pydantic rejects → entire draft (including valid `full_name` and `phone`) is lost.
+AI מחזיר `"unknown"` → Pydantic דוחה → ה-draft כולו (כולל `full_name` ו-`phone` תקפים) הולך לאיבוד.
 
-### Fix
-For external-sourced enum values, accept `str | None` and validate idempotently in the caller. Reserve strict enums for internal-only fields.
+### תיקון
+לערכי enum ממקור חיצוני, קבל `str | None` ועשה ולידציה idempotent ב-caller. שמור enums strict לשדות פנימיים בלבד.
 
-### Real commits
+### Commits אמיתיים
 - Noa `7001892`, `f6293e3`, `dc24922`.
 
 ---
 
-## Pattern 9 — Walrus + truthy check on env var
+## דפוס 9 — Walrus + בדיקת truthy על env var
 
 ```python
-if override := os.environ.get("OVERRIDE_VALUE"):  # ❌ "" is falsy but valid override
+if override := os.environ.get("OVERRIDE_VALUE"):  # ❌ "" הוא falsy אבל override תקף
   apply(override)
 ```
 
-`""` is a meaningful value ("override to empty"), but the walrus treats it as `None`.
+`""` הוא ערך משמעותי ("override ל-empty"), אבל ה-walrus מתייחס אליו כ-`None`.
 
-### Fix
+### תיקון
 ```python
 override = os.environ.get("OVERRIDE_VALUE")
 if override is not None:
   apply(override.strip())
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `236b072`.
 
 ---
 
-## Cross-references
+## הפניות צולבות
 
-- **CORE U3** — boundary validation (general theory)
-- **R4** — SDK error completeness (this file is the deep-dive)
-- **BY-STACK/state-machine.md** — Pydantic schema mismatch
+- **CORE U3** — ולידציה של boundary (תיאוריה כללית)
+- **R4** — שלמות exception של SDK (הקובץ הזה הוא ה-deep-dive)
+- **BY-STACK/state-machine.md** — אי-התאמת Pydantic schema
 - **`bugbot-rules/external-input-isinstance.md`**, **`sdk-error-completeness.md`**

@@ -1,238 +1,238 @@
-# CRITICAL PATTERNS
+# דפוסים קריטיים (CRITICAL)
 
-High-severity bug patterns — **always apply, regardless of stack or frequency in source documents.** Security, data-loss, privacy, financial, or catastrophic-availability impact.
+דפוסי באגים בחומרה גבוהה — **תמיד החל, ללא קשר ל-stack או לתדירות במסמכי המקור.** חומרה אבטחתית, אובדן נתונים, פרטיות, פיננסי, או זמינות קטסטרופלית.
 
-Several of these appeared in only one source document (the 8-projects scan, where security work was systematically reviewed). Their **severity warrants top-tier placement even though frequency is narrow**. Each is tagged with its evidence base.
+חלק מהם הופיעו רק במסמך מקור אחד (סריקת 8-הפרויקטים, שבה עבודת אבטחה נסקרה באופן שיטתי). **החומרה שלהם מצדיקה הצבה בדרג העליון גם כשהתדירות צרה**. כל אחד מתויג עם בסיס הראיות שלו.
 
 ---
 
-## K1. OAuth password takeover via signup flow
+## K1. השתלטות על חשבון OAuth דרך flow של signup
 
-**Source:** 8-Projects C1 (routine — commit `8a39df6`)
-**Severity:** CRITICAL — full account takeover
+**מקור:** 8-Projects C1 (routine — commit `8a39df6`)
+**חומרה:** CRITICAL — השתלטות מלאה על חשבון
 
-### What it looks like
-Signup flow allows setting a password for an account that already exists via OAuth, requiring only the email address as input. Attacker who knows an OAuth user's email can:
-1. Submit signup with that email + a new password.
-2. Login with email/password from then on, bypassing OAuth.
+### איך זה נראה
+flow של signup מאפשר קביעת סיסמה לחשבון שכבר קיים דרך OAuth, ודורש רק את כתובת ה-email כקלט. תוקף שיודע את ה-email של משתמש OAuth יכול:
+1. לשלוח signup עם ה-email הזה + סיסמה חדשה.
+2. להתחבר עם email/password מאז ואילך, ולעקוף את OAuth.
 
-### Detection rule
-For any "set password" / "register" / "link account" endpoint that accepts an email:
-1. If an account exists under that email via OAuth (or any other identity provider), **reject** the password-setting unless the request is authenticated as that user OR includes a verified one-time link sent to the OAuth-bound email.
-2. Email knowledge alone is never sufficient for privilege transfer.
+### כלל לזיהוי
+לכל endpoint של "set password" / "register" / "link account" שמקבל email:
+1. אם חשבון קיים תחת ה-email דרך OAuth (או כל ספק זהות אחר), **דחה** את קביעת הסיסמה אלא אם הבקשה מאומתת כאותו משתמש או כוללת קישור one-time מאומת שנשלח ל-email שמקושר ל-OAuth.
+2. ידיעת ה-email לבדה אף פעם לא מספיקה להעברת privilege.
 
-### See also
+### ראה גם
 - `bugbot-rules/auth-before-irreversible-action.md`
 - `bugbot-rules/privilege-escalation-unverified.md`
 
 ---
 
-## K2. Rate limiter bypass via X-Forwarded-For spoofing
+## K2. עקיפת rate limiter דרך זיוף X-Forwarded-For
 
-**Source:** 8-Projects C2 (Shipment-bot `11e7379`, routine `06ca796` — two projects)
-**Severity:** CRITICAL — security control bypassed
+**מקור:** 8-Projects C2 (Shipment-bot `11e7379`, routine `06ca796` — שני פרויקטים)
+**חומרה:** CRITICAL — בקרת אבטחה נעקפת
 
-### What it looks like
-Rate limiter reads `X-Forwarded-For` (or `X-Real-IP`) directly from the request without validating that the immediate peer is a trusted proxy. Attacker spoofs the header → each request appears to come from a different IP → unlimited requests.
+### איך זה נראה
+ה-rate limiter קורא `X-Forwarded-For` (או `X-Real-IP`) ישירות מהבקשה בלי לוודא שה-peer המיידי הוא proxy אמין. התוקף מזייף את ה-header → כל בקשה נראית מגיעה מ-IP שונה → אין הגבלה.
 
-### Detection rule
-Anywhere the code uses `request.headers["x-forwarded-for"]` or equivalent for security / rate-limit / abuse decisions:
-1. The framework must be configured with an explicit trusted-proxy list (Starlette `ProxyHeadersMiddleware` with `trusted_hosts`; Express `app.set('trust proxy', <list>)`; Flask `ProxyFix(... trusted_hops=N)`).
-2. **Never** trust the entire `X-Forwarded-For` chain; trust only the rightmost segments equal to the configured hop count.
-3. If no proxy is in front, use `request.client.host` / `req.socket.remoteAddress` only.
+### כלל לזיהוי
+בכל מקום שהקוד משתמש ב-`request.headers["x-forwarded-for"]` או שווה ערך להחלטות security / rate-limit / abuse:
+1. ה-framework חייב להיות מוגדר עם רשימה מפורשת של proxies אמינים (Starlette `ProxyHeadersMiddleware` עם `trusted_hosts`; Express `app.set('trust proxy', <list>)`; Flask `ProxyFix(... trusted_hops=N)`).
+2. **לעולם** אל תסמוך על כל ה-chain של `X-Forwarded-For`; סמוך רק על הסגמנטים מימין השווים למספר ה-hops שמוגדר.
+3. אם אין proxy מקדים, השתמש ב-`request.client.host` / `req.socket.remoteAddress` בלבד.
 
-### See also
-- `BY-STACK/webhooks.md` — section on caller identity
+### ראה גם
+- `BY-STACK/webhooks.md` — סעיף על זהות הקורא
 - `bugbot-rules/rate-limit-xff-spoofing.md`
 
 ---
 
-## K3. Privilege escalation — auto-admin by unverified email
+## K3. הסלמת הרשאות — auto-admin לפי email לא מאומת
 
-**Source:** 8-Projects C10 (Markdown-Academy — commit `4623bdb`)
-**Severity:** CRITICAL — admin role granted to attacker
+**מקור:** 8-Projects C10 (Markdown-Academy — commit `4623bdb`)
+**חומרה:** CRITICAL — תפקיד admin ניתן לתוקף
 
-### What it looks like
-On registration, the code checks whether the supplied email equals a configured "owner / admin" email. If it does, the new user is granted admin role — **before** the email has been verified. Attacker who knows the owner's email creates an account, never confirms email, and is admin.
+### איך זה נראה
+ב-registration, הקוד בודק אם ה-email שסופק שווה ל-email של "owner / admin" שמוגדר. אם כן, המשתמש החדש מקבל תפקיד admin — **לפני** שה-email אומת. תוקף שיודע את ה-email של ה-owner יוצר חשבון, לעולם לא מאשר email, והוא admin.
 
-### Detection rule
-Any code path that grants elevated role (admin / staff / owner / super_user) must:
-1. Be reachable **only after** email verification (verification token validated, `email_verified_at` set).
-2. Or be gated by an out-of-band action by an existing admin (invite link + token).
-3. Never trust `request.body.email == OWNER_EMAIL` at registration time.
+### כלל לזיהוי
+כל נתיב קוד שמעניק תפקיד מוגבר (admin / staff / owner / super_user) חייב:
+1. להיות נגיש **רק אחרי** email verification (verification token תקף, `email_verified_at` מסומן).
+2. או להיות gated על ידי פעולה out-of-band של admin קיים (קישור invite + token).
+3. לעולם לא לסמוך על `request.body.email == OWNER_EMAIL` בזמן registration.
 
-### See also
+### ראה גם
 - `bugbot-rules/privilege-escalation-unverified.md`
 
 ---
 
-## K4. XSS via `innerHTML` with user-supplied display name
+## K4. XSS דרך `innerHTML` עם display name של משתמש
 
-**Source:** 8-Projects C9 (Facebook-Leads-New — commit `6a6ec51`)
-**Severity:** CRITICAL — DOM XSS in admin panel
+**מקור:** 8-Projects C9 (Facebook-Leads-New — commit `6a6ec51`)
+**חומרה:** CRITICAL — DOM XSS בפאנל admin
 
-### What it looks like
-`renderBlockedUsers` (or any admin/internal panel) used `element.innerHTML = '<div>' + user.name + '</div>'` with a name sourced from an external system (Facebook display name). A user named `<script>alert(1)</script>` executes script in the admin's browser context.
+### איך זה נראה
+`renderBlockedUsers` (או כל פאנל admin/פנימי) השתמש ב-`element.innerHTML = '<div>' + user.name + '</div>'` עם שם שמקורו במערכת חיצונית (Facebook display name). משתמש עם שם `<script>alert(1)</script>` מריץ script בקונטקסט של ה-admin.
 
-### Detection rule
-1. `.innerHTML = ` / `dangerouslySetInnerHTML` / `v-html` with a string that includes any externally-sourced value (API response, DB row, URL param, `localStorage`) → flag.
-2. Default to `textContent` / React JSX text nodes.
-3. If HTML is genuinely required, the value must pass through `DOMPurify` (or equivalent) immediately before assignment, in the same line as the assignment.
-4. "Admin only" is not a defense — admins are the targets of XSS.
+### כלל לזיהוי
+1. `.innerHTML = ` / `dangerouslySetInnerHTML` / `v-html` עם מחרוזת שכוללת ערך כלשהו ממקור חיצוני (תגובת API, שורת DB, URL param, `localStorage`) → דווח.
+2. ברירת מחדל: `textContent` / text nodes ב-JSX של React.
+3. אם HTML באמת נדרש, הערך חייב לעבור דרך `DOMPurify` (או שווה ערך) באותה שורה של ההשמה.
+4. "Admin only" אינה הגנה — admins הם בדיוק היעדים של XSS.
 
-### See also
-- `BY-STACK/react-frontend.md` — DOM section
+### ראה גם
+- `BY-STACK/react-frontend.md` — סעיף DOM
 - `bugbot-rules/xss-innerhtml.md`
 
 ---
 
-## K5. Network-exposed admin panel without auth
+## K5. פאנל admin חשוף לרשת בלי auth
 
-**Source:** 8-Projects C11 (Amazon-bot — commits `85776b5`, `c27c769`)
-**Severity:** CRITICAL — RCE / admin control to anyone on the network
+**מקור:** 8-Projects C11 (Amazon-bot — commits `85776b5`, `c27c769`)
+**חומרה:** CRITICAL — RCE / שליטת admin לכל מי שברשת
 
-### What it looks like
-Flask / FastAPI / Express server bound to `0.0.0.0` ("listen on all interfaces") with no token gate, no `Authorization` header check, no IP allowlist. Anyone reaching the port can use the panel.
+### איך זה נראה
+שרת Flask / FastAPI / Express שמאזין ב-`0.0.0.0` ("listen on all interfaces") בלי token gate, בלי בדיקת `Authorization` header, בלי IP allowlist. כל מי שמגיע ל-port יכול להשתמש בפאנל.
 
-### Detection rule
-Any HTTP server startup:
-1. If bound to `0.0.0.0` / `::` / "all interfaces" → require either (a) an authentication middleware that rejects unauthenticated requests *before* any route runs, or (b) a firewall / ingress that gates access externally.
-2. If neither is configured → bind to `127.0.0.1` / `localhost` only.
-3. Default to localhost during development; require an explicit env var to bind publicly.
+### כלל לזיהוי
+לכל עליית שרת HTTP:
+1. אם נקשר ל-`0.0.0.0` / `::` / "all interfaces" → דרוש או (a) middleware של אימות שדוחה בקשות לא מאומתות *לפני* שכל route רץ, או (b) firewall / ingress שחוסם גישה חיצונית.
+2. אם אף אחד לא מוגדר → קשר ל-`127.0.0.1` / `localhost` בלבד.
+3. ברירת מחדל: localhost ב-dev; דרוש env var מפורש לקישור פומבי.
 
-### See also
+### ראה גם
 - `bugbot-rules/network-exposed-without-auth.md`
 
 ---
 
-## K6. Password hash / secret leaked in response or error message
+## K6. password hash / secret נדלף ב-response או error message
 
-**Source:** 8-Projects C6 (routine `06ca796`), C24 (Shipment-bot `59a5e3c`)
-**Severity:** CRITICAL — secret material exposure
+**מקור:** 8-Projects C6 (routine `06ca796`), C24 (Shipment-bot `59a5e3c`)
+**חומרה:** CRITICAL — חשיפת חומר סודי
 
-### What it looks like
-- `ctx.user` middleware exposed the full ORM row including `passwordHash` field. Any endpoint serializing the user (profile, comments author, mentions) leaked hashes.
-- `InsufficientCreditError.to_dict()` included `self.message = "Insufficient credit for courier {id}"` — internal courier UUID exposed in API response.
+### איך זה נראה
+- middleware של `ctx.user` חשף את שורת ה-ORM המלאה כולל שדה `passwordHash`. כל endpoint שעושה serialization למשתמש (profile, comments author, mentions) דלף hashes.
+- `InsufficientCreditError.to_dict()` כלל את `self.message = "Insufficient credit for courier {id}"` — UUID פנימי של courier נחשף ב-response של ה-API.
 
-### Detection rule
-1. User / actor serialization MUST go through an explicit DTO / Pydantic response model that lists only the allowed fields. ORM row → JSON is forbidden at API surfaces.
-2. Forbidden field names anywhere in API response: `password`, `passwordHash`, `password_hash`, `salt`, `refresh_token`, `access_token`, `api_key`, `secret`, `private_key`.
-3. Exception classes that may be raised at API surfaces must not include internal IDs / hostnames / heuristic reasons in their public message. Pattern: `class XError(AppException): public_message: str  # safe;  detail: dict  # server-only`.
+### כלל לזיהוי
+1. Serialization של משתמש / actor חייב לעבור דרך DTO / Pydantic response model מפורש שמפרט רק את השדות המותרים. ORM row → JSON אסור בגבולות API.
+2. שמות שדות אסורים בכל מקום ב-response של API: `password`, `passwordHash`, `password_hash`, `salt`, `refresh_token`, `access_token`, `api_key`, `secret`, `private_key`.
+3. מחלקות exception שעלולות להיזרק בגבולות API לא יכולות לכלול IDs פנימיים / hostnames / סיבות heuristic ב-message הפומבי שלהן. דפוס: `class XError(AppException): public_message: str  # safe;  detail: dict  # server-only`.
 
-### See also
+### ראה גם
 - `bugbot-rules/secret-in-error-response.md`
 
 ---
 
-## K7. PII in logs and API responses
+## K7. PII בלוגים וב-API responses
 
-**Source:** EmailFlow P5 (Hebrew doc) + 8-Projects C6, C24, C57 — **RECURRING by frequency, CRITICAL by severity**
-**Severity:** CRITICAL — privacy / GDPR / compliance
+**מקור:** EmailFlow P5 (מסמך בעברית) + 8-Projects C6, C24, C57 — **RECURRING לפי תדירות, CRITICAL לפי חומרה**
+**חומרה:** CRITICAL — פרטיות / GDPR / compliance
 
-### What it looks like
-- `logger.info("sending email to %s", user.email)` — email is PII; survives in log aggregator forever.
-- `HTTPException(detail=str(exc))` — internal exception string with stack trace leaks to client.
-- `summary: "heuristic: esp:mailchimp.com"` in API response — exposes internal classification logic.
-- English error messages with stack traces shown to end users (instead of generic translated message).
+### איך זה נראה
+- `logger.info("sending email to %s", user.email)` — email הוא PII; שורד ב-log aggregator לנצח.
+- `HTTPException(detail=str(exc))` — מחרוזת exception פנימית עם stack trace דולפת ללקוח.
+- `summary: "heuristic: esp:mailchimp.com"` ב-response של API — חושף לוגיקה פנימית של classification.
+- הודעות שגיאה באנגלית עם stack traces שמוצגות למשתמשי קצה (במקום הודעה מתורגמת גנרית).
 
-### Detection rule
-In every `logger.*()` call and `HTTPException` `detail` / response body:
+### כלל לזיהוי
+בכל קריאת `logger.*()` וב-`HTTPException` `detail` / body של response:
 
-**Forbidden in logs (or API response):**
-- `email`, `phone`, `from_email`, `to_email`, address fields, name fields.
-- Body content of email / chat / messages.
-- Raw OAuth tokens, `refresh_token`, `access_token`, API keys.
+**אסור בלוגים (או ב-response של API):**
+- `email`, `phone`, `from_email`, `to_email`, שדות כתובת, שדות שם.
+- תוכן body של email / chat / messages.
+- OAuth tokens גולמיים, `refresh_token`, `access_token`, API keys.
 
-**Forbidden in API response only (logs OK if behind log access controls):**
-- Heuristic decision reasons (`'esp:mailchimp.com'`, `'spam_score=0.8'`).
-- Internal DB UUIDs of other tenants / users.
-- Stack traces, exception class names, framework error messages.
-- SQL fragments.
+**אסור ב-response של API בלבד (לוגים בסדר אם יש בקרת גישה ללוגים):**
+- סיבות heuristic להחלטה (`'esp:mailchimp.com'`, `'spam_score=0.8'`).
+- UUIDs פנימיים של DB של tenants / users אחרים.
+- Stack traces, שמות מחלקות exception, הודעות framework.
+- שברי SQL.
 
-**Replacements:**
-- PII → email *domain* only, or non-reversible hash, or own user_id.
-- Internal logic → generic localized error.
-- Internal IDs → only IDs of the *current* user's own resources.
+**החלפות:**
+- PII → רק *domain* של email, או hash לא הפיך, או user_id משלך.
+- לוגיקה פנימית → הודעת שגיאה מתורגמת גנרית.
+- IDs פנימיים → רק IDs של המשאבים של המשתמש *הנוכחי*.
 
-### See also
-- `RECURRING-PATTERNS.md` notes this as the only RECURRING pattern also promoted to CRITICAL.
+### ראה גם
+- `RECURRING-PATTERNS.md` מציין שזה הדפוס היחיד מ-RECURRING שגם קודם ל-CRITICAL.
 - `bugbot-rules/pii-in-logs.md`
 
 ---
 
-## K8. LIKE wildcard injection in user-supplied prefix
+## K8. LIKE wildcard injection ב-prefix של משתמש
 
-**Source:** 8-Projects C12 (Facebook-Leads-New — commit `2f45eca`)
-**Severity:** CRITICAL — query manipulation / data exposure
+**מקור:** 8-Projects C12 (Facebook-Leads-New — commit `2f45eca`)
+**חומרה:** CRITICAL — מניפולציה של query / חשיפת נתונים
 
-### What it looks like
-`get_config_by_prefix(prefix)` ran `WHERE key LIKE :prefix || '%'`. SQL `LIKE` treats `_` as "any single char" and `%` as "any sequence". A user-supplied prefix like `test_key` matched both `test_key_foo` and `testXkey_foo` — and a prefix of `%` would match everything.
+### איך זה נראה
+`get_config_by_prefix(prefix)` הריץ `WHERE key LIKE :prefix || '%'`. SQL `LIKE` מתייחס ל-`_` כ-"כל תו יחיד" ול-`%` כ-"כל רצף". prefix מהמשתמש כמו `test_key` תפס גם `test_key_foo` וגם `testXkey_foo` — ו-prefix של `%` היה תופס הכל.
 
-### Detection rule
-Any `LIKE` clause built from user input:
-1. Escape `_` and `%` (and the escape char itself) in the input: `prefix.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')` and use `LIKE :p ESCAPE '\\'`.
-2. Or rewrite to exact match (`=`) if prefix-search isn't actually required.
-3. SQLAlchemy: use `column.startswith(value, autoescape=True)` instead of manual `LIKE`.
+### כלל לזיהוי
+לכל סעיף `LIKE` שנבנה מקלט משתמש:
+1. ברח מ-`_` ומ-`%` (ומתו ה-escape עצמו) בקלט: `prefix.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')` ושימוש ב-`LIKE :p ESCAPE '\\'`.
+2. או שכתב להתאמה מדויקת (`=`) אם חיפוש prefix לא באמת נדרש.
+3. SQLAlchemy: השתמש ב-`column.startswith(value, autoescape=True)` במקום `LIKE` ידני.
 
-### See also
+### ראה גם
 - `BY-STACK/postgres.md`
 - `bugbot-rules/like-wildcard-injection.md`
 
 ---
 
-## K9. Auth credential dispatched before storage (OTP / link / token)
+## K9. credential auth נשלח לפני storage (OTP / link / token)
 
-**Source:** 8-Projects C4 (Shipment-bot — commits `552f0f7`, `155aa81`)
-**Severity:** HIGH — auth lifecycle inconsistency, possible bypass via alternate verification path
+**מקור:** 8-Projects C4 (Shipment-bot — commits `552f0f7`, `155aa81`)
+**חומרה:** HIGH — חוסר עקביות ב-lifecycle של auth, אפשרות לעקיפה דרך נתיב אימות חלופי
 
-### What it looks like
-Order of operations:
-1. Generate OTP.
-2. Send via SMS / email (irreversible).
-3. Store in Redis / DB.
+### איך זה נראה
+סדר הפעולות:
+1. ייצור OTP.
+2. שליחה דרך SMS / email (בלתי הפיך).
+3. שמירה ב-Redis / DB.
 
-If step 3 fails (Redis down, transient error), the user has a real code in hand but no verifier ever can match it. Worse, if there's a fallback "skip OTP" path that triggers on "Redis miss", the attacker who can cause Redis flakes gains a bypass.
+אם שלב 3 נכשל (Redis למטה, שגיאה זמנית), למשתמש יש קוד אמיתי ביד אבל אף verifier לא יוכל להתאים אותו. גרוע מכך, אם יש נתיב fallback "דלג על OTP" שמופעל על "Redis miss", התוקף שיכול לגרום ל-Redis להיות flaky מקבל עקיפה.
 
-### Detection rule
-Every "credential generation + dispatch" flow must:
-1. Persist (Redis SET / DB INSERT with TTL) **before** the external send.
-2. If persist fails, do NOT send.
-3. No "fallback" path that proceeds when verification storage is unreachable — fail closed.
+### כלל לזיהוי
+כל flow של "ייצור + שליחה של credential" חייב:
+1. להתמיד (Redis SET / DB INSERT עם TTL) **לפני** השליחה החיצונית.
+2. אם ההתמדה נכשלת, לא לשלוח.
+3. אין נתיב "fallback" שממשיך כשאחסון verification לא בר השגה — fail closed.
 
-Generalization: any "reserve / dispatch / store" triplet where the external action is irreversible — see CORE U1 (reserve-then-fill).
+הכללה: כל triplet של "reserve / dispatch / store" שהפעולה החיצונית בו בלתי הפיכה — ראה CORE U1 (reserve-then-fill).
 
-### See also
+### ראה גם
 - `CORE-PATTERNS.md` U1
 - `BY-STACK/webhooks.md`
 - `bugbot-rules/auth-before-irreversible-action.md`
 
 ---
 
-## K10. Generic 500 displayed as "invalid credentials"
+## K10. 500 גנרי מוצג כ-"invalid credentials"
 
-**Source:** 8-Projects C57 (Web — commit `5196657`)
-**Severity:** HIGH — security UX + user-enumeration aid + obscures real outages
+**מקור:** 8-Projects C57 (Web — commit `5196657`)
+**חומרה:** HIGH — security UX + סיוע לאיתור משתמשים + מסתיר outages אמיתיים
 
-### What it looks like
-Login handler:
+### איך זה נראה
+Handler של login:
 ```js
 catch (err) {
   if (err.status === 500) showError("Invalid username or password");
   if (err.status === 401) showError("Invalid username or password");
 }
 ```
-Any DB failure, network blip, or backend bug surfaces as "wrong password". Three consequences:
-1. Real outage is invisible to ops (users say "my password isn't working").
-2. Aids account-enumeration attackers (every email looks "wrong").
-3. Users lock themselves out of real accounts trying to "reset" passwords that work.
+כל כשל DB, רעש רשת, או באג ב-backend מופיע כ-"wrong password". שלוש תוצאות:
+1. Outage אמיתי בלתי נראה ל-ops (משתמשים אומרים "הסיסמה שלי לא עובדת").
+2. עוזר לתוקפים שמחפשים enumeration של חשבונות (כל email נראה "שגוי").
+3. משתמשים נועלים את עצמם מחוץ לחשבונות אמיתיים בניסיון "לאפס" סיסמאות שכן עובדות.
 
-### Detection rule
-Login / auth error handling must branch:
-- `401 / 403` → "Invalid credentials" (generic, doesn't leak whether email exists).
-- `5xx` → "Service temporarily unavailable. Please try again in a moment." + alert to monitoring.
+### כלל לזיהוי
+טיפול בשגיאות login / auth חייב להסתעף:
+- `401 / 403` → "Invalid credentials" (גנרי, לא דולף אם ה-email קיים).
+- `5xx` → "Service temporarily unavailable. Please try again in a moment." + התראה למוניטורינג.
 - `429` → "Too many attempts. Try again in N minutes."
 
-Never collapse `5xx` into "invalid credentials".
+לעולם אל תאחד `5xx` ל-"invalid credentials".
 
-### See also
-- `bugbot-rules/auth-before-irreversible-action.md` (auth UX section)
+### ראה גם
+- `bugbot-rules/auth-before-irreversible-action.md` (סעיף auth UX)

@@ -1,25 +1,25 @@
 # privilege-escalation-unverified
 
-**CRITICAL — privilege escalation via unverified attributes**
+**CRITICAL — הסלמת הרשאות דרך attributes לא מאומתים**
 
-Detect role / permission grants that depend on a user-supplied attribute (email, claim) without verifying that the user actually owns the attribute.
+זהה הענקת תפקיד / הרשאה שתלויה ב-attribute שמסופק על ידי המשתמש (email, claim) בלי לוודא שהמשתמש באמת בעל ה-attribute.
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. Code grants an elevated role / permission (`admin`, `staff`, `owner`, `super_user`, custom high-privilege role).
-2. The grant decision is based on a user-supplied value at registration / login / link time:
-   - `request.body.email == OWNER_EMAIL` (or any allowlist comparison).
-   - A claim from an unverified JWT.
-   - A header value (`X-User-Role`).
-   - A value from a self-asserted profile field.
-3. The grant happens BEFORE one of:
-   - Email verification (token mailed, `email_verified_at` set).
-   - Out-of-band action by an existing admin (invite token).
-   - Possession proof of an OAuth identity (token from IdP).
+1. הקוד מעניק תפקיד / הרשאה מוגברת (`admin`, `staff`, `owner`, `super_user`, תפקיד מותאם בהרשאה גבוהה).
+2. החלטת ההענקה מבוססת על ערך שסופק על ידי המשתמש בזמן registration / login / link:
+   - `request.body.email == OWNER_EMAIL` (או כל השוואת allowlist).
+   - claim מ-JWT לא מאומת.
+   - ערך header (`X-User-Role`).
+   - ערך משדה profile שמוצהר עצמית.
+3. ההענקה קורית *לפני* אחד מ:
+   - email verification (token נשלח ב-mail, `email_verified_at` מסומן).
+   - פעולה out-of-band על ידי admin קיים (invite token).
+   - הוכחת בעלות על זהות OAuth (token מ-IdP).
 
-## Required pattern
+## דפוס נדרש
 
-Elevated role grants must be gated by an explicit verification:
+הענקות תפקיד מוגבר חייבות להיות gated על ידי verification מפורש:
 
 ```python
 if user.email_verified_at is None:
@@ -28,7 +28,7 @@ if request.body.email == settings.OWNER_EMAIL:
   user.role = "owner"
 ```
 
-Or via invite tokens issued by existing admins:
+או דרך invite tokens שהונפקו על ידי admins קיימים:
 
 ```python
 invite = await get_invite_by_token(request.body.token)
@@ -39,9 +39,9 @@ if invite and invite.role == "admin" and invite.email == request.body.email:
 
 ## False positives
 
-- Read-only role display (showing "you are admin" UI when the role is already trusted).
-- Test fixtures / seed data.
+- תצוגת תפקיד read-only (הצגת UI של "אתה admin" כשהתפקיד כבר אמין).
+- test fixtures / נתוני seed.
 
-## Severity
+## חומרה
 
-CRITICAL — attacker who knows an admin's email creates an account, never verifies, gains admin role.
+CRITICAL — תוקף שיודע את ה-email של admin יוצר חשבון, לעולם לא מאמת, מקבל תפקיד admin.

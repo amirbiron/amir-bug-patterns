@@ -1,26 +1,26 @@
 # BY-STACK: Postgres (SQL, migrations, pagination, indexes)
 
-## Relevance — copy this file if your project has...
-- ✅ PostgreSQL (the bulk of this file is PG-specific)
-- ✅ Any SQL DB with `LIKE` queries on user input (K8 applies broadly)
-- ✅ Alembic migrations (Pattern 5 — model drift)
-- ✅ MySQL — read Pattern 5 (MySQL doesn't support `ADD COLUMN IF NOT EXISTS`)
-- ✅ Pagination via `LIMIT` / `OFFSET` or cursor
-- ⏭ Skip if: NoSQL only (MongoDB has different gotchas — see Pattern 8 footnote)
+## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+- ✅ PostgreSQL (רוב הקובץ הזה ספציפי ל-PG)
+- ✅ כל DB של SQL עם queries של `LIKE` על קלט משתמש (K8 חל באופן רחב)
+- ✅ Alembic migrations (דפוס 5 — model drift)
+- ✅ MySQL — קרא דפוס 5 (MySQL לא תומך ב-`ADD COLUMN IF NOT EXISTS`)
+- ✅ דפדוף דרך `LIMIT` / `OFFSET` או cursor
+- ⏭ דלג אם: NoSQL בלבד (MongoDB יש לה gotchas שונים — ראה footnote בדפוס 8)
 
-> Cross-link: **CRITICAL K8** (LIKE wildcard injection) and **CORE U4** + **U6** are the underlying patterns. This file folds in **R2** (pagination tiebreaker).
+> Cross-link: **CRITICAL K8** (LIKE wildcard injection) ו-**CORE U4** + **U6** הם הדפוסים הבסיסיים. הקובץ הזה מקפל פנימה את **R2** (pagination tiebreaker).
 
 ---
 
-## Pattern 1 — NULL semantics in CAS (CORE U4)
+## דפוס 1 — סמנטיקת NULL ב-CAS (CORE U4)
 
 ```sql
 UPDATE subscription SET history_id = :new WHERE id = :id AND history_id = :expected_old;
 ```
-If `history_id` is `NULL` in the row and `:expected_old` is `NULL`, the `=` comparison evaluates to `NULL`, treated as `FALSE` → no row matched → CAS appears to fail → cursor stuck forever.
+אם `history_id` הוא `NULL` בשורה ו-`:expected_old` הוא `NULL`, ההשוואה `=` מוערכת כ-`NULL`, מטופל כ-`FALSE` → לא נתפסה שורה → CAS נראה כושל → cursor תקוע לנצח.
 
-### Fix
-Branch in application code:
+### תיקון
+הסתעפות בקוד האפליקציה:
 ```python
 if expected_old is None:
   where = Subscription.history_id.is_(None)
@@ -28,12 +28,12 @@ else:
   where = Subscription.history_id == expected_old
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `cf99698`.
 
 ---
 
-## Pattern 2 — `VARCHAR(N)` too small for enum value (CORE U4)
+## דפוס 2 — `VARCHAR(N)` קטן מדי לערך enum (CORE U4)
 
 ```python
 class Source(StrEnum):
@@ -43,35 +43,35 @@ class Source(StrEnum):
 class Lead(Base):
   source = Column(String(10), ...)  # ❌ "email_provider" > 10
 ```
-Develops fine on SQLite (no length enforcement), fails in Postgres production INSERT.
+נכון ב-dev על SQLite (אין אכיפת אורך), נכשל ב-INSERT של Postgres בפרודקשן.
 
-### Detection rule
-- CI test: for every `String(N)` column populated from an enum, assert `N >= max(len(v) for v in EnumClass)`.
-- Or use `Enum(EnumClass)` directly (creates a PG enum type or text column with check constraint).
+### כלל לזיהוי
+- טסט CI: לכל עמודת `String(N)` שמתמלאת מ-enum, ודא `N >= max(len(v) for v in EnumClass)`.
+- או השתמש ב-`Enum(EnumClass)` ישירות (יוצר טיפוס enum של PG או עמודת טקסט עם check constraint).
 
-### Real commits
+### Commits אמיתיים
 - Noa `2c8263a`.
 
 ---
 
-## Pattern 3 — Integer column too small for external IDs
+## דפוס 3 — עמודת Integer קטנה מדי ל-IDs חיצוניים
 
 ```python
 class Message(Base):
-  telegram_user_id = Column(Integer, ...)  # ❌ 2^31 isn't enough
+  telegram_user_id = Column(Integer, ...)  # ❌ 2^31 לא מספיק
 ```
 
-Telegram, Discord, Stripe, GitHub IDs can exceed 2³¹.
+Telegram, Discord, Stripe, GitHub IDs יכולים לחרוג מ-2³¹.
 
-### Fix
-Use `BigInteger` (`BIGINT`).
+### תיקון
+השתמש ב-`BigInteger` (`BIGINT`).
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `b16b99f`.
 
 ---
 
-## Pattern 4 — `ORDER BY` without secondary tiebreaker (R2)
+## דפוס 4 — `ORDER BY` בלי tiebreaker משני (R2)
 
 ```python
 q = (
@@ -80,9 +80,9 @@ q = (
     .limit(20).offset(40)
 )
 ```
-Two leads with identical `updated_at` get unspecified order. Pagination across pages can skip or duplicate one of them.
+שני leads עם `updated_at` זהה מקבלים סדר לא מוגדר. דפדוף בין דפים יכול לדלג או להכפיל אחד מהם.
 
-### Fix
+### תיקון
 ```python
 q = (
   select(Lead)
@@ -91,75 +91,75 @@ q = (
 )
 ```
 
-For CAS with "latest" semantics, the selector and the verifier must use the same tuple.
+ל-CAS עם סמנטיקת "latest", ה-selector וה-verifier חייבים להשתמש באותו tuple.
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `d84daca`, `3987818`, `a0c4603`.
 - Shipment-bot `c0c1b74`.
 
 ---
 
-## Pattern 5 — Migration ↔ model drift (CORE U6)
+## דפוס 5 — סטייה בין migration ל-model (CORE U6)
 
-**Severity:** MEDIUM (fresh DB builds — test, dev, prod-from-scratch — diverge from migrated prod).
+**חומרה:** MEDIUM (deploys טריים — test, dev, prod-from-scratch — מתפצלים מ-prod ממוגרר).
 
-### Common failures
-- `op.create_index(...)` in migration but not in model's `__table_args__`. Fresh DB has no index.
-- `CheckConstraint("a > b")` in migration but `CheckConstraint("b < a")` (logically same) in model. Postgres normalizes both forms but the names differ → autogenerate sees a "missing" constraint.
-- `DROP COLUMN` in migration but code still references the column.
-- Alembic revision id longer than 32 chars → migration fails on fresh deploy (default `VARCHAR(32)` in `alembic_version`).
-- MySQL projects: `ADD COLUMN IF NOT EXISTS` doesn't exist (PG-only).
-- Missing CREATE TABLE for a fresh-deploy migration that starts with ALTER.
+### כשלים נפוצים
+- `op.create_index(...)` ב-migration אבל לא ב-`__table_args__` של המודל. ל-DB טרי אין index.
+- `CheckConstraint("a > b")` ב-migration אבל `CheckConstraint("b < a")` (לוגית זהה) במודל. Postgres מנרמל שתי הצורות אבל השמות שונים → autogenerate רואה constraint "חסר".
+- `DROP COLUMN` ב-migration אבל הקוד עדיין מתייחס לעמודה.
+- revision id של Alembic ארוך מ-32 chars → migration נכשל ב-deploy טרי (ברירת מחדל `VARCHAR(32)` ב-`alembic_version`).
+- פרויקטי MySQL: `ADD COLUMN IF NOT EXISTS` לא קיים (PG-only).
+- חסר CREATE TABLE ל-migration של fresh-deploy שמתחיל ב-ALTER.
 
-### Detection rule
-1. Every constraint/index in a migration → mirror it in `__table_args__`.
-2. `DROP COLUMN` in same PR that adds the model attribute (or leaves an existing reference) → flag.
-3. Revision id ≤ 30 chars.
-4. MySQL projects: ban `ADD COLUMN IF NOT EXISTS` via grep; replace with `try/except` check or a one-shot migration.
-5. Migrations are additive when old code still uses the column.
+### כלל לזיהוי
+1. כל constraint/index ב-migration → שקף אותו ב-`__table_args__`.
+2. `DROP COLUMN` ב-PR שמוסיף attribute למודל (או משאיר הפניה קיימת) → דווח.
+3. revision id ≤ 30 chars.
+4. פרויקטי MySQL: אסור `ADD COLUMN IF NOT EXISTS` דרך grep; החלף ב-`try/except` או migration one-shot.
+5. migrations הם additive כשהקוד הישן עדיין משתמש בעמודה.
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `40f855d`, `a3a3134`, `cea815d`, `f143e1c`, `3f43d91`.
 - routine `80c1fc4`, `7a4e879`, `230e0c1`.
-- Noa `2c8263a` (column-length variant).
-- Shipment-bot `b16b99f` (column-type variant).
+- Noa `2c8263a` (וריאציה של אורך עמודה).
+- Shipment-bot `b16b99f` (וריאציה של טיפוס עמודה).
 
 ---
 
-## Pattern 6 — `LIKE` wildcard injection on user input (CRITICAL K8)
+## דפוס 6 — `LIKE` wildcard injection בקלט משתמש (CRITICAL K8)
 
 ```python
 session.execute(select(Config).where(Config.key.like(f"{user_prefix}%")))  # ❌
 ```
-User prefix `"test_key"` matches `"test_key_foo"` AND `"testXkey_foo"`. Prefix `"%"` matches everything.
+prefix של משתמש `"test_key"` תופס `"test_key_foo"` וגם `"testXkey_foo"`. prefix של `"%"` תופס הכל.
 
-### Fix
+### תיקון
 - SQLAlchemy: `Config.key.startswith(user_prefix, autoescape=True)`.
-- Raw SQL: escape `_`, `%`, and the escape char in the input, then `LIKE :p ESCAPE '\\'`.
-- Or use exact `=` if prefix-search isn't required.
+- Raw SQL: ברח מ-`_`, `%`, ומתו ה-escape בקלט, ואז `LIKE :p ESCAPE '\\'`.
+- או השתמש ב-`=` מדויק אם חיפוש prefix לא נדרש.
 
-### Real commits
+### Commits אמיתיים
 - Facebook-Leads-New `2f45eca`.
 
 ---
 
-## Pattern 7 — `ANY(:ids)` / `IN` with type mismatch
+## דפוס 7 — `ANY(:ids)` / `IN` עם אי-התאמת טיפוס
 
 ```python
-session.execute(select(Lead).where(Lead.id == any_(string_ids)))  # ❌ if Lead.id is UUID
+session.execute(select(Lead).where(Lead.id == any_(string_ids)))  # ❌ אם Lead.id הוא UUID
 ```
 
-Postgres won't implicitly cast a string array to a UUID array.
+Postgres לא יבצע cast מרומז ממערך מחרוזות למערך UUID.
 
-### Fix
-Convert to UUIDs before passing, or cast in SQL: `cast(Lead.id, String) == any_(string_ids)`.
+### תיקון
+המר ל-UUIDs לפני העברה, או cast ב-SQL: `cast(Lead.id, String) == any_(string_ids)`.
 
-### Real commits
+### Commits אמיתיים
 - Noa `244286d`.
 
 ---
 
-## Pattern 8 — SQLAlchemy `postgresql_ops` misused as sort direction
+## דפוס 8 — SQLAlchemy `postgresql_ops` בשימוש שגוי ככיוון מיון
 
 ```python
 class Lead(Base):
@@ -168,68 +168,68 @@ class Lead(Base):
   )
 ```
 
-`postgresql_ops` is for operator classes (`text_pattern_ops`, `varchar_pattern_ops`), not sort direction.
+`postgresql_ops` הוא למחלקות אופרטור (`text_pattern_ops`, `varchar_pattern_ops`), לא כיוון מיון.
 
-### Fix
+### תיקון
 ```python
 from sqlalchemy import desc
 Index("ix_lead_created_desc", desc("created_at"))
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `98e8d18`.
 
 ---
 
-## Pattern 9 — Python string ops on `Column` expressions
+## דפוס 9 — פעולות מחרוזת של Python על Column expressions
 
 ```python
 q = select(Lead).where(Lead.email.strip() == "x@example.com")  # ❌
 ```
 
-`.strip()` runs on the Column object's metadata (no-op in SQL), not in the query.
+`.strip()` רץ על metadata של אובייקט Column (no-op ב-SQL), לא ב-query.
 
-### Fix
+### תיקון
 ```python
 from sqlalchemy import func
 q = select(Lead).where(func.trim(Lead.email) == "x@example.com")
 ```
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `dfdf975`.
 
 ---
 
-## Pattern 10 — Truthy check vs `IS NULL` on string columns
+## דפוס 10 — בדיקת truthy מול `IS NULL` בעמודות מחרוזת
 
 ```python
-if lead.notes:  # whitespace "  " is truthy in Python
+if lead.notes:  # רווח לבן "  " הוא truthy ב-Python
   process(lead.notes)
 ```
 
-If the edit flow normalizes blank input to `NULL`, the two representations drift. Use explicit normalization:
+אם flow העריכה מנרמל input ריק ל-`NULL`, שתי הייצוגים נסחפים. השתמש בנרמול מפורש:
 ```python
 notes = (lead.notes or "").strip()
 if notes:
   process(notes)
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `7444dd9`.
 
 ---
 
-## Footnote — Other DBs
+## Footnote — DBs אחרים
 
-- **MySQL:** No `ADD COLUMN IF NOT EXISTS`. CHECK constraints aren't enforced before 8.0.16. `utf8` is not real UTF-8 (use `utf8mb4`). Production needs explicit SSL config (routine `230e0c1`).
-- **MongoDB:** Aggregation pipeline without `{allowDiskUse: true}` hits a 100MB RAM limit on `$sort` (CodeBot `4824ad9`). Always pass it for any non-trivial pipeline.
+- **MySQL:** אין `ADD COLUMN IF NOT EXISTS`. CHECK constraints לא נאכפים לפני 8.0.16. `utf8` אינו UTF-8 אמיתי (השתמש ב-`utf8mb4`). פרודקשן דורש SSL config מפורש (routine `230e0c1`).
+- **MongoDB:** aggregation pipeline בלי `{allowDiskUse: true}` פוגע ב-100MB RAM limit על `$sort` (CodeBot `4824ad9`). תמיד העבר את זה לכל pipeline לא טריוויאלי.
 
 ---
 
-## Cross-references
+## הפניות צולבות
 
-- **CORE U4** — Postgres edge cases (this file is the deep-dive)
-- **CORE U6** — Migration drift (folded in here)
-- **R2** — Pagination tiebreaker (folded in here)
+- **CORE U4** — Postgres edge cases (הקובץ הזה הוא ה-deep-dive)
+- **CORE U6** — Migration drift (מקופל פנימה כאן)
+- **R2** — דפדוף עם tiebreaker (מקופל פנימה כאן)
 - **CRITICAL K8** — LIKE injection
 - **`bugbot-rules/postgres-null-cas.md`**, **`pagination-tiebreaker.md`**, **`migration-model-drift.md`**, **`like-wildcard-injection.md`**

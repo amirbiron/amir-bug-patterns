@@ -1,24 +1,24 @@
-# State-machine patterns (paste into CLAUDE.md)
+# דפוסי State-machine (להעתקה ל-CLAUDE.md)
 
-1. **Touchpoint completeness.** Any function that updates an entity's status / lifecycle column (`apply_chip`, `mark_*_sent`, `perform_action`) must atomically update the **canonical sibling list** in one transaction:
-   - status field
+1. **שלמות touchpoint.** כל פונקציה שמעדכנת עמודת status / lifecycle של ישות (`apply_chip`, `mark_*_sent`, `perform_action`) חייבת לעדכן atomically את **רשימת השדות האחים הקנונית** בטרנזקציה אחת:
+   - שדה status
    - `last_outbound_at` (UTC)
-   - `last_activity_type` (matching `ActivityType.<X>.value`)
-   - Close open tasks in `AUTO_CLOSE_TASK_TYPES`
-   - Create new task with `assigned_to`, `due_at`, unique `origin_rule`
+   - `last_activity_type` (תואם ל-`ActivityType.<X>.value`)
+   - סגירת tasks פתוחים ב-`AUTO_CLOSE_TASK_TYPES`
+   - יצירת task חדש עם `assigned_to`, `due_at`, `origin_rule` ייחודי
    - `log_activity(...)`
-   - `sync_lead_next_action_cache(...)` after flush
+   - `sync_lead_next_action_cache(...)` אחרי flush
 
-2. **Status with cascade requirements.** Transitioning to `BOOKING_PENDING` / `BOOKED` requires a `Booking` row or `ValidationError`. Transitions to `WON` / `LOST` / `ARCHIVED` go through `close_lead(...)`, not direct assignment.
+2. **Status עם דרישות cascade.** מעבר ל-`BOOKING_PENDING` / `BOOKED` דורש שורת `Booking` או `ValidationError`. מעברים ל-`WON` / `LOST` / `ARCHIVED` עוברים דרך `close_lead(...)`, לא השמה ישירה.
 
-3. **Activity log records intent, not just outcome.** When CAS / `UPDATE` returns `rowcount=0`, still log activity with `metadata.applied=false`. Otherwise downstream consumers (cron, dashboard) think the event never happened.
+3. **Activity log מתעד intent, לא רק outcome.** כש-CAS / `UPDATE` מחזיר `rowcount=0`, עדיין לוג activity עם `metadata.applied=false`. אחרת צרכנים downstream (cron, dashboard) חושבים שה-event לא קרה.
 
-4. **`last_activity_type` column value MUST equal the `type` written to activity log.** Mismatches (e.g., `meeting_rejected` vs `MEETING_CANCELED`) break downstream filters.
+4. **הערך של עמודת `last_activity_type` חייב להיות שווה ל-`type` שנכתב ב-activity log.** אי-התאמות (למשל `meeting_rejected` מול `MEETING_CANCELED`) שוברות filters downstream.
 
-5. **Pydantic schema defaults are strict contracts.** When a caller omits a field with a default, the default applies silently. Verify the default matches the source intent (don't default `preferred_contact=WHATSAPP` for an email-intake flow).
+5. **Pydantic schema defaults הם חוזים strict.** כש-caller משמיט שדה עם default, ה-default חל בשקט. ודא שה-default תואם לכוונה של המקור (אל תקבע default של `preferred_contact=WHATSAPP` ל-flow של email-intake).
 
-6. **Distinguish "missing" from "None" in dict filtering.** Use `if k in d:` not `if d.get(k) is not None:` when `None` is a legal value.
+6. **הבדל "missing" מ-"None" בסינון dict.** השתמש ב-`if k in d:` לא `if d.get(k) is not None:` כש-`None` הוא ערך חוקי.
 
-7. **Multi-role users:** state transitions check the *target state*, not just the role. A user can be both driver and secretary; menu routing must select target by explicit state, not role.
+7. **משתמשים מרובי-תפקידים:** state transitions בודקים את ה-*target state*, לא רק את התפקיד. משתמש יכול להיות גם driver וגם secretary; routing של menu חייב לבחור target לפי state מפורש, לא תפקיד.
 
-See `BY-STACK/state-machine.md` for code examples.
+ראה `BY-STACK/state-machine.md` לדוגמאות קוד.

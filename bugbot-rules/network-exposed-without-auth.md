@@ -1,33 +1,33 @@
 # network-exposed-without-auth
 
-**CRITICAL — RCE / admin takeover**
+**CRITICAL — RCE / השתלטות admin**
 
-Detect HTTP servers bound to all-interfaces (`0.0.0.0`, `::`) without an authentication middleware that rejects unauthenticated requests before any route runs.
+זהה שרתי HTTP שנקשרים ל-all-interfaces (`0.0.0.0`, `::`) בלי middleware של אימות שדוחה בקשות לא מאומתות לפני שכל route רץ.
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. Server startup binds to one of:
+1. עליית השרת נקשרת לאחד מ:
    - `0.0.0.0`
    - `::` / `[::]`
-   - The string literal `"all"` / framework-equivalent
-   - Empty/unset bind address that defaults to all interfaces (some frameworks)
-2. No authentication middleware is registered to run unconditionally before route dispatch:
-   - FastAPI / Starlette: no global `app.add_middleware(AuthMiddleware)` checking every request.
-   - Express: no app-level `app.use(authMiddleware)`.
-   - Flask: no `@app.before_request` doing auth, or no `Flask-Login` / `flask-httpauth` covering all routes.
-3. The application exposes admin / control / write endpoints (panel, settings, debug, admin API).
+   - המחרוזת `"all"` / שווה ערך ב-framework
+   - כתובת bind ריקה/לא מוגדרת שברירת המחדל שלה היא all interfaces (חלק מה-frameworks)
+2. אין middleware של אימות שרשום לרוץ ללא תנאי לפני dispatch של route:
+   - FastAPI / Starlette: אין `app.add_middleware(AuthMiddleware)` גלובלי שבודק כל request.
+   - Express: אין `app.use(authMiddleware)` ברמת ה-app.
+   - Flask: אין `@app.before_request` שעושה auth, או אין `Flask-Login` / `flask-httpauth` שמכסה את כל ה-routes.
+3. ה-application חושף endpoints של admin / control / write (panel, settings, debug, admin API).
 
-## Allowed configurations
+## הגדרות מותרות
 
-- Bind to `127.0.0.1` / `localhost` for dev / single-machine deploys (preferred default).
-- Authentication middleware AT THE FRAMEWORK LEVEL, rejecting requests lacking valid token / session before any route runs (not just `@require_auth` decorators that can be forgotten on new routes).
-- Network-level access controls (firewall, ingress allowlist) documented in the deployment config.
+- bind ל-`127.0.0.1` / `localhost` ל-dev / deploys של מכונה יחידה (ברירת מחדל מועדפת).
+- middleware של אימות ברמת framework, שדוחה בקשות בלי token / session תקפים לפני שכל route רץ (לא רק decorators של `@require_auth` שיכולים להישכח ב-routes חדשים).
+- בקרות גישה ברמת רשת (firewall, ingress allowlist) מתועדות ב-config של ה-deployment.
 
 ## False positives
 
-- HTTPS termination proxy that enforces mTLS / client certs in front of an otherwise-open server (verify the proxy is actually in front and required).
-- Health-check-only endpoint at `:/healthz` is acceptable on `0.0.0.0` if it returns no sensitive data.
+- HTTPS termination proxy שאוכף mTLS / client certs מול שרת אחרת פתוח (ודא שה-proxy באמת לפנים ונדרש).
+- endpoint רק ל-health-check ב-`:/healthz` מקובל ב-`0.0.0.0` אם הוא לא מחזיר נתונים רגישים.
 
-## Severity
+## חומרה
 
-CRITICAL — anyone with network access to the port has admin / write access; common in dev environments accidentally promoted to prod or exposed via misconfigured cloud security groups.
+CRITICAL — לכל מי שיש גישת רשת ל-port יש גישת admin / write; שכיח בסביבות dev שקודמו בטעות ל-prod או נחשפו דרך security groups של cloud עם הגדרה שגויה.

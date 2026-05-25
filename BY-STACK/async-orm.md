@@ -1,20 +1,20 @@
 # BY-STACK: Async ORM (SQLAlchemy AsyncSession)
 
-## Relevance — copy this file if your project has...
+## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
 - ✅ SQLAlchemy `AsyncSession` / `async_sessionmaker` / `create_async_engine`
-- ✅ FastAPI or aiohttp with async DB writes
-- ✅ Celery / RQ tasks using async SQLAlchemy
-- ✅ Code that does `await session.commit()` inside a loop
-- ✅ Code that uses `asyncio.gather` with DB operations
-- ⏭ Skip if: sync SQLAlchemy only, or non-Python ORMs (Prisma, Knex, etc. — different rules)
+- ✅ FastAPI או aiohttp עם כתיבות DB async
+- ✅ Celery / RQ tasks שמשתמשים ב-SQLAlchemy async
+- ✅ קוד שעושה `await session.commit()` בתוך לולאה
+- ✅ קוד שמשתמש ב-`asyncio.gather` עם פעולות DB
+- ⏭ דלג אם: רק SQLAlchemy סינכרוני, או ORMs לא של Python (Prisma, Knex, וכו' — כללים שונים)
 
 ---
 
-## Pattern 1 — `MissingGreenlet` after rollback (R1)
+## דפוס 1 — `MissingGreenlet` אחרי rollback (R1)
 
-**Severity:** MEDIUM — crashes; sometimes silent data corruption
+**חומרה:** MEDIUM — קריסות; לפעמים שחיתות נתונים שקטה
 
-### What it looks like
+### איך זה נראה
 ```python
 try:
   await session.execute(...)
@@ -23,10 +23,10 @@ except SomeError:
   await session.rollback()
   logger.error("failed for lead %s", lead.email)  # ❌ MissingGreenlet
 ```
-After `rollback()`, all ORM objects in the session are expired. Accessing `lead.email` triggers a lazy load — but we're outside a greenlet context now.
+אחרי `rollback()`, כל אובייקטי ה-ORM ב-session expired. גישה ל-`lead.email` מפעילה lazy load — אבל אנחנו מחוץ ל-greenlet context עכשיו.
 
-### Fix
-Extract primitives before any operation that can rollback:
+### תיקון
+חלץ primitives לפני כל פעולה שיכולה לעשות rollback:
 ```python
 lead_id = lead.id
 lead_email = lead.email
@@ -38,24 +38,24 @@ except SomeError:
   logger.error("failed for lead %s", lead_email)  # ✅
 ```
 
-Or expunge explicitly: `session.expunge(lead)` to detach (`lead.email` keeps working as a primitive).
+או נתק במפורש: `session.expunge(lead)` כדי לנתק (`lead.email` ממשיך לעבוד כ-primitive).
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `0fdd247`.
-- Shipment-bot `85d7a8e` — loop over `expiring` deliveries after `db.commit()` triggered `MissingGreenlet` re-reading attrs.
+- Shipment-bot `85d7a8e` — לולאה על `expiring` deliveries אחרי `db.commit()` הפעילה `MissingGreenlet` בקריאת attrs מחדש.
 
 ---
 
-## Pattern 2 — Sharing an AsyncSession across `asyncio.gather`
+## דפוס 2 — שיתוף AsyncSession בין `asyncio.gather`
 
 ```python
 async def process_all(session, items):
   await asyncio.gather(*[process(session, item) for item in items])  # ❌
 ```
-`AsyncSession` is not task-safe. Concurrent tasks corrupt the session's internal state.
+`AsyncSession` אינו task-safe. tasks concurrent משחיתים את ה-state הפנימי של ה-session.
 
-### Fix
-Each task opens its own session:
+### תיקון
+כל task פותח את שלו:
 ```python
 async def process_all(sessionmaker, items):
   async def one(item):
@@ -64,34 +64,34 @@ async def process_all(sessionmaker, items):
   await asyncio.gather(*[one(item) for item in items])
 ```
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `018b166`.
 
 ---
 
-## Pattern 3 — Stale attributes after in-loop commit
+## דפוס 3 — attributes ישנים אחרי commit בלולאה
 
 ```python
 for row in await session.execute(...):
   await session.commit()  # commits any pending changes
-  process(row.related_field)  # ❌ may be stale (commit refreshes only PK)
+  process(row.related_field)  # ❌ עלול להיות ישן (commit מרענן רק PK)
 ```
 
-### Fix
+### תיקון
 ```python
 for row in ...:
-  await session.refresh(row)  # explicit refresh after commit
+  await session.refresh(row)  # רענון מפורש אחרי commit
   process(row.related_field)
 ```
 
-Or batch commits outside the loop.
+או קבץ את ה-commits מחוץ ללולאה.
 
-### Real commits
-- EmailFlow `0e6dc85` — embedding job accessed stale attrs after in-loop commit.
+### Commits אמיתיים
+- EmailFlow `0e6dc85` — embedding job ניגש ל-attributes ישנים אחרי commit בתוך לולאה.
 
 ---
 
-## Pattern 4 — Singleton engine bound to event loop in Celery
+## דפוס 4 — singleton engine מקושר ל-event loop ב-Celery
 
 ```python
 # module-level
@@ -100,14 +100,14 @@ SessionLocal = async_sessionmaker(engine, ...)
 
 @app.task
 async def my_task():
-  async with SessionLocal() as session:  # ❌ engine bound to previous loop → second task fails
+  async with SessionLocal() as session:  # ❌ engine מקושר ל-loop קודם → task שני נכשל
     ...
 ```
 
-Celery creates a fresh event loop per task. Engines created at import time bind to whatever loop existed then.
+Celery יוצר event loop טרי לכל task. Engines שנוצרו ב-import time מקושרים ל-loop שהיה קיים אז.
 
-### Fix
-Lazy-create per task, or use `engine.dispose()` between tasks, or use a sync engine in Celery and async only at the API layer.
+### תיקון
+יצירה lazy לכל task, או `engine.dispose()` בין tasks, או השתמש ב-engine סינכרוני ב-Celery ובאסינכרוני רק ב-API layer.
 ```python
 @app.task
 async def my_task():
@@ -119,59 +119,59 @@ async def my_task():
     await engine.dispose()
 ```
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `0f30963`.
 
 ---
 
-## Pattern 5 — `joinedload` + `with_for_update` incompatibility
+## דפוס 5 — `joinedload` + `with_for_update` לא תואמים
 
 ```python
 q = select(Lead).options(joinedload(Lead.booking)).with_for_update()  # ❌
 ```
 
-SQLAlchemy raises (the eager load join can't be locked cleanly).
+SQLAlchemy זורק (ה-join של eager load לא יכול להינעל באופן נקי).
 
-### Fix
+### תיקון
 ```python
 q = select(Lead).options(contains_eager(Lead.booking)).join(Booking).with_for_update()
 ```
 
-### Real commits
+### Commits אמיתיים
 - Shipment-bot `4352bac`.
 
 ---
 
-## Pattern 6 — Python string ops on Column expressions
+## דפוס 6 — פעולות מחרוזת של Python על Column expressions
 
 ```python
 q = select(Lead).where(Lead.email.strip() == "x@example.com")  # ❌
-# .strip() runs on the Column object metadata, not in SQL — query semantics break
+# .strip() רץ על metadata של Column, לא ב-SQL — סמנטיקת ה-query נשברת
 ```
 
-### Fix
+### תיקון
 ```python
 from sqlalchemy import func
 q = select(Lead).where(func.trim(Lead.email) == "x@example.com")
 ```
 
-### Real commits
+### Commits אמיתיים
 - EmailFlow `dfdf975`.
 
 ---
 
-## Pattern 7 — CAS on nullable column (CORE U1 + U4)
+## דפוס 7 — CAS על עמודה nullable (CORE U1 + U4)
 
 ```python
 result = await session.execute(
   update(Subscription)
-    .where(Subscription.id == sid, Subscription.history_id == expected_old)  # ❌ doesn't match NULL
+    .where(Subscription.id == sid, Subscription.history_id == expected_old)  # ❌ לא תופס NULL
     .values(history_id=new_id)
 )
 ```
-If `expected_old` is `None` and the row has `history_id IS NULL`, `col = NULL` evaluates to `NULL` (not `TRUE`) → rowcount = 0 → cursor stuck forever.
+אם `expected_old` הוא `None` ולשורה יש `history_id IS NULL`, `col = NULL` מוערך כ-`NULL` (לא `TRUE`) → rowcount = 0 → cursor תקוע לעד.
 
-### Fix
+### תיקון
 ```python
 if expected_old is None:
   where_clause = Subscription.history_id.is_(None)
@@ -183,37 +183,37 @@ result = await session.execute(
 )
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `cf99698`.
 
 ---
 
-## Pattern 8 — `ANY(:ids)` with type mismatch
+## דפוס 8 — `ANY(:ids)` עם אי-התאמת טיפוס
 
 ```python
-q = select(Lead).where(Lead.id == any_(string_array))  # ❌ if Lead.id is UUID
+q = select(Lead).where(Lead.id == any_(string_array))  # ❌ אם Lead.id הוא UUID
 ```
 
-Postgres won't implicitly cast string array to UUID.
+Postgres לא יבצע cast מרומז ממערך מחרוזות למערך UUID.
 
-### Fix
-Cast on either side:
+### תיקון
+Cast בשני הצדדים:
 ```python
 q = select(Lead).where(cast(Lead.id, String) == any_(string_array))
-# or: pass uuid.UUID objects in string_array
+# או: העבר אובייקטי uuid.UUID ב-string_array
 ```
 
-### Real commits
+### Commits אמיתיים
 - Noa `244286d`.
 
 ---
 
-## Pattern 9 — Audit log on UPDATE failure (links to CORE U5)
+## דפוס 9 — Audit log בכשל UPDATE (מקושר ל-CORE U5)
 
-When a CAS `UPDATE` returns `rowcount=0`, the side-effect didn't happen. But downstream consumers (cron, dashboards) infer state from the activity log. If you only log on success, they think the event never occurred → they take action (create task, send reminder) under the wrong assumption.
+כש-CAS `UPDATE` מחזיר `rowcount=0`, ה-side-effect לא קרה. אבל צרכנים downstream (cron, dashboards) מסיקים state מ-activity log. אם לוגים רק על הצלחה, הם חושבים שה-event לא קרה → לוקחים פעולה (יוצרים task, שולחים תזכורת) בהנחה השגויה.
 
-### Rule
-For any UPDATE that can fail due to CAS / race / filter rejection:
+### כלל
+לכל UPDATE שיכול להיכשל עקב CAS / race / דחיית filter:
 ```python
 result = await session.execute(update(...).where(...))
 if result.rowcount == 0:
@@ -222,16 +222,16 @@ else:
   await log_activity(type=..., metadata={"applied": True})
 ```
 
-### Real commits
-- Noa `04cb101` — `_apply_reschedule` rowcount=0 left booking without activity → cron treated as never-happened.
-- Noa `0aff4a1` — webhook returned changes=[] without persisting new sync_token → infinite loop.
+### Commits אמיתיים
+- Noa `04cb101` — `_apply_reschedule` עם rowcount=0 השאיר booking בלי activity → cron התייחס לזה כאילו לא קרה.
+- Noa `0aff4a1` — webhook החזיר changes=[] בלי לשמור sync_token חדש → לולאה אינסופית.
 
 ---
 
-## Cross-references
+## הפניות צולבות
 
-- **CORE U1** — Race conditions in async code (this file covers ORM-side specifics)
-- **CORE U4** — Postgres NULL semantics in CAS
-- **CORE U5** — Linked-field atomicity (the audit-log-on-failure pattern)
-- **R1** — SQLAlchemy async session lifecycle (this file is the deep-dive)
+- **CORE U1** — race conditions בקוד async (הקובץ הזה מכסה ספציפיות צד-ORM)
+- **CORE U4** — סמנטיקת NULL של Postgres ב-CAS
+- **CORE U5** — atomicity של linked-field (דפוס audit-log-on-failure)
+- **R1** — lifecycle של AsyncSession ב-SQLAlchemy (הקובץ הזה הוא ה-deep-dive)
 - **`bugbot-rules/race-toctou.md`**, **`postgres-null-cas.md`**, **`linked-field-atomicity.md`**

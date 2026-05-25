@@ -1,15 +1,15 @@
-# Universal patterns (paste into CLAUDE.md — applies to every project)
+# דפוסים אוניברסליים (להעתקה ל-CLAUDE.md — חל על כל פרויקט)
 
-1. **Async race / TOCTOU.** Read-then-write needs a UNIQUE constraint, advisory lock, or CAS. `INSERT` locally **before** any irreversible external call. Every `async def` called in a boolean context (`if foo():`) must have `await`. CAS on nullable column: branch `is None` → use `IS NULL`.
+1. **Async race / TOCTOU.** read-then-write דורש UNIQUE constraint, advisory lock, או CAS. `INSERT` מקומי **לפני** כל קריאה חיצונית בלתי הפיכה. כל `async def` שנקראת בהקשר בוליאני (`if foo():`) חייבת `await`. CAS על עמודה nullable: הסתעפות `is None` → השתמש ב-`IS NULL`.
 
-2. **React state sync.** Local `useState(props.X)` is stale when `props.X` changes — use `key={id}`, `useEffect([X], () => setState(X))`, or derived state. All hooks before any early return. `useCallback`/`useMemo` deps must include every prop/state in the body. `setState` after `await` checks a cancellation flag.
+2. **סנכרון state ב-React.** `useState(props.X)` מקומי ישן כש-`props.X` משתנה — השתמש ב-`key={id}`, `useEffect([X], () => setState(X))`, או derived state. כל ה-hooks לפני כל early return. deps של `useCallback`/`useMemo` חייבים לכלול כל prop/state בגוף. `setState` אחרי `await` בודק cancellation flag.
 
-3. **External input validation.** Before `.get()` / `.append()` / `.strip()` / iteration on external data: `isinstance(...)` guard. Numbers: `isfinite()` + range. Regex on external text: raw strings + word boundaries; prefer `json.JSONDecoder().raw_decode()` over regex. SDK calls: catch base class (`anthropic.APIError`), order subclass-before-superclass. Startup SDK init: try/except + format validation — degrade the feature, never crash the boot.
+3. **ולידציה של external input.** לפני `.get()` / `.append()` / `.strip()` / iteration על נתון חיצוני: `isinstance(...)` guard. מספרים: `isfinite()` + טווח. regex על טקסט חיצוני: raw strings + word boundaries; עדיף `json.JSONDecoder().raw_decode()` על regex. קריאות SDK: תפוס base class (`anthropic.APIError`), סדר subclass-לפני-superclass. אתחול SDK ב-startup: try/except + ולידציית פורמט — הורד את הפיצ'ר, לעולם אל תקרוס את ה-boot.
 
-4. **SQL/Postgres edges.** `col = NULL` is NULL, not TRUE — branch to `IS NULL`. `VARCHAR(N)` ≥ longest enum value (CI test). Telegram / external IDs: `BigInteger`. Every `ORDER BY` paired with `LIMIT`/`OFFSET` needs `, id` tiebreaker. `LIKE` with user input: `.startswith(value, autoescape=True)` or escape `_`/`%`.
+4. **SQL/Postgres edges.** `col = NULL` הוא NULL, לא TRUE — הסתעפות `IS NULL`. `VARCHAR(N)` ≥ ערך enum הארוך ביותר (טסט CI). Telegram / IDs חיצוניים: `BigInteger`. כל `ORDER BY` משולב עם `LIMIT`/`OFFSET` דורש tiebreaker `, id`. `LIKE` עם קלט משתמש: `.startswith(value, autoescape=True)` או escape ל-`_`/`%`.
 
-5. **Linked-field atomicity.** Status changes update ALL coupled fields (`status` + `last_outbound_at` + `last_activity_type` + close-related-task + activity-log) in one transaction. External call: write local row with `UNIQUE` first; or write audit log with `metadata.applied=false` on failure. Token pairs (access + refresh) stored/updated together.
+5. **atomicity של linked-field.** שינויי status מעדכנים את כל השדות המקושרים (`status` + `last_outbound_at` + `last_activity_type` + סגירת task קשור + activity-log) בטרנזקציה אחת. קריאה חיצונית: כתוב שורה מקומית עם `UNIQUE` קודם; או כתוב audit log עם `metadata.applied=false` בכשל. Token pairs (access + refresh) נשמרים/מתעדכנים יחד.
 
-6. **Migration drift.** Every `Index`/`CheckConstraint`/`UniqueConstraint` in migration must mirror in model `__table_args__`. Alembic revision id ≤ 30 chars. MySQL projects: no `ADD COLUMN IF NOT EXISTS`. `DROP COLUMN` is a separate migration after code stops using the field.
+6. **סטיית migration.** כל `Index`/`CheckConstraint`/`UniqueConstraint` ב-migration חייב לשקף ב-`__table_args__` של המודל. revision id של Alembic ≤ 30 chars. פרויקטי MySQL: אסור `ADD COLUMN IF NOT EXISTS`. `DROP COLUMN` הוא migration נפרד אחרי שהקוד הפסיק להשתמש בשדה.
 
-See `BY-STACK/*.md` for code examples and `bugbot-rules/*.md` for standalone rule prompts.
+ראה `BY-STACK/*.md` לדוגמאות קוד ו-`bugbot-rules/*.md` ל-prompts של כללים עצמאיים.

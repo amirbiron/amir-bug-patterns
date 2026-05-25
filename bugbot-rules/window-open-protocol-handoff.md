@@ -1,16 +1,16 @@
 # window-open-protocol-handoff
 
-Detect frontend code that misinterprets `window.open(url, ...)` returning `null` as a popup-blocker event, when in fact the URL uses a system protocol that the browser intentionally handed off to the OS (returning `null` is normal).
+זהה קוד frontend שמפרש בטעות את החזרת `null` של `window.open(url, ...)` כאירוע popup-blocker, כשבאמת ה-URL משתמש ב-protocol מערכת שהדפדפן העביר בכוונה ל-OS (החזרת `null` היא רגילה).
 
-## Flag when ALL apply
+## דווח כשמתקיימים כל הבאים
 
-1. Code calls `window.open(url, ...)` followed by a guard like `if (!win) { ... }` or `if (win === null) { ... }` that cancels the current operation, shows "popup blocked" error, or returns early.
-2. The `url` argument can use a system protocol — i.e., starts with `mailto:`, `tel:`, `sms:`, `file:`, or is dynamically computed and can include those schemes.
-3. The cancel branch produces a user-visible failure that abandons legitimate state (e.g., `markAsSent` not called, form not submitted).
+1. הקוד קורא `window.open(url, ...)` ולאחריו guard כמו `if (!win) { ... }` או `if (win === null) { ... }` שמבטל את הפעולה הנוכחית, מציג שגיאת "popup blocked", או חוזר מוקדם.
+2. ה-argument של `url` יכול להשתמש ב-protocol מערכת — כלומר מתחיל ב-`mailto:`, `tel:`, `sms:`, `file:`, או מחושב דינמית ויכול לכלול את ה-schemes האלה.
+3. ה-branch של ביטול מייצר כשל גלוי למשתמש שמוותר על state לגיטימי (למשל `markAsSent` לא נקרא, טופס לא הוגש).
 
-## Fix
+## תיקון
 
-For system protocols, use an `<a>` element + `.click()`:
+ל-protocols מערכת, השתמש באלמנט `<a>` + `.click()`:
 ```js
 const a = document.createElement("a");
 a.href = `mailto:${address}`;
@@ -18,7 +18,7 @@ a.click();
 markAsSent();
 ```
 
-Or scheme-detect before applying the popup-blocker assumption:
+או זהה לפי scheme לפני שאתה מחיל את הנחת popup-blocker:
 ```js
 const isSystemProtocol = /^(mailto|tel|sms|file):/.test(url);
 const win = window.open(url, "_blank");
@@ -26,17 +26,17 @@ if (!win && !isSystemProtocol) { showError("Popup blocked"); return; }
 markAsSent();
 ```
 
-## Related browser-quirk flags (suggest in same review pass)
+## דגלי browser-quirk קשורים (להציע באותה סקירה)
 
-- `navigator.clipboard.writeText(...)` without try/catch (fails on HTTP).
-- `URL.createObjectURL(...)` without matching `URL.revokeObjectURL` in cleanup.
-- `setTimeout(fn, delay)` where `delay` is externally sourced and not `isFinite`-guarded.
+- `navigator.clipboard.writeText(...)` בלי try/catch (נכשל על HTTP).
+- `URL.createObjectURL(...)` בלי `URL.revokeObjectURL` מתאים ב-cleanup.
+- `setTimeout(fn, delay)` כש-`delay` ממקור חיצוני ולא מוגן ב-`isFinite`.
 
 ## False positives
 
-- `window.open` strictly for `http(s):` URLs where popup-blocker check is correct.
-- The cancel branch only logs and continues (best-effort, not state-cancelling).
+- `window.open` רק ל-URLs של `http(s):` שבהם בדיקת popup-blocker נכונה.
+- ה-branch של ביטול רק רושם לוג וממשיך (best-effort, לא מבטל state).
 
-## Severity
+## חומרה
 
-MEDIUM — UX-breaking, occasionally state-corrupting when the cancel branch reverts in-flight changes.
+MEDIUM — שובר UX, מדי פעם משחית state כש-branch הביטול מבטל שינויים באמצע.

@@ -1,21 +1,21 @@
-# Browser-handoff patterns (paste into CLAUDE.md)
+# דפוסי Browser-handoff (להעתקה ל-CLAUDE.md)
 
-1. **`window.open(mailto:|tel:|sms:|file:)` returns `null` in Chrome** — that's OS handoff, NOT popup-blocker. Don't gate `markAsSent()` on `if (!win)`. Use `<a>` + `.click()` for system protocols, reserve popup-blocker check for `http(s):` URLs.
+1. **`window.open(mailto:|tel:|sms:|file:)` מחזיר `null` ב-Chrome** — זה handoff ל-OS, *לא* popup-blocker. אל תחסום `markAsSent()` על `if (!win)`. השתמש ב-`<a>` + `.click()` ל-protocols מערכת, שמור את בדיקת popup-blocker ל-URLs של `http(s):`.
 
-2. **`navigator.clipboard.writeText` requires HTTPS / localhost.** Wrap in try/catch; on failure, fall back to legacy `document.execCommand` or show a user-actionable error.
+2. **`navigator.clipboard.writeText` דורש HTTPS / localhost.** עטוף ב-try/catch; בכשל, fallback ל-`document.execCommand` legacy או הצג שגיאה שמאפשרת למשתמש לפעול.
 
-3. **Tooltip / dropdown closes on click → check event propagation.** Either `e.stopPropagation()` inside the inner element, or "click outside" hook that compares `event.target` with the inner ref via `.contains()`.
+3. **Tooltip / dropdown נסגר על click → בדוק event propagation.** או `e.stopPropagation()` בתוך האלמנט הפנימי, או hook של "click outside" שמשווה `event.target` עם ref פנימי דרך `.contains()`.
 
-4. **`* { margin: 0; padding: 0 }` overrides Tailwind utility classes.** Use `@tailwind base` (Preflight) only; remove manual `*` resets.
+4. **`* { margin: 0; padding: 0 }` דורס מחלקות utility של Tailwind.** השתמש ב-`@tailwind base` (Preflight) בלבד; הסר resets ידניים של `*`.
 
-5. **`URL.createObjectURL(blob)` must have a matching `URL.revokeObjectURL` in `useEffect` cleanup** — otherwise blob URL leaks accumulate.
+5. **ל-`URL.createObjectURL(blob)` חייב להיות `URL.revokeObjectURL` מתאים ב-cleanup של `useEffect`** — אחרת דליפות blob URL מצטברות.
 
-6. **`setTimeout(fn, delay)` / `new Date(value)` with externally-sourced number requires `isFinite(value) && value > 0` guard.**
+6. **`setTimeout(fn, delay)` / `new Date(value)` עם מספר ממקור חיצוני דורש הגנת `isFinite(value) && value > 0`.**
 
-7. **`localStorage` is per-key; multi-field auth state must be atomic** — store as one JSON blob or always write both keys together.
+7. **`localStorage` הוא per-key; state auth מרובה-שדות חייב להיות atomic** — שמור כ-JSON blob יחיד או תמיד כתוב את שני ה-keys יחד.
 
-8. **Time-anchored UI ("show after meeting ends") uses `slot_end`, not `slot_start + estimate`.** Short meetings break the latter.
+8. **UI מבוסס-זמן ("הצג אחרי שהמפגש מסתיים") משתמש ב-`slot_end`, לא `slot_start + estimate`.** מפגשים קצרים שוברים את האחרון.
 
-9. **`useEffect` mid-await + unmount: use a cancellation flag** so subsequent `setState` is a no-op.
+9. **`useEffect` באמצע await + unmount: השתמש ב-cancellation flag** כך ש-`setState` שלאחר מכן הוא no-op.
 
-See `BY-STACK/browser-handoff.md`.
+ראה `BY-STACK/browser-handoff.md`.
