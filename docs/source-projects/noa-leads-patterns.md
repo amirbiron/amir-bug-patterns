@@ -467,6 +467,47 @@ CLAUDE.md כלל 9 כתוב על זה.
 
 ---
 
+## P3 — Pattern 11: שדה ב-schema/payload לא מגיע לכתיבה הסופית
+
+**תדירות:** 2 קומיטים, severity Medium (איבוד נתונים שקט, feature appears complete).
+
+**דוגמאות:**
+- `TBD-gmail-intake` — Gmail intake מילא `lead_message` בסיכום AI במקום ב-raw של הלקוח. ה-schema קיבל את השדה, ה-route העביר אותו, אבל ה-mapping בכתיבה הקצה לעמודה את ה-source הלא נכון (סיכום במקום הטקסט הגולמי).
+- `TBD-is-returning-customer` — `is_returning_customer` הוגדר ב-`LeadCreate`, נשלח מ-`NewLeadModal` ב-UI, אבל פונקציית יצירת ה-Lead לא מיפתה אותו ל-`Lead(is_returning_customer=...)` → תמיד נשמר `False` (ה-DB default).
+
+**סיבה שורשית:** schema-to-write drift. שכבות ה-input (Pydantic + frontend) מתעדכנות עם שדה חדש, אבל שכבת ה-CRUD ש**בונה את ה-row** לא מתעדכנת יחד. אין שגיאת validation (השדה התקבל), אין שגיאת DB (default קיים בעמודה או nullable) → ה-feature נראה שלם אבל ה-DB שומר default בשקט.
+
+זה **לא** Pattern 4 (schema default דורס intent): שם ה-caller לא שלח את השדה. כאן השדה **כן נשלח** ועבר את כל הסכמה — רק הכתיבה שכחה אותו. זה גם **לא** linked-field atomicity: לא מדובר בקבוצת שדות מקושרים, אלא בשדה בודד שנשמט בנקודת הסיום.
+
+CLAUDE.md הקיים לא מכסה את זה במפורש — אכיפה דורשת CI grep / bugbot rule.
+
+**Custom rule prompt:** ראה `bugbot-rules/input-field-not-persisted.md` ל-detection signature מלא (5 קריטריונים) + 4 false positives.
+
+עיקרון לזיהוי מהיר:
+```
+לכל BaseModel ב-schemas/ ששמו מסתיים ב-Create / Update:
+  1. אסוף `model_fields` של הסכמה.
+  2. אתר את ה-CRUD function שמקבל את הסכמה כפרמטר.
+  3. חשב set difference: schema fields - assigned columns ב-Model(...).
+  4. אם ההפרש כולל שדה non-Optional ולא-derived — דווח.
+  
+בנוסף: בכל diff שמוסיף שדה ל-*Create schema, ודא שיש שינוי תואם
+ב-CRUD layer (`crud_*.py` או `services/*.py`) באותו PR.
+
+Wrong-source mapping (וריאציה 2): חפש Model(...)/dict assignments
+שמקבלים ערך משדה payload בעל שם דומה אבל סמנטיקה שונה
+(summary במקום raw, classification במקום input).
+```
+
+**False positives:**
+- ⚠️ שדות **derived** שנגזרים מ-fields אחרים בקוד (לא מגיעים מ-payload). סינון: רק שדות שמופיעים גם ב-schema וגם ב-frontend payload.
+- ⚠️ Audit columns שמתמלאים אוטומטית (`created_at`, `updated_at`, `created_by_id`).
+- ⚠️ PATCH endpoints שכותבים subset מכוון של שדות (לא יוצרים entity חדש).
+
+**Mode מומלץ:** Warning. CI grep חוקי, אבל false positives על שדות derived / audit שכיחים מספיק כדי שלא להפוך ל-strict.
+
+---
+
 ## דירוג סופי
 
 | Priority | Pattern | תדירות | Severity range | Mode מומלץ |
@@ -481,6 +522,7 @@ CLAUDE.md כלל 9 כתוב על זה.
 | **P2** | 8. SQL nullability + PG edge cases | 5 | Medium-High | Strict |
 | **P3** | 9. Activity log as source of truth | 3 | Medium | Warning |
 | **P3** | 10. Browser protocol handoff | 2 | Medium | Warning |
+| **P3** | 11. שדה ב-schema/payload לא מגיע לכתיבה הסופית | 2 | Medium | Warning |
 
 ## הערה כללית על false-positive tuning
 
