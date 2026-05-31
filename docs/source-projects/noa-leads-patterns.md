@@ -469,11 +469,12 @@ CLAUDE.md כלל 9 כתוב על זה.
 
 ## P3 — Pattern 11: שדה ב-schema/payload לא מגיע לכתיבה הסופית
 
-**תדירות:** 2 קומיטים, severity Medium (איבוד נתונים שקט, feature appears complete).
+**תדירות:** 3 קומיטים, severity Medium (איבוד נתונים שקט, feature appears complete).
 
 **דוגמאות:**
 - `TBD-gmail-intake` — Gmail intake מילא `lead_message` בסיכום AI במקום ב-raw של הלקוח. ה-schema קיבל את השדה, ה-route העביר אותו, אבל ה-mapping בכתיבה הקצה לעמודה את ה-source הלא נכון (סיכום במקום הטקסט הגולמי).
 - `TBD-is-returning-customer` — `is_returning_customer` הוגדר ב-`LeadCreate`, נשלח מ-`NewLeadModal` ב-UI, אבל פונקציית יצירת ה-Lead לא מיפתה אותו ל-`Lead(is_returning_customer=...)` → תמיד נשמר `False` (ה-DB default).
+- `TBD-followup-interval` — שדה של מרווח followup (`followup_interval_days` / equivalent) עבר את ה-schema ואת ה-UI, אבל פונקציית בניית ה-Lead / Rule לא העבירה אותו ל-row → תמיד נשמר ערך ברירת המחדל. המשתמש בחר interval אחד, המערכת המשיכה לפי ה-default.
 
 **סיבה שורשית:** schema-to-write drift. שכבות ה-input (Pydantic + frontend) מתעדכנות עם שדה חדש, אבל שכבת ה-CRUD ש**בונה את ה-row** לא מתעדכנת יחד. אין שגיאת validation (השדה התקבל), אין שגיאת DB (default קיים בעמודה או nullable) → ה-feature נראה שלם אבל ה-DB שומר default בשקט.
 
@@ -508,6 +509,84 @@ Wrong-source mapping (וריאציה 2): חפש Model(...)/dict assignments
 
 ---
 
+## P3 — Pattern 12: React state stale על prop / localStorage key (resync חסר)
+
+**תדירות:** 2 קומיטים, severity Medium-High (UI מציג ערך ישן; submit שולח נתונים שגויים חזרה לשרת).
+
+**דוגמאות:**
+- `TBD-followup-rules` — `FollowupRulesSection` מאתחל state מקומי מ-prop, אבל ה-prop משתנה אחרי save (parent refetch מהשרת). state המקומי לא מסונכרן → ה-UI ממשיך להציג את הערכים הישנים שהמשתמש שלח. הפתרון הקנוני: `useEffect([prop], () => setState(prop))` או `key={...}` ב-parent (force remount).
+- `TBD-use-local-storage` — `useLocalStorage` hook לא מאפס את ה-state כש-ה-key prop משתנה ואין ערך שמור ב-localStorage. רכיב שעובר בין identifiers (לדוגמה lead-ל-lead, או tab-ל-tab) ממשיך להציג את ה-state של הקודם. סינכרון חסר ב-effect שמאזין ל-key change ומפיל ל-`defaultValue` במקרה של miss.
+
+**סיבה שורשית:** הדפוס הקלאסי של React — `useState(props.X)` או `useState(() => readFromLS(key))` מאתחל פעם אחת ב-mount, אבל ה-prop יכול להשתנות. ללא `key={X}` ב-parent או `useEffect([X], () => setState(...))`, ה-state המקומי "תקוע" על הערך הראשון. ב-`useLocalStorage` הסיכון מוגבר כי ה-key משמש כמזהה זהות של ה-state — מעבר בין entities מצריך reset ל-default אם אין ערך שמור.
+
+**Custom rule prompt:** ראה `bugbot-rules/react-stale-state-on-prop.md` ו-CORE U2 (`claude-md-snippets/universal.md` סעיף 2, `BY-STACK/react-frontend.md` דפוס 1). הכלל הקיים מכסה את שני המקרים — אין צורך ב-rule חדש.
+
+**False positives:**
+- ⚠️ state מקומי טהור (modal פתוח/סגור, theme toggle) — לא צריך resync.
+- ⚠️ props שלא משתנים אחרי mount (`user.id` קבוע).
+- ⚠️ uncontrolled inputs עם `defaultValue`.
+
+**Mode מומלץ:** Warning. strict ייצור רעש על כל `useState(props.X)` בכוונה לא מסונכרן.
+
+**Cross-tier:** הדפוס כבר ב-`CORE-PATTERNS.md` U2 (3/3 מקורות: EmailFlow + Web + עכשיו Noa מאושר במפורש). שני המופעים החדשים מחזקים את בסיס הראיות; commits נוספו גם ל-`BY-STACK/react-frontend.md` דפוס 1.
+
+---
+
+## P3 — Pattern 13: דליפת לידים סגורים / terminal-state לרשימות אקטיביות
+
+**תדירות:** 2 קומיטים, severity Medium-High (UI מציג לידים סגורים כאקטיביים; race יוצר notifications/tasks ללידים שכבר נסגרו).
+
+**דוגמאות:**
+- `TBD-archive-truthy` — `if closed:` (Python truthy) במקום `if closed is True` באחת מ-archive queries. העמודה nullable: `None` (לא נקבע), `False`, או `True`. truthy תפס רק `True`, ו-`None` נחשב "לא סגור" כך שלידים שעדיין לא קיבלו ערך מפורש (drift היסטורי) הופיעו כאקטיביים בטעות. שווה ערך: filter שהיה צריך להיות מפורש (`closed is True` או `is_active = True`) נשבר על Python truthy semantics.
+- `TBD-needs-attention-race` — `needs_attention` cron בדק לידים שהיו פתוחים בזמן ה-`SELECT`, ויצר task. במקביל, פעולה אחרת סגרה את הליד. ה-cron כתב את ה-task **אחרי** הסגירה (race) → task נוצר על ליד שכבר סגור → notification פייק למשתמש. אין CAS על `status` בכתיבת ה-task / אין `SELECT FOR UPDATE` על הליד.
+
+**סיבה שורשית:** שני sub-mechanisms ל-leak אחד:
+1. **Filter truthy על nullable boolean** — Python `if x:` לא מבחין בין `False` ל-`None`. כש-העמודה nullable, החלק של `None` יכול ליפול בצד הלא צפוי של ה-filter. דרוש `is True` / `is None` מפורש.
+2. **Race נגד terminal transition** — בין `SELECT` ל-`UPDATE`/`INSERT`, terminal status יכול להשתנות. בלי CAS (`WHERE status NOT IN (CLOSED, ARCHIVED, WON, LOST)`) או `SELECT FOR UPDATE`, ה-writer דוחס ערך שגוי על ליד שכבר סגור.
+
+**Custom rule prompts:**
+- ל-truthy: ראה `bugbot-rules/filter-too-narrow.md` (קריטריון #6 — truthy על nullable boolean — נוסף יחד עם הדפוס הזה).
+- ל-race: ראה `bugbot-rules/race-toctou.md` (קריטריונים 1+4 — CAS על terminal state, או `SELECT FOR UPDATE`).
+
+**False positives:**
+- ⚠️ עמודות boolean **non-nullable** עם default מוגדר — truthy בסדר כי ה-domain רק `True`/`False`.
+- ⚠️ Cron שכותב לטבלת audit-only שלא משפיעה על UI — race פחות חמור.
+
+**Mode מומלץ:** Strict לכל cron / handler שכותב על entity עם terminal states (`closed`, `archived`, `won`, `lost`). Warning ל-UI filters.
+
+**הערה:** הדפוס הזה לא הצריך rule חדש — שני המנגנונים מכוסים על ידי כלל קיים שהורחב (`filter-too-narrow`) וכלל קיים שלא דרש שינוי (`race-toctou`). הרישום ב-source doc חיוני כי הצירוף "closed leads leak" יחזור על עצמו ב-Noa_Leads גם בעתיד וכדאי שייקרא מ-Pattern 13.
+
+---
+
+## P3 — Pattern 14: React + משאב async חיצוני (mic / camera / socket) — guard + cleanup חסרים
+
+**תדירות:** 1 קומיט עם 3 sub-bugs, severity Medium-High (דליפת hardware, פעולות במקביל, state corruption).
+
+**דוגמאות:**
+- `TBD-voice-recorder-button` — `VoiceRecorderButton` הציג שלוש בעיות בקומפוננטה אחת:
+  1. **לחיצה כפולה יצרה הקלטות מקבילות.** אין guard של "in-flight" — לחיצה שנייה לפני שהראשונה התייצבה התחילה `getUserMedia` שני, ושני `MediaRecorder` רצו במקביל.
+  2. **סגירת מודאל המשיכה להעלות.** unmount של ה-modal לא ביטל את ה-upload-in-flight (אין `AbortController`). ה-component התפרק, אבל ה-`await fetch(...)` המשיך ועדכן state ש-React כבר העלים → React warning + side effects לא רצויים.
+  3. **מיקרופון דלף.** ה-stream של `getUserMedia` לא קיבל `stream.getTracks().forEach(t => t.stop())` בכל מסלולי היציאה (stop / שגיאה / unmount). LED של המיקרופון נשאר דולק אחרי שהמשתמש סגר את המודאל.
+
+**סיבה שורשית:** React + משאב async חיצוני (mic, camera, WebSocket, EventSource, MediaRecorder, AudioContext, AbortController ל-fetch ארוך) מצריך **שלוש** הגנות שחיות יחד:
+1. **Action-in-flight guard** — `useRef` שמסמן שפעולה מתחילה; double-click לא יתחיל פעולה שנייה. reset ב-`finally`.
+2. **Mounted guard אחרי `await`** — `let cancelled = false; return () => { cancelled = true; }` ב-`useEffect`, וכל `setState` אחרי await מותנה ב-`if (!cancelled)`.
+3. **Cleanup עקבי בכל מסלולי היציאה** — `releaseResource()` idempotent שנקראת מ-stop button, מ-`catch`, ומ-`useEffect cleanup`. חסר אפילו מסלול אחד = leak.
+
+הדפוס מופיע כל פעם שיש משאב חיצוני שהדפדפן לא משחרר אוטומטית — בניגוד ל-`setTimeout` (משוחרר ב-GC) או fetch קצר רגיל (אין side effects כשה-promise פוקע). הסיכון הייחודי: hardware (מיקרופון/מצלמה) ופרטיות.
+
+**Custom rule prompt:** ראה `bugbot-rules/react-async-media-resource.md` — detection signature מלא של 5 קריטריונים + 5 false-positive filters.
+
+**False positives:**
+- ⚠️ קומפוננטות עם משאב שמשוחרר אוטומטית (fetch קצר בלי side effects).
+- ⚠️ קומפוננטות שאינן ניתנות ל-unmount באמצע (single-shot recorder במסך מלא).
+- ⚠️ `getUserMedia` ב-app-level singleton שמנוהל מחוץ ל-component lifecycle.
+- ⚠️ Custom hook (`useMicrophone`, `useSocket`) שמטפל פנימית — בדוק את ה-hook פעם אחת.
+
+**Mode מומלץ:** Strict לכל קומפוננטה שמשתמשת ב-`navigator.mediaDevices.*`, `new WebSocket(...)`, `new EventSource(...)`, `new MediaRecorder(...)`, `new AudioContext(...)`, או `new AbortController()` שמועבר ל-fetch ארוך.
+
+---
+
 ## דירוג סופי
 
 | Priority | Pattern | תדירות | Severity range | Mode מומלץ |
@@ -522,7 +601,10 @@ Wrong-source mapping (וריאציה 2): חפש Model(...)/dict assignments
 | **P2** | 8. SQL nullability + PG edge cases | 5 | Medium-High | Strict |
 | **P3** | 9. Activity log as source of truth | 3 | Medium | Warning |
 | **P3** | 10. Browser protocol handoff | 2 | Medium | Warning |
-| **P3** | 11. שדה ב-schema/payload לא מגיע לכתיבה הסופית | 2 | Medium | Warning |
+| **P3** | 11. שדה ב-schema/payload לא מגיע לכתיבה הסופית | 3 | Medium | Warning |
+| **P3** | 12. React state stale על prop / localStorage key | 2 | Medium-High | Warning |
+| **P3** | 13. Terminal-state leak (סגורים בקריאות אקטיביות) | 2 | Medium-High | Strict (cron) / Warning (UI) |
+| **P3** | 14. React + משאב async חיצוני (mic / camera / socket) | 1 | Medium-High | Strict |
 
 ## הערה כללית על false-positive tuning
 
