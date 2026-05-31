@@ -21,6 +21,8 @@
 
 5. **`Array.filter` ולאחריו UI של `.length === 0`** כש-predicate ה-filter לא מכסה את כל variants הישות הצפויות → המשתמש רואה רשימה ריקה בטעות.
 
+6. **Filter שמסתמך על truthy של nullable boolean** במקום השוואה מפורשת. דוגמה: `if closed:` במקום `if closed is True` כש-`closed` יכול להיות `None` / `False` / `True`. ב-Python, `None` ו-`False` שניהם falsy, אבל הסמנטיקה לרוב דורשת הבחנה — `None` = "לא נקבע" (אקטיבי כברירת מחדל היסטורית), `False` = "סגור במפורש שלילי", `True` = "סגור". הכשל הקלאסי: filter שאמור להוציא רק לידים סגורים (`closed is True`) משאיר לידים עם `closed=None` ברשימת האקטיביים — או הפוך, תופס לידים עם `None` כאילו הם סגורים. דווח על `if <bool_col>:` / `if not <bool_col>:` / `.filter(model.col)` כש-העמודה nullable, בלי `is True` / `is False` / `is None` או `!= True` מפורש. שווה ערך ב-SQL: `WHERE col` במקום `WHERE col IS TRUE`.
+
 ## False positives
 
 - צמצום scope מכוון (owner-scoped, role-scoped, tenant-scoped) כש-ה-filter *הוא* הפיצ'ר.

@@ -55,6 +55,8 @@ function StatusDropdown({ leadId, currentStatus }) {
 - EmailFlow `d84daca`, `3987818` — status dropdown תקוע על ערך ישן.
 - EmailFlow `02f633a` — חסר `key={conversationId}` ב-ReplyBox → state עבר בין שיחות.
 - EmailFlow `b14e3f3` — `seenDraftKey` collision בין שתי הודעות.
+- Noa `TBD-followup-rules` — `FollowupRulesSection` לא סינכרן state אחרי save (prop השתנה, useState המקומי תקוע).
+- Noa `TBD-use-local-storage` — `useLocalStorage` hook לא איפס state ל-`defaultValue` כש-ה-key prop השתנה ולא היה ערך שמור.
 - Web `2e5c480` — רק `token` עודכן, לא `refreshToken`.
 
 ---
