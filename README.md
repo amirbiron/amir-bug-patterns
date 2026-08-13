@@ -21,8 +21,11 @@
 | `CRITICAL-PATTERNS.md` | אותו דבר. |
 | `claude-md-snippets/universal.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
 | `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 10 כללים). |
+| `TESTING-PATTERNS.md` | לזרוק ל-`docs/`, או לקשר מ-`CLAUDE.md`. |
+| `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
+| `BY-STACK/hebrew-source.md` + `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
 
-זה ~50 שורות שמתווספות ל-`CLAUDE.md` שמכסות את ה-baseline האוניברסלי + האבטחה.
+זה ~75 שורות שמתווספות ל-`CLAUDE.md` שמכסות את ה-baseline האוניברסלי, האבטחה, הבדיקות והעברית.
 
 ### 2. ואז לפי stack
 
@@ -38,6 +41,7 @@
 | Anthropic / Google / Stripe / OAuth / FCM SDKs | `BY-STACK/external-sdk.md` | `claude-md-snippets/external-sdk.md` |
 | קוד דפדפן עם `mailto:` / clipboard / blob URLs | `BY-STACK/browser-handoff.md` | `claude-md-snippets/browser-handoff.md` |
 | State machines / status enums | `BY-STACK/state-machine.md` | `claude-md-snippets/state-machine.md` |
+| מגיש HTML / CSP / OAuth בדפדפן / iframes | `BY-STACK/browser-policy.md` | `claude-md-snippets/browser-policy.md` |
 
 ### 3. אופציונלי — אם יש זמן
 
@@ -66,6 +70,13 @@
 
 3. **הוסף `bugbot-rules/<name>.md`** לכל דפוס עם detection signature נקייה לאוטומציה.
 
+   **לפני שמוסיפים דפוס — לשאול אם הוא בכלל באג בקוד.** אם הבאג היה
+   בפער בין מה שהבדיקות אימתו לבין מה שהמערכת עושה, מקומו
+   ב-`TESTING-PATTERNS.md`, לא בקטגוריה לפי stack. הציר הזה נוסף
+   מאוחר בדיוק כי פספסתי אותו: שלושה באגים רצופים ב-Markdown-Docs
+   תוקנו כבאגי קוד, בזמן שהשורש המשותף היה שהבדיקות עקבו אחרי המפרט
+   ולא אחרי הלקוח.
+
 4. **עדכן `claude-md-snippets/*.md`** אם הדפוס תמציתי מספיק להיכנס ב-≤20 שורות.
 
 5. **קרא מחדש את `MIGRATION-NOTES.md`** רבעונית כדי לראות אם המודל המנטלי שלי של "אוניברסלי vs ספציפי ל-stack" עדיין מחזיק.
@@ -78,8 +89,9 @@ amir-bug-patterns/
 ├── CORE-PATTERNS.md             # U1..U6 — 3/3 מקורות, החל בכל מקום
 ├── CRITICAL-PATTERNS.md         # K1..K10 — חומרה גבוהה, החל בכל מקום
 ├── RECURRING-PATTERNS.md        # R1..R5 — 2/3 מקורות, החל אם ה-stack תואם
+├── TESTING-PATTERNS.md          # T1..T3 — הבדיקה כמקור הבאג, החל בכל מקום
 ├── MIGRATION-NOTES.md           # meta-analysis, top-3 day-1 picks
-├── BY-STACK/                    # 8 קבצים, מאורגנים לפי מודל מנטלי
+├── BY-STACK/                    # 10 קבצים, מאורגנים לפי מודל מנטלי
 │   ├── react-frontend.md
 │   ├── async-orm.md
 │   ├── state-machine.md
@@ -87,8 +99,10 @@ amir-bug-patterns/
 │   ├── cron-jobs.md
 │   ├── postgres.md
 │   ├── external-sdk.md
-│   └── browser-handoff.md
-├── claude-md-snippets/          # ≤20 שורות כל אחד, להדבקה ל-CLAUDE.md של הפרויקט
+│   ├── browser-handoff.md
+│   ├── browser-policy.md
+│   └── hebrew-source.md
+├── claude-md-snippets/          # ≤30 שורות כל אחד, להדבקה ל-CLAUDE.md של הפרויקט
 │   ├── universal.md
 │   ├── critical.md
 │   ├── react.md
@@ -98,9 +112,16 @@ amir-bug-patterns/
 │   ├── cron-jobs.md
 │   ├── postgres.md
 │   ├── external-sdk.md
-│   └── browser-handoff.md
+│   ├── browser-handoff.md
+│   ├── browser-policy.md
+│   ├── testing.md
+│   └── hebrew.md
 ├── bugbot-rules/                # כלל אחד לכל קובץ, stack-agnostic
 │   ├── race-toctou.md
+│   ├── test-mirrors-spec-not-client.md
+│   ├── test-infra-shared-state.md
+│   ├── blanket-policy-silent-block.md
+│   ├── hebrew-source-and-data.md
 │   ├── react-stale-state-on-prop.md
 │   ├── external-input-isinstance.md
 │   ├── postgres-null-cas.md
@@ -122,10 +143,12 @@ amir-bug-patterns/
 └── docs/source-projects/        # מסמכי post-mortem מקוריים (reference)
     ├── noa-leads-patterns.md
     ├── emailflow-patterns.md
-    └── eight-projects-patterns.md
+    ├── eight-projects-patterns.md
+    └── markdown-docs-mcp-patterns.md
 ```
 
 ## ראה גם
 
 - **`MIGRATION-NOTES.md`** — מה הפתיע אותי במהלך ההצלבה, ומהם 3 הדפוסים העליונים לחיבור לפרויקט חדש ביום הראשון.
+- **`TESTING-PATTERNS.md`** — הציר שבו הקוד שבור, הבדיקות ירוקות, וה-CI הוא זה שמשקר. אי אפשר לתפוס אותו בעזרת עוד בדיקה מאותו סוג.
 - **`docs/source-projects/`** — מסמכי post-mortem מקוריים בעברית שמזינים את הספרייה הזו. ההפניות הצולבות בכל קובץ דפוס (`commit 33af59e`, `commit f847a44`, וכו') מצביעות לתוך מסמכי המקור.
