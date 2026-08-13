@@ -91,7 +91,7 @@ amir-bug-patterns/
 ├── RECURRING-PATTERNS.md        # R1..R5 — 2/3 מקורות, החל אם ה-stack תואם
 ├── TESTING-PATTERNS.md          # T1..T3 — הבדיקה כמקור הבאג, החל בכל מקום
 ├── MIGRATION-NOTES.md           # meta-analysis, top-3 day-1 picks
-├── BY-STACK/                    # 8 קבצים, מאורגנים לפי מודל מנטלי
+├── BY-STACK/                    # 10 קבצים, מאורגנים לפי מודל מנטלי
 │   ├── react-frontend.md
 │   ├── async-orm.md
 │   ├── state-machine.md
@@ -102,7 +102,7 @@ amir-bug-patterns/
 │   ├── browser-handoff.md
 │   ├── browser-policy.md
 │   └── hebrew-source.md
-├── claude-md-snippets/          # ≤20 שורות כל אחד, להדבקה ל-CLAUDE.md של הפרויקט
+├── claude-md-snippets/          # ≤30 שורות כל אחד, להדבקה ל-CLAUDE.md של הפרויקט
 │   ├── universal.md
 │   ├── critical.md
 │   ├── react.md

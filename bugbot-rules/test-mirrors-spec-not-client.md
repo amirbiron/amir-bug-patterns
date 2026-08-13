@@ -14,8 +14,10 @@
    לנתיב אחר מזה שההצהרה מכריזה עליו.
 
 3. פיצ'ר שנשען על אכיפה בצד הלקוח — CSP, `SameSite`, CORS, origin של
-   `postMessage`, service worker — שאין לו אף בדיקה בדפדפן אמיתי.
-   `httpx` / `requests` / `TestClient` אינם אוכפים אף אחת מהן.
+   `postMessage`, service worker — שיש לו רק בדיקת חוזה בשרת. נדרשות
+   **שתיהן**: בדיקת שרת שהכותרת נשלחת עם הערך הנכון, ובדיקת דפדפן
+   שהפעולה אכן מותרת. `httpx` / `requests` / `TestClient` מאמתים את
+   הראשונה בלבד.
 
 4. בדיקה של תכונת מקביליות (single-use, idempotency, lock, rate limit)
    שקוראת לקוד **ברצף** במקום ב-`asyncio.gather` / threads.
