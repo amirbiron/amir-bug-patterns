@@ -55,6 +55,7 @@
 שורות הטבלה להדבקה בכל פרויקט, לפי ה-stack שלו בפועל:
 
 ### CodeBot (בוט טלגרם + webapp + MongoDB/GridFS + Sphinx docs)
+
 | כשאתה נוגע ב... | קרא |
 |---|---|
 | שמירה/מחיקה שמסתיימת בהודעת ✅ למשתמש | `CRITICAL-PATTERNS.md` K11 |
@@ -65,6 +66,7 @@
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
 
 ### ai-business-bot (Flask + SQLite WAL + OpenAI/Gemini + Twilio/Meta + multi-tenant)
+
 | כשאתה נוגע ב... | קרא |
 |---|---|
 | webhook handlers (Twilio/Meta/Telegram) | `BY-STACK/webhooks.md` |
@@ -75,6 +77,7 @@
 | שליחת הודעה + עדכון סטטוס | `claude-md-snippets/universal.md` §5 (linked-field atomicity) |
 
 ### Campaign AI (FastAPI + Supabase/Postgres + Meta Marketing API + סליקה)
+
 | כשאתה נוגע ב... | קרא |
 |---|---|
 | migrations / שאילתות / pagination | `BY-STACK/postgres.md` |
@@ -84,6 +87,7 @@
 | סטטוסים של קמפיין/חיוב | `BY-STACK/state-machine.md` |
 
 ### CodeKeeper (WebApp + בוט + MongoDB + MCP)
+
 | כשאתה נוגע ב... | קרא |
 |---|---|
 | כלי MCP שכותבים (save/edit/append) | `CRITICAL-PATTERNS.md` K11 — `save_file` שמחזיר `ok:true` בלי לעדכן הוא בדיוק הדפוס |
@@ -93,10 +97,11 @@
 
 ### Noa_Leads (FastAPI + Next.js + Supabase + Calendar/Gmail)
 הפרויקט הוא מקור P1..P9 — רוב הדפוסים כבר נולדו כאן. הטריגרים:
+
 | כשאתה נוגע ב... | קרא |
 |---|---|
 | React forms / dropdowns מסונכרני-backend | `BY-STACK/react-frontend.md` |
-| sync tokens / webhooks של Calendar/Gmail | `BY-STACK/webhooks.md` + U1 |
+| sync tokens / webhooks של Calendar/Gmail | `BY-STACK/webhooks.md` + `CORE-PATTERNS.md` U1 |
 | סטטוסים ו-activity log | `BY-STACK/state-machine.md` |
 | SQLAlchemy async | `BY-STACK/async-orm.md` |
 
@@ -158,8 +163,9 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 צ'קליסט, בסדר הזה — כ-20 דקות סה"כ:
 
 1. **CLAUDE.md ראשוני**: להדביק את שלושת הסניפטים האוניברסליים —
-   `claude-md-snippets/universal.md`, `critical.md`, `testing.md`
-   (~80 שורות). בפרויקט עברי: גם `hebrew.md`.
+   `claude-md-snippets/universal.md`, `claude-md-snippets/critical.md`,
+   `claude-md-snippets/testing.md` (~80 שורות). בפרויקט עברי: גם
+   `claude-md-snippets/hebrew.md`.
 2. **decision tree של ה-stack** (README §2): לכל "כן" — להדביק את
    ה-snippet המתאים ולרשום את קובץ ה-BY-STACK בטבלת הטריגרים.
 3. **בלוק הטריגרים** (סעיף 1 כאן): להדביק את התבנית עם השורות של
