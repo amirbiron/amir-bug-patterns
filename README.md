@@ -20,7 +20,7 @@
 | `CORE-PATTERNS.md` | לזרוק ל-`docs/` של הפרויקט החדש, או לקשר מ-`CLAUDE.md`. |
 | `CRITICAL-PATTERNS.md` | אותו דבר. |
 | `claude-md-snippets/universal.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
-| `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 10 כללים). |
+| `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 11 כללים). |
 | `TESTING-PATTERNS.md` | לזרוק ל-`docs/`, או לקשר מ-`CLAUDE.md`. |
 | `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
 | `BY-STACK/hebrew-source.md` + `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
@@ -52,7 +52,7 @@
 `bugbot-rules/*.md` — קובץ אחד לכל כלל, stack-agnostic. השתמש בהם דרך אחת מהבאות:
 - העתקת קבצים בודדים להגדרת bugbot של Cursor / דומה.
 - הדבקת התוכן ל-prompt של סקירת קוד עם Claude אחד בכל פעם בעת סקירת PR.
-- שילוב כמה ל-prompt אחד לסקירה ממוקדת (למשל סקירת אבטחה = כללי K1..K10).
+- שילוב כמה ל-prompt אחד לסקירה ממוקדת (למשל סקירת אבטחה = כללי K1..K10; K11 הוא שלמות-נתונים, לא אבטחה — צרף אותו לסקירות correctness).
 
 הכללים המתויגים CRITICAL (`pii-in-logs`, `xss-innerhtml`, `rate-limit-xff-spoofing`, וכו') צריכים תמיד לרוץ על PRs שנוגעים ב-auth, endpoints חשופים-לציבור, או קלט משתמש.
 
@@ -79,15 +79,33 @@
 
 4. **עדכן `claude-md-snippets/*.md`** אם הדפוס תמציתי מספיק להיכנס ב-≤20 שורות.
 
-5. **קרא מחדש את `MIGRATION-NOTES.md`** רבעונית כדי לראות אם המודל המנטלי שלי של "אוניברסלי vs ספציפי ל-stack" עדיין מחזיק.
+5. **הוסף שורת טריגר ב-`CLAUDE.md` של הפרויקטים הרלוונטיים** (התבנית
+   והמיפוי ב-`INTEGRATION.md`). דפוס בלי טריגר הוא דפוס שלא ייקרא בזמן
+   המימוש — שני הצעדים הם צעד אחד, לא שניים.
+
+6. **קרא מחדש את `MIGRATION-NOTES.md`** רבעונית כדי לראות אם המודל המנטלי שלי של "אוניברסלי vs ספציפי ל-stack" עדיין מחזיק.
+
+### מתי הלולאה הזו נסגרת — הטריגרים לתיעוד
+
+(הנוסח המודבק ל-`CLAUDE.md` של פרויקטים חי ב-`INTEGRATION.md` §1 — עדכון
+לכללים האלה מעדכן את שני המקומות יחד.)
+
+- **ריוויוור (cubic / qodo / CodeRabbit / claude) תפס ממצא אמיתי ב-PR**
+  שאינו מכוסה כאן → הממצא כבר מנוסח, עם קוד והסבר. לתעד **באותו יום**,
+  בזמן שהראיות טריות — לא בסוף הסשן ולא "כשיהיה זמן".
+- **אותו סוג טעות תוקן פעמיים** — גם בלי שריוויוור תפס. פעמיים = דפוס.
+- הלקח מ-CodeBot P1: הדפוס חזר **שלוש פעמים** לפני שתועד, ובפעם השלישית
+  ריוויוור הצביע על ה-PR הקודם בעצמו. תיעוד אחרי הפעם הראשונה היה חוסך
+  את שתי הבאות.
 
 ## מבנה הריפו
 
-```
+```text
 amir-bug-patterns/
 ├── README.md                    # הקובץ הזה
+├── INTEGRATION.md               # איך הידע מגיע לסשנים: טריגרים ל-CLAUDE.md, נוסח לבאגבוטים, תהליך פרויקט חדש
 ├── CORE-PATTERNS.md             # U1..U6 — 3/3 מקורות, החל בכל מקום
-├── CRITICAL-PATTERNS.md         # K1..K10 — חומרה גבוהה, החל בכל מקום
+├── CRITICAL-PATTERNS.md         # K1..K11 — חומרה גבוהה, החל בכל מקום
 ├── RECURRING-PATTERNS.md        # R1..R5 — 2/3 מקורות, החל אם ה-stack תואם
 ├── TESTING-PATTERNS.md          # T1..T3 — הבדיקה כמקור הבאג, החל בכל מקום
 ├── MIGRATION-NOTES.md           # meta-analysis, top-3 day-1 picks
@@ -132,6 +150,9 @@ amir-bug-patterns/
 │   ├── window-open-protocol-handoff.md
 │   ├── cron-terminal-state.md
 │   ├── filter-too-narrow.md
+│   ├── return-value-failure-unchecked.md
+│   ├── line-number-coupling.md
+│   ├── widened-exception-scope.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── xss-innerhtml.md                     # CRITICAL
@@ -144,11 +165,13 @@ amir-bug-patterns/
     ├── noa-leads-patterns.md
     ├── emailflow-patterns.md
     ├── eight-projects-patterns.md
-    └── markdown-docs-mcp-patterns.md
+    ├── markdown-docs-mcp-patterns.md
+    └── codebot-patterns.md
 ```
 
 ## ראה גם
 
+- **`INTEGRATION.md`** — הצד השני של הספרייה: איך הידע מגיע לסשנים בזמן המימוש, ולא רק שוכב כאן.
 - **`MIGRATION-NOTES.md`** — מה הפתיע אותי במהלך ההצלבה, ומהם 3 הדפוסים העליונים לחיבור לפרויקט חדש ביום הראשון.
 - **`TESTING-PATTERNS.md`** — הציר שבו הקוד שבור, הבדיקות ירוקות, וה-CI הוא זה שמשקר. אי אפשר לתפוס אותו בעזרת עוד בדיקה מאותו סוג.
 - **`docs/source-projects/`** — מסמכי post-mortem מקוריים בעברית שמזינים את הספרייה הזו. ההפניות הצולבות בכל קובץ דפוס (`commit 33af59e`, `commit f847a44`, וכו') מצביעות לתוך מסמכי המקור.

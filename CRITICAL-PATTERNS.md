@@ -236,3 +236,49 @@ catch (err) {
 
 ### ראה גם
 - `bugbot-rules/auth-before-irreversible-action.md` (סעיף auth UX)
+
+---
+
+## K11. כשל שמדווח בערך החזרה נבלע — הצלחה מדומה למשתמש
+
+**מקור:** CodeBot P1 (PR #3232, PR #3172, ומופע cache invalidation) — 3 מופעים באותו ריפו
+**חומרה:** HIGH — אובדן נתונים שקט: המשתמש מקבל אישור על פעולה שלא קרתה
+
+### איך זה נראה
+פונקציה מסמנת כשל בערך החזרה — `None`, `False`, `0`, `[]`, rowcount — ולא
+בזריקת חריגה. הקורא עוטף אותה ב-`try/except`, מניח ש"לא נזרקה חריגה" פירושו
+הצלחה, ומדווח ✅:
+
+```python
+try:
+    saved = await asyncio.to_thread(backup_manager.save_backup_bytes, raw, metadata)
+    saved = True                     # save_backup_bytes מחזיר None בכשל — לא זורק
+except Exception:
+    await notify_failure()           # לא ירוץ לעולם
+# המשתמש רואה "✅ נשמר גיבוי" על גיבוי שלא נשמר
+```
+
+הנזק הקשה הוא לא הכשל עצמו אלא **האישור השקרי**: משתמש שסומך על גיבוי
+שאינו קיים, קאש שמוגש כמעודכן אחרי invalidation שמחק 0 מפתחות, "נשלח"
+שלא נשלח. ה-try/except המיותר מחמיר — הוא משדר לקורא הבא "הכשל מטופל".
+
+### כלל לזיהוי
+לכל קריאה שעטופה ב-try/except או שאחריה דיווח הצלחה:
+1. בדוק את מסלול הכשל של הפונקציה הנקראת — זורקת או מחזירה falsy? (הקובע
+   הוא החוזה של הפונקציה, לא הערך: `0` מ-invalidation שאמור למחוק הוא
+   כשל, `0` ממחיקה אופורטוניסטית הוא תקין.)
+2. אם מחזירה falsy בכשל: חובה `if not result:` אחרי הקריאה, לפני כל דיווח הצלחה.
+3. דגל אדום: השמת דגל הצלחה קבוע (`saved = True`) מיד אחרי הקריאה.
+4. בכתיבת פונקציה חדשה: בחר ערוץ כשל אחד — עדיף זריקה — ותעד אותו ב-docstring.
+
+### False positives
+- פונקציות raise-on-error מתועדות — שם try/except הוא הערוץ הנכון.
+- fire-and-forget מוצהר (מטריקות, לוגים) שכשל שקט מקובל בו.
+
+### מצב מומלץ
+**strict** בכל נתיב שמסתיים בהודעת הצלחה למשתמש או בכתיבת נתונים.
+
+### ראה גם
+- `bugbot-rules/return-value-failure-unchecked.md`
+- `bugbot-rules/sdk-error-completeness.md` §3 — קרוב המשפחה בעולם ה-SDK: כשלים שחוזרים כערכים מ-`gather(return_exceptions=True)`
+- `CORE-PATTERNS.md` U1 — בדיקת rowcount אחרי CAS היא מופע של אותו עקרון
