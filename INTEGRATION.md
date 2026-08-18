@@ -50,6 +50,20 @@
 - הטבלה קצרה (שורות בודדות) — לא מנפחת את הקובץ.
 - הידע נשאר במקום אחד ומתעדכן במקום אחד.
 
+### והסניפטים האוניברסליים (universal / critical / testing)?
+
+ה-README (סעיף "איך להחיל על **פרויקט חדש**") אומר להדביק את שלושתם —
+~75 שורות. שני המסמכים לא סותרים, כי הם מדברים על שני מצבים:
+
+- **פרויקט חדש**: מדביקים את שלושת הסניפטים במלואם (צעד 1 ב-§4 כאן).
+  אין עדיין CLAUDE.md גדול, וה-75 שורות הן ה-baseline שכל השאר נבנה עליו.
+- **פרויקט קיים עם CLAUDE.md מבוסס**: לא מדביקים את כולם — זה מנפח קובץ
+  שכבר עמוס ויוצר עותק שמתיישן. במקום זה: בלוק הטריגרים מפנה אליהם
+  (`testing.md` לפני כל טסט חדש), ו**כלל בודד שהדפוס שלו כבר עלה בפרויקט
+  נפרס inline בבלוק** — כמו K11 ב-`CLAUDE.md` של CodeBot, שנכתב שם
+  בגוף הטקסט כי הוא תפס את הריפו הזה שלוש פעמים. עלה דפוס נוסף בפרויקט →
+  מוסיפים גם את הכלל שלו inline, לא את כל הסניפט.
+
 ---
 
 ## 2. מיפוי פר-פרויקט — מה ממלא את הטבלה שב-§1
@@ -76,7 +90,9 @@
 
 השורות עצמן, לפי ה-stack של כל פרויקט:
 
-### CodeBot (בוט טלגרם + webapp + MongoDB/GridFS + Sphinx docs)
+### CodeBot = CodeKeeper — ריפו אחד: `amirbiron/CodeBot`
+(בוט טלגרם + webapp + MongoDB/GridFS + MCP + ChatOps + Sphinx docs.
+CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שני פרויקטים.)
 
 | כשאתה נוגע ב... | קרא |
 |---|---|
@@ -86,6 +102,10 @@
 | PyGithub / קריאות SDK חיצוני | `BY-STACK/external-sdk.md` |
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
+| כלי MCP שכותבים (save/edit/append) | `CRITICAL-PATTERNS.md` K11 — `save_file` שמחזיר `ok:true` בלי לעדכן הוא בדיוק הדפוס |
+| Repo Sync Engine / mirrors | `CORE-PATTERNS.md` U1 |
+| ChatOps / admin gating | `claude-md-snippets/critical.md` §5 (רשת) + fail-open flags |
+| endpoints של ה-webapp | `BY-STACK/browser-policy.md` |
 
 ### ai-business-bot (Flask + SQLite WAL + OpenAI/Gemini + Twilio/Meta + multi-tenant)
 
@@ -107,15 +127,7 @@
 | Meta Marketing API / OpenAI | `BY-STACK/external-sdk.md` |
 | endpoints של auth / roles | `claude-md-snippets/critical.md` (K1, K3, K10) |
 | סטטוסים של קמפיין/חיוב | `BY-STACK/state-machine.md` |
-
-### CodeKeeper (WebApp + בוט + MongoDB + MCP)
-
-| כשאתה נוגע ב... | קרא |
-|---|---|
-| כלי MCP שכותבים (save/edit/append) | `CRITICAL-PATTERNS.md` K11 — `save_file` שמחזיר `ok:true` בלי לעדכן הוא בדיוק הדפוס |
-| Repo Sync Engine / mirrors | `CORE-PATTERNS.md` U1 |
-| ChatOps / admin gating | `claude-md-snippets/critical.md` §5 (רשת) + fail-open flags |
-| endpoints של ה-webapp | `BY-STACK/browser-policy.md` |
+| jobs מתוזמנים (חיוב מחזורי, סיום trial, סנכרון קמפיינים) | `BY-STACK/cron-jobs.md` |
 
 ### Noa_Leads (FastAPI + Next.js + Supabase + Calendar/Gmail)
 הפרויקט הוא מקור P1..P9 — רוב הדפוסים כבר נולדו כאן. הטריגרים:
