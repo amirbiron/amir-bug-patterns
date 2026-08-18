@@ -201,3 +201,4 @@ setTimeout(load, isFinite(parsed) && parsed > 0 ? parsed : 1000);  // ✅
 - **CRITICAL K4** — XSS via `innerHTML` / `dangerouslySetInnerHTML`
 - **R3** — quirks רחבים יותר של Browser API (clipboard, mailto:, blob URLs)
 - **`bugbot-rules/react-stale-state-on-prop.md`** — prompt עצמאי
+- **`bugbot-rules/react-async-media-resource.md`** — משאב async חיצוני (מיקרופון, WebSocket, MediaRecorder): double-action, setState אחרי unmount, ו-cleanup בכל מסלולי היציאה

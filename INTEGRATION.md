@@ -50,6 +50,15 @@
 - הטבלה קצרה (שורות בודדות) — לא מנפחת את הקובץ.
 - הידע נשאר במקום אחד ומתעדכן במקום אחד.
 
+### והסניפטים האוניברסליים (universal / critical / testing)?
+
+ה-README (סעיף "איך להחיל על **פרויקט חדש**") אומר להדביק את שלושתם —
+~70 שורות (עם `hebrew.md` — ~90, המספר שב-README). שני המסמכים לא סותרים, כי הם מדברים על שני מצבים:
+
+- **פרויקט חדש**: מדביקים את שלושת הסניפטים במלואם (צעד 1 ב-§4 כאן).
+  אין עדיין CLAUDE.md גדול, וה-70 שורות הן ה-baseline שכל השאר נבנה עליו.
+- **פרויקט קיים עם CLAUDE.md מבוסס**: לא מדביקים אף אחד מהם במלואו — זה מנפח קובץ שכבר עמוס ויוצר עותק שמתיישן. מה כן, פר-סניפט: `testing.md` כבר מופנה מבלוק הטריגרים (שורת "לפני כתיבת טסט חדש") — ההפניה מספיקה; `universal.md` ו-`critical.md` נשארים בהפניה דרך הטריגרים של §2, ו**כלל בודד מתוכם שהדפוס שלו כבר עלה בפרויקט נפרס inline בבלוק** — כמו K11 ב-`CLAUDE.md` של CodeBot, שנכתב שם בגוף הטקסט כי הוא תפס את הריפו הזה שלוש פעמים. עלה דפוס נוסף בפרויקט ← מוסיפים גם את הכלל שלו inline, לא את כל הסניפט.
+
 ---
 
 ## 2. מיפוי פר-פרויקט — מה ממלא את הטבלה שב-§1
@@ -76,7 +85,9 @@
 
 השורות עצמן, לפי ה-stack של כל פרויקט:
 
-### CodeBot (בוט טלגרם + webapp + MongoDB/GridFS + Sphinx docs)
+### CodeBot = CodeKeeper — ריפו אחד: `amirbiron/CodeBot`
+(בוט טלגרם + webapp + MongoDB/GridFS + MCP + ChatOps + Sphinx docs.
+CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שני פרויקטים.)
 
 | כשאתה נוגע ב... | קרא |
 |---|---|
@@ -86,6 +97,10 @@
 | PyGithub / קריאות SDK חיצוני | `BY-STACK/external-sdk.md` |
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
+| כלי MCP שכותבים (save/edit/append) | `CRITICAL-PATTERNS.md` K11 — `save_file` שמחזיר `ok:true` בלי לעדכן הוא בדיוק הדפוס |
+| Repo Sync Engine / mirrors | `CORE-PATTERNS.md` U1 |
+| ChatOps / admin gating | `claude-md-snippets/critical.md` §5 (רשת) + fail-open flags |
+| endpoints של ה-webapp | `BY-STACK/browser-policy.md` |
 
 ### ai-business-bot (Flask + SQLite WAL + OpenAI/Gemini + Twilio/Meta + multi-tenant)
 
@@ -95,7 +110,8 @@
 | קריאות OpenAI/Gemini/Graph API | `BY-STACK/external-sdk.md` |
 | jobs מתוזמנים (תזכורות, purge תיקון 13) | `BY-STACK/cron-jobs.md` |
 | לוגים בנתיב שיחות לקוח | `bugbot-rules/pii-in-logs.md` (CRITICAL — שיחות = PII) |
-| בידוד tenant / ContextVar | `CORE-PATTERNS.md` U1 + U5 |
+| בידוד tenant / ContextVar / שאילתות בטבלאות רב-דייריות | `CRITICAL-PATTERNS.md` K12 + `bugbot-rules/tenant-row-scoping.md` |
+| threads של בוט/worker לצד ה-webapp | `bugbot-rules/background-thread-liveness.md` |
 | שליחת הודעה + עדכון סטטוס | `claude-md-snippets/universal.md` §5 (linked-field atomicity) |
 
 ### Campaign AI (FastAPI + Supabase/Postgres + Meta Marketing API + סליקה)
@@ -107,18 +123,10 @@
 | Meta Marketing API / OpenAI | `BY-STACK/external-sdk.md` |
 | endpoints של auth / roles | `claude-md-snippets/critical.md` (K1, K3, K10) |
 | סטטוסים של קמפיין/חיוב | `BY-STACK/state-machine.md` |
-
-### CodeKeeper (WebApp + בוט + MongoDB + MCP)
-
-| כשאתה נוגע ב... | קרא |
-|---|---|
-| כלי MCP שכותבים (save/edit/append) | `CRITICAL-PATTERNS.md` K11 — `save_file` שמחזיר `ok:true` בלי לעדכן הוא בדיוק הדפוס |
-| Repo Sync Engine / mirrors | `CORE-PATTERNS.md` U1 |
-| ChatOps / admin gating | `claude-md-snippets/critical.md` §5 (רשת) + fail-open flags |
-| endpoints של ה-webapp | `BY-STACK/browser-policy.md` |
+| jobs מתוזמנים (חיוב מחזורי, סיום trial, סנכרון קמפיינים) | `BY-STACK/cron-jobs.md` |
 
 ### Noa_Leads (FastAPI + Next.js + Supabase + Calendar/Gmail)
-הפרויקט הוא מקור P1..P9 — רוב הדפוסים כבר נולדו כאן. הטריגרים:
+הפרויקט הוא מקור P1..P14 — רוב הדפוסים כבר נולדו כאן. הטריגרים:
 
 | כשאתה נוגע ב... | קרא |
 |---|---|
@@ -129,7 +137,7 @@
 
 ### פרויקטים קטנים (TaskFlow, myAgent, APIWatchBot...)
 מספיק הבלוק האוניברסלי: K11 + testing + הכלל הרלוונטי היחיד לפי ה-stack
-(myAgent: webhooks; TaskFlow: cron-jobs לתזכורות).
+(myAgent: webhooks; TaskFlow: cron-jobs לתזכורות; סורק לידים / Social Publisher: `bugbot-rules/content-hash-normalization.md` — dedup של תוכן חיצוני).
 
 ---
 
@@ -154,7 +162,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 5. הפניות שורה: `literalinclude` עם `:lines:` כשיש חלופת `:pyobject:` — דגל. הפניית file.py:123 בתיעוד ארוך-חיים — דגל.
 
-6. אבטחה (strict תמיד): PII בלוגים (email/phone/message body), secrets ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security, קרדנציאל שנשלח לפני שנשמר (fail closed).
+6. אבטחה (strict תמיד): PII בלוגים (email/phone/message body), secrets ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security, קרדנציאל שנשלח לפני שנשמר (fail closed), ובטבלה רב-דיירית — SELECT/UPDATE/DELETE עם predicate על ה-tenant המאומת (כולל get-by-id ו-exports), INSERT/UPSERT עם tenant שנגזר מה-context המאומת ולא מהלקוח (ו-conflict key שכולל tenant), ו-context של tenant בלי default שקט.
 
 7. קלט חיצוני ופילטרים: לפני `.get()`/`.strip()`/iteration על ערך מ-API /  webhook / output של LLM — `isinstance` guard; מספר חיצוני — `isfinite`.  פילטר על ערוץ/type יחיד כשיש לישות כמה variants — דגל. סדר הפילטרים: security/deny קודם, business/override אחריו — לא הפוך. פיצ'ר שנחסם בשקט (blocklist במקום allowlist, CSP `'none'` בלי היתר לחריג) נראה למשתמש ככפתור שבור — דגל.
 
@@ -182,7 +190,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 1. **CLAUDE.md ראשוני**: להדביק את שלושת הסניפטים האוניברסליים —
    `claude-md-snippets/universal.md`, `claude-md-snippets/critical.md`,
-   `claude-md-snippets/testing.md` (~80 שורות). בפרויקט עברי: גם
+   `claude-md-snippets/testing.md` (שלושת הסניפטים יחד ≈ 70 שורות). בפרויקט עברי: גם
    `claude-md-snippets/hebrew.md`.
 2. **decision tree של ה-stack** (README §2): לכל "כן" — להדביק את
    ה-snippet המתאים ולרשום את קובץ ה-BY-STACK בטבלת הטריגרים.

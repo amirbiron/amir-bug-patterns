@@ -282,3 +282,36 @@ except Exception:
 - `bugbot-rules/return-value-failure-unchecked.md`
 - `bugbot-rules/sdk-error-completeness.md` §3 — קרוב המשפחה בעולם ה-SDK: כשלים שחוזרים כערכים מ-`gather(return_exceptions=True)`
 - `CORE-PATTERNS.md` U1 — בדיקת rowcount אחרי CAS היא מופע של אותו עקרון
+
+---
+
+## K12. שאילתה רב-דיירית בלי tenant scope — דליפה בין לקוחות
+
+**מקור:** EmailFlow (3 מופעי auth/tenant isolation, HIGH — נספח "מחוץ ל-Top 7"); הקשר חי: ai-business-bot (ContextVar של tenant עם `default=None`)
+**חומרה:** CRITICAL — דליפת נתונים בין לקוחות: הלקוח של דנה רואה את הלידים של יוסי
+
+### איך זה נראה
+במערכת רב-דיירית, שאילתה אחת ששכחה `WHERE tenant_id = :current` מספיקה כדי שנתוני לקוח אחד יגיעו ללקוח אחר. הדליפה שקטה לגמרי — אין חריגה, אין לוג, התשובה "תקינה" רק עם נתונים של מישהו אחר. שלושת המסלולים הקלאסיים:
+
+1. **get-by-id בלי scope.** `SELECT ... WHERE id = :id` — ה-id הגיע מהלקוח, וכל מי שמנחש/מונה ids קורא שורות של דיירים אחרים (IDOR).
+2. **נתיב משני שנשכח.** ה-list הראשי מסונן, אבל ה-export / החיפוש / ה-aggregation / ה-webhook handler — לא. הבידוד חזק בדיוק כמו השאילתה הכי חלשה.
+3. **Context של tenant עם fallback שקט.** `ContextVar("tenant", default=None)` או `default=DEFAULT_TENANT` — נתיב ששכח לקבוע context לא נכשל, הוא רץ על הדייר הלא נכון. גרוע מדליפה: כתיבה לדייר הלא נכון.
+
+### כלל לזיהוי
+1. חוזה לפי סוג הפעולה, בטבלה עם עמודת `tenant_id`/`account_id`/`org_id`: **SELECT / UPDATE / DELETE** — predicate על ה-tenant המאומת בכל שאילתה, כולל get-by-id, exports, aggregations, חיפוש ומחיקות. **INSERT / UPSERT** — אין WHERE שיציל אותך: ה-`tenant_id` הנכתב נגזר מה-context המאומת של הבקשה, לעולם לא מערך שהגיע מהלקוח; וב-UPSERT מפתח ה-conflict כולל את ה-tenant, אחרת דייר אחד דורס שורה של אחר.
+2. עדיף אכיפה מרכזית על משמעת נקודתית: scoped session / query builder שמזריק את הסינון, RLS ב-Postgres, או repository שמקבל tenant כפרמטר חובה.
+3. Context של tenant: **fail-closed** — בלי default; נתיב בלי context זורק, לא נופל בשקט לברירת מחדל. דגל `TENANCY_STRICT` כבוי בפרודקשן = הדפוס הזה בהמתנה.
+4. מפתחות cache, session, וקבצים זמניים כוללים את ה-tenant — אחרת ה-cache מגיש נתוני דייר אחד לאחר.
+5. בדיקת בידוד היא בדיקת חובה: שני tenants **סינתטיים** על מסד בדיקה זמני, פעולה זהה, ואימות ששום תשובה לא מכילה נתונים של השני. שלב ה-T2 — הרצה עם ההגנה כבויה כדי לוודא שהבדיקה נופלת — רץ **רק** ב-local או ב-CI על המסד הזמני; לעולם לא בפרודקשן, ב-staging, או בכל סביבה עם נתונים משותפים.
+
+### False positives
+- טבלאות גלובליות באמת (קונפיג מערכת, קטלוג ציבורי) — מסומנות ככאלה במפורש.
+- קוד admin שמוצהר ומאובטח ככזה (עם audit log), שסורק את כל הדיירים בכוונה.
+
+### מצב מומלץ
+**strict** על כל טבלה עם עמודת tenant. אין warning-period לדפוס הזה — הדליפה הראשונה היא כבר אירוע אבטחה.
+
+### ראה גם
+- `bugbot-rules/tenant-row-scoping.md`
+- `CORE-PATTERNS.md` U5 — עדכון חלקי (הכתיבה מסוננת, הלוג לא)
+- `bugbot-rules/privilege-escalation-unverified.md` — הקצה השני: מי בכלל מקבל להיות באיזה tenant

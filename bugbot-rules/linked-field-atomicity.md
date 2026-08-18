@@ -26,3 +26,7 @@
 ## חומרה
 
 HIGH — שחיתות נתונים שקטה; flows downstream פועלים על state לא עקבי.
+
+## ראה גם
+
+- `bugbot-rules/input-field-not-persisted.md` — הדפוס האח: שדה בודד שעבר את כל שכבות ה-input אך הושמט בנקודת הכתיבה. failure modes נפרדים, שניהם מתקיימים במקביל.

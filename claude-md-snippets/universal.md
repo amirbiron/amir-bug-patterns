@@ -4,7 +4,7 @@
 
 2. **סנכרון state ב-React.** `useState(props.X)` מקומי ישן כש-`props.X` משתנה — השתמש ב-`key={id}`, `useEffect([X], () => setState(X))`, או derived state. כל ה-hooks לפני כל early return. deps של `useCallback`/`useMemo` חייבים לכלול כל prop/state בגוף. `setState` אחרי `await` בודק cancellation flag.
 
-3. **ולידציה של external input.** לפני `.get()` / `.append()` / `.strip()` / iteration על נתון חיצוני: `isinstance(...)` guard. מספרים: `isfinite()` + טווח. regex על טקסט חיצוני: raw strings + word boundaries; עדיף `json.JSONDecoder().raw_decode()` על regex. קריאות SDK: תפוס base class (`anthropic.APIError`), סדר subclass-לפני-superclass. אתחול SDK ב-startup: try/except + ולידציית פורמט — הורד את הפיצ'ר, לעולם אל תקרוס את ה-boot.
+3. **ולידציה של external input.** לפני `.get()` / `.append()` / `.strip()` / iteration על נתון חיצוני: `isinstance(...)` guard. מספרים: `isfinite()` + טווח. regex על טקסט חיצוני: raw strings + word boundaries; עדיף `json.JSONDecoder().raw_decode()` על regex. קריאות SDK: תפוס base class (`anthropic.APIError`), סדר subclass-לפני-superclass. אתחול SDK ב-startup: try/except + ולידציית פורמט — הורד את הפיצ'ר, לעולם אל תקרוס את ה-boot. הזרקה למחרוזת עם דקדוק (CSP, כותרות, שמות קבצים): שתי בדיקות — תחביר (`fullmatch` מול הדקדוק, לא ניקוי blocklist) וגם סמנטיקה (הערך ב-allowlist המורשה — תקין תחבירית ≠ מורשה).
 
 4. **SQL/Postgres edges.** `col = NULL` הוא NULL, לא TRUE — הסתעפות `IS NULL`. `VARCHAR(N)` ≥ ערך enum הארוך ביותר (טסט CI). Telegram / IDs חיצוניים: `BigInteger`. כל `ORDER BY` משולב עם `LIMIT`/`OFFSET` דורש tiebreaker `, id`. `LIKE` עם קלט משתמש: `.startswith(value, autoescape=True)` או escape ל-`_`/`%`.
 
