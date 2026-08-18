@@ -141,9 +141,11 @@ amir-bug-patterns/
 │   ├── blanket-policy-silent-block.md
 │   ├── hebrew-source-and-data.md
 │   ├── react-stale-state-on-prop.md
+│   ├── react-async-media-resource.md
 │   ├── external-input-isinstance.md
 │   ├── postgres-null-cas.md
 │   ├── linked-field-atomicity.md
+│   ├── input-field-not-persisted.md
 │   ├── migration-model-drift.md
 │   ├── pagination-tiebreaker.md
 │   ├── sdk-error-completeness.md
