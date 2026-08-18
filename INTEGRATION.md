@@ -110,7 +110,8 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | קריאות OpenAI/Gemini/Graph API | `BY-STACK/external-sdk.md` |
 | jobs מתוזמנים (תזכורות, purge תיקון 13) | `BY-STACK/cron-jobs.md` |
 | לוגים בנתיב שיחות לקוח | `bugbot-rules/pii-in-logs.md` (CRITICAL — שיחות = PII) |
-| בידוד tenant / ContextVar | `CORE-PATTERNS.md` U1 + U5 |
+| בידוד tenant / ContextVar / שאילתות בטבלאות רב-דייריות | `CRITICAL-PATTERNS.md` K12 + `bugbot-rules/tenant-row-scoping.md` |
+| threads של בוט/worker לצד ה-webapp | `bugbot-rules/background-thread-liveness.md` |
 | שליחת הודעה + עדכון סטטוס | `claude-md-snippets/universal.md` §5 (linked-field atomicity) |
 
 ### Campaign AI (FastAPI + Supabase/Postgres + Meta Marketing API + סליקה)
@@ -136,7 +137,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 
 ### פרויקטים קטנים (TaskFlow, myAgent, APIWatchBot...)
 מספיק הבלוק האוניברסלי: K11 + testing + הכלל הרלוונטי היחיד לפי ה-stack
-(myAgent: webhooks; TaskFlow: cron-jobs לתזכורות).
+(myAgent: webhooks; TaskFlow: cron-jobs לתזכורות; סורק לידים / Social Publisher: `bugbot-rules/content-hash-normalization.md` — dedup של תוכן חיצוני).
 
 ---
 
@@ -161,7 +162,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 5. הפניות שורה: `literalinclude` עם `:lines:` כשיש חלופת `:pyobject:` — דגל. הפניית file.py:123 בתיעוד ארוך-חיים — דגל.
 
-6. אבטחה (strict תמיד): PII בלוגים (email/phone/message body), secrets ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security, קרדנציאל שנשלח לפני שנשמר (fail closed).
+6. אבטחה (strict תמיד): PII בלוגים (email/phone/message body), secrets ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security, קרדנציאל שנשלח לפני שנשמר (fail closed), ובטבלה רב-דיירית — כל שאילתה (כולל get-by-id, exports, כתיבות) מסוננת לפי ה-tenant הנוכחי, ו-context של tenant בלי default שקט.
 
 7. קלט חיצוני ופילטרים: לפני `.get()`/`.strip()`/iteration על ערך מ-API /  webhook / output של LLM — `isinstance` guard; מספר חיצוני — `isfinite`.  פילטר על ערוץ/type יחיד כשיש לישות כמה variants — דגל. סדר הפילטרים: security/deny קודם, business/override אחריו — לא הפוך. פיצ'ר שנחסם בשקט (blocklist במקום allowlist, CSP `'none'` בלי היתר לחריג) נראה למשתמש ככפתור שבור — דגל.
 
@@ -189,7 +190,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 1. **CLAUDE.md ראשוני**: להדביק את שלושת הסניפטים האוניברסליים —
    `claude-md-snippets/universal.md`, `claude-md-snippets/critical.md`,
-   `claude-md-snippets/testing.md` (~70 שורות). בפרויקט עברי: גם
+   `claude-md-snippets/testing.md` (שלושת הסניפטים יחד ≈ 70 שורות). בפרויקט עברי: גם
    `claude-md-snippets/hebrew.md`.
 2. **decision tree של ה-stack** (README §2): לכל "כן" — להדביק את
    ה-snippet המתאים ולרשום את קובץ ה-BY-STACK בטבלת הטריגרים.

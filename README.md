@@ -155,6 +155,8 @@ amir-bug-patterns/
 │   ├── return-value-failure-unchecked.md
 │   ├── line-number-coupling.md
 │   ├── widened-exception-scope.md
+│   ├── background-thread-liveness.md
+│   ├── content-hash-normalization.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── xss-innerhtml.md                     # CRITICAL
@@ -162,7 +164,8 @@ amir-bug-patterns/
 │   ├── auth-before-irreversible-action.md   # CRITICAL
 │   ├── privilege-escalation-unverified.md   # CRITICAL
 │   ├── network-exposed-without-auth.md      # CRITICAL
-│   └── like-wildcard-injection.md           # CRITICAL
+│   ├── like-wildcard-injection.md           # CRITICAL
+│   └── tenant-row-scoping.md                 # CRITICAL
 └── docs/source-projects/        # מסמכי post-mortem מקוריים (reference)
     ├── noa-leads-patterns.md
     ├── emailflow-patterns.md
