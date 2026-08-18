@@ -9,12 +9,17 @@ URL, connection string, פקודת shell, כותרת HTTP — שזורמת אח�
 
 ## דווח כשמתקיים אחד מהבאים
 
-1. f-string / concat שמרכיב סוד לתוך מחרוזת
-   (`f"...{bot_token}..."`, `f"...{api_key}..."`), והתוצאה מגיעה —
-   ישירות או דרך משתנה — לאחד מאלה:
+1. **כל בניית מחרוזת** שמרכיבה סוד — f-string, `.format()`,
+   אינטרפולציית `%`, שרשור `+`, `str.join`, `urljoin`/URL builders —
+   (`f"...{bot_token}..."`, `"...{}...".format(api_key)`), והתוצאה
+   מגיעה — ישירות או דרך משתנה — לאחד מ-**ערוצי התצפית (sinks)**:
    - הודעת חריגה (`raise X(f"... {url}")`, `msg += f" url={url}"`)
    - שדה על אובייקט חריגה (`self.url = url`)
-   - קריאת לוג (`logger.error(f"failed: {url}")`)
+   - **כל** שיטת לוג (`logger.debug/info/warning/error/exception`,
+     `print` לפלט שנאסף)
+   - קריאה ישירה ל-API של ניטור: `sentry_sdk.capture_message` /
+     `capture_exception` / `add_breadcrumb`, `extra=`/`tags=`
+   הבדיקה היא source-to-sink: לעקוב אחרי הזרימה, לא אחרי התחביר.
 
 2. מנגנון ניקוי שנכשל-פתוח:
    ```python
@@ -27,8 +32,9 @@ URL, connection string, פקודת shell, כותרת HTTP — שזורמת אח�
    בחריגת עומק, ו-before_send שמחזיר את האירוע הגולמי בכשל.
 
 3. סינון Sentry/לוגים לפי שמות שדות בלבד
-   (`if "token" in key.lower(): redact`) — לא מכסה גוף חריגה,
-   breadcrumbs, או repr של אובייקטים.
+   (`if "token" in key.lower(): redact`). ניקוי אמיתי סורק את
+   **כל הערכים במבנה האירוע במלואו** — מקונן, מפתחות, גוף חריגה,
+   breadcrumbs, ו-repr של אובייקטים — לא רק שדות ששמם חשוד.
 
 ## תיקון
 
@@ -38,9 +44,10 @@ URL, connection string, פקודת shell, כותרת HTTP — שזורמת אח�
 
 ## False positives
 
-- סוד שמורכב ל-URL רק לצורך הקריאה עצמה ולא נשמר/נלוגג
-  (הרכבה מקומית שנעלמת) — בעייתי רק אם ספריית ה-HTTP מדליפה את
-  ה-URL בחריגות שלה (requests כן — לבדוק את מסלול החריגה).
+- סוד שמורכב ל-URL רק לצורך הקריאה עצמה, לא נשמר/נלוגג,
+  **וספריית ה-HTTP לא מדליפה את ה-URL בחריגות שלה** — הרכבה מקומית
+  שנעלמת. שימו לב: `requests` כן מדליפה (ה-URL מופיע בחריגות
+  חיבור/timeout), ולכן שם זה true positive, לא false positive.
 - טסטים עם טוקנים בדויים שמאמתים שהניקוי עובד.
 
 ## חומרה

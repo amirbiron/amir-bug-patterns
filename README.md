@@ -52,7 +52,7 @@
 `bugbot-rules/*.md` — קובץ אחד לכל כלל, stack-agnostic. השתמש בהם דרך אחת מהבאות:
 - העתקת קבצים בודדים להגדרת bugbot של Cursor / דומה.
 - הדבקת התוכן ל-prompt של סקירת קוד עם Claude אחד בכל פעם בעת סקירת PR.
-- שילוב כמה ל-prompt אחד לסקירה ממוקדת (למשל סקירת אבטחה = כללי K1..K10 + K12 בידוד דיירים; K11 הוא שלמות-נתונים, לא אבטחה — צרף אותו לסקירות correctness).
+- שילוב כמה ל-prompt אחד לסקירה ממוקדת (למשל סקירת אבטחה = כללי K1..K10 + K12 בידוד דיירים + K13 סוד במחרוזת נגזרת; K11 הוא שלמות-נתונים, לא אבטחה — צרף אותו לסקירות correctness).
 
 הכללים המתויגים CRITICAL (`pii-in-logs`, `xss-innerhtml`, `rate-limit-xff-spoofing`, וכו') צריכים תמיד לרוץ על PRs שנוגעים ב-auth, endpoints חשופים-לציבור, או קלט משתמש.
 
@@ -105,7 +105,7 @@ amir-bug-patterns/
 ├── README.md                    # הקובץ הזה
 ├── INTEGRATION.md               # איך הידע מגיע לסשנים: טריגרים ל-CLAUDE.md, נוסח לבאגבוטים, תהליך פרויקט חדש
 ├── CORE-PATTERNS.md             # U1..U6 — 3/3 מקורות, החל בכל מקום
-├── CRITICAL-PATTERNS.md         # K1..K12 — חומרה גבוהה, החל בכל מקום
+├── CRITICAL-PATTERNS.md         # K1..K13 — חומרה גבוהה, החל בכל מקום
 ├── RECURRING-PATTERNS.md        # R1..R5 — 2/3 מקורות, החל אם ה-stack תואם
 ├── TESTING-PATTERNS.md          # T1..T3 — הבדיקה כמקור הבאג, החל בכל מקום
 ├── MIGRATION-NOTES.md           # meta-analysis, top-3 day-1 picks
@@ -158,7 +158,8 @@ amir-bug-patterns/
 │   ├── background-thread-liveness.md
 │   ├── content-hash-normalization.md
 │   ├── pii-in-logs.md                       # CRITICAL
-│   ├── secret-in-error-response.md          # CRITICAL
+│   ├── secret-in-error-response.md
+│   ├── secret-in-derived-text.md          # CRITICAL
 │   ├── xss-innerhtml.md                     # CRITICAL
 │   ├── rate-limit-xff-spoofing.md           # CRITICAL
 │   ├── auth-before-irreversible-action.md   # CRITICAL
