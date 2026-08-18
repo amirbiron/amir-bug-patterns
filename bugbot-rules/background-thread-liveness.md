@@ -10,7 +10,7 @@
 
 3. **`daemon=True` על thread קריטי.** נוח לכיבוי, אבל מבטיח שאף אחד לא ימתין לו ולא ישים לב שהוא מת. thread קריטי הוא לא daemon — או שהוא daemon עם heartbeat מנוטר.
 
-4. **`asyncio.create_task` בלי שמירת reference ובלי callback.** ה-task נאסף ב-GC או נכשל בשקט; דרוש `task.add_done_callback` שבודק `task.exception()`.
+4. **`asyncio.create_task` בלי reference חזק.** ה-event loop מחזיק רק weak reference — task ללא reference נאסף ב-GC באמצע ריצה, ו-`add_done_callback` לבדו לא מונע זאת. דרוש שניהם: שמירה ב-collection חי (`tasks.add(task)` + `task.add_done_callback(tasks.discard)`) **וגם** callback שבודק `task.exception()` ומדווח.
 
 ## False positives
 
