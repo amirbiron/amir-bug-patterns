@@ -53,7 +53,7 @@
 ### והסניפטים האוניברסליים (universal / critical / testing)?
 
 ה-README (סעיף "איך להחיל על **פרויקט חדש**") אומר להדביק את שלושתם —
-~70 שורות. שני המסמכים לא סותרים, כי הם מדברים על שני מצבים:
+~70 שורות (עם `hebrew.md` — ~90, המספר שב-README). שני המסמכים לא סותרים, כי הם מדברים על שני מצבים:
 
 - **פרויקט חדש**: מדביקים את שלושת הסניפטים במלואם (צעד 1 ב-§4 כאן).
   אין עדיין CLAUDE.md גדול, וה-70 שורות הן ה-baseline שכל השאר נבנה עליו.
@@ -162,7 +162,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 5. הפניות שורה: `literalinclude` עם `:lines:` כשיש חלופת `:pyobject:` — דגל. הפניית file.py:123 בתיעוד ארוך-חיים — דגל.
 
-6. אבטחה (strict תמיד): PII בלוגים (email/phone/message body), secrets ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security, קרדנציאל שנשלח לפני שנשמר (fail closed), ובטבלה רב-דיירית — כל שאילתה (כולל get-by-id, exports, כתיבות) מסוננת לפי ה-tenant הנוכחי, ו-context של tenant בלי default שקט.
+6. אבטחה (strict תמיד): PII בלוגים (email/phone/message body), secrets ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security, קרדנציאל שנשלח לפני שנשמר (fail closed), ובטבלה רב-דיירית — SELECT/UPDATE/DELETE עם predicate על ה-tenant המאומת (כולל get-by-id ו-exports), INSERT/UPSERT עם tenant שנגזר מה-context המאומת ולא מהלקוח (ו-conflict key שכולל tenant), ו-context של tenant בלי default שקט.
 
 7. קלט חיצוני ופילטרים: לפני `.get()`/`.strip()`/iteration על ערך מ-API /  webhook / output של LLM — `isinstance` guard; מספר חיצוני — `isfinite`.  פילטר על ערוץ/type יחיד כשיש לישות כמה variants — דגל. סדר הפילטרים: security/deny קודם, business/override אחריו — לא הפוך. פיצ'ר שנחסם בשקט (blocklist במקום allowlist, CSP `'none'` בלי היתר לחריג) נראה למשתמש ככפתור שבור — דגל.
 

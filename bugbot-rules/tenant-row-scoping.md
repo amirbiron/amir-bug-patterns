@@ -4,7 +4,7 @@
 
 ## דווח כשמתקיים אחד מהבאים
 
-1. **שאילתה בלי tenant scope.** `SELECT` / `UPDATE` / `DELETE` על טבלה שיש בה עמודת `tenant_id` / `account_id` / `org_id`, בלי תנאי על ה-tenant הנוכחי. חל גם על כתיבות — כתיבה לדייר הלא נכון גרועה מדליפת קריאה.
+1. **שאילתה בלי tenant scope.** `SELECT` / `UPDATE` / `DELETE` על טבלה שיש בה עמודת `tenant_id` / `account_id` / `org_id`, בלי predicate על ה-tenant המאומת. ול-**INSERT / UPSERT** חוזה משלו: ה-`tenant_id` הנכתב נגזר מה-context המאומת — ערך שמגיע מגוף הבקשה של הלקוח הוא דגל; וב-UPSERT מפתח ה-conflict כולל את ה-tenant, אחרת דייר דורס שורה של דייר אחר.
 
 2. **get-by-id בלי scope.** `WHERE id = :id` כשה-id מגיע מהלקוח, בלי `AND tenant_id = :current` — מי שמונה ids קורא שורות של דיירים אחרים (IDOR).
 

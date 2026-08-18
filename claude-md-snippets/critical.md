@@ -22,6 +22,6 @@
 
 11. **כשל בערך החזרה ≠ חריגה.** לפני עטיפת קריאה ב-try/except — בדוק את מסלול הכשל של הפונקציה: זורקת, או מחזירה `None`/`False`/`0`? אם לפי החוזה שלה falsy מסמן כשל — חובה `if not result:` לפני כל דיווח הצלחה (`0` שמשמעו "אין מה למחוק" אינו כשל). אסור `saved = True` קבוע אחרי קריאה, ואסור ✅ למשתמש בלי תנאי על הערך. בפונקציה חדשה: ערוץ כשל אחד (עדיף זריקה), מתועד ב-docstring.
 
-12. **שאילתה רב-דיירית בלי tenant scope.** כל שאילתה (קריאה וכתיבה) בטבלה עם `tenant_id` מסוננת לפי ה-tenant הנוכחי — כולל get-by-id, exports, aggregations. Context של tenant: fail-closed — בלי default; נתיב בלי context זורק, לא נופל בשקט לברירת מחדל. מפתחות cache/session כוללים tenant. בדיקת בידוד (שני tenants) היא חובה.
+12. **שאילתה רב-דיירית בלי tenant scope.** SELECT/UPDATE/DELETE בטבלה עם `tenant_id` — predicate על ה-tenant המאומת, כולל get-by-id, exports, aggregations. INSERT/UPSERT — ה-tenant נגזר מה-context המאומת, לא מערך של הלקוח; conflict key כולל tenant. Context של tenant: fail-closed — בלי default; נתיב בלי context זורק. מפתחות cache/session כוללים tenant. בדיקת בידוד (שני tenants סינתטיים, מסד בדיקה בלבד) היא חובה. חריגים מוצהרים: טבלאות גלובליות באמת ונתיבי admin מבוקרים.
 
 ראה `CRITICAL-PATTERNS.md` להגיון מלא וכללי זיהוי.

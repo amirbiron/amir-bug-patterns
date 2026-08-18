@@ -139,7 +139,7 @@
 5. ל-regex על טקסט חיצוני: raw strings (`r"..."`) ו-word boundaries; עדיף `json.JSONDecoder().raw_decode()` על regex ל-JSON משובץ.
 6. לקריאות SDK: לתפוס את ה-base class של ה-SDK (`anthropic.APIError`, `googleapiclient.errors.HttpError`), לסדר את ה-`except` subclass-לפני-superclass.
 7. לאתחול SDK בזמן startup (VAPID keys, env vars, OAuth secrets): לעטוף את האתחול ב-try/except + לוודא פורמט ב-boot.
-8. להזרקת ערך חיצוני למחרוזת עם דקדוק ללא הפרדת נתונים/קוד (CSP, כותרות HTTP, שמות קבצים): לאמת מול הדקדוק ב-allowlist עם `fullmatch` — לא לנקות תווים אסורים (blocklist לעולם אינו שלם, וערך פגום בהנחיית מדיניות גרוע מערך חסר). לא חל על SQL/shell — שם קיימת הפרדה אמיתית (parameterized queries, `shell=False`) וולידציה אינה תחליף לה.
+8. להזרקת ערך חיצוני למחרוזת עם דקדוק ללא הפרדת נתונים/קוד (CSP, כותרות HTTP, שמות קבצים): שתי בדיקות, לא אחת. (א) תחביר — הערך ניתן לביטוי בדקדוק היעד, ב-`fullmatch` מול הדקדוק עצמו ולא בניקוי תווים אסורים (blocklist לעולם אינו שלם, וערך פגום בהנחיית מדיניות גרוע מערך חסר). (ב) סמנטיקה — הערך גם מורשה: מופיע ב-allowlist של origins/סכמות/ספריות מותרות. `evil.com` הוא host-source תקין תחבירית — רק הבדיקה השנייה עוצרת אותו. לא חל על SQL/shell — שם קיימת הפרדה אמיתית (parameterized queries, `shell=False`) וולידציה אינה תחליף לה.
 
 ### False positives
 - מבני נתונים פנימיים שנוצרו על ידי הקוד שלנו (קלט FastAPI שעבר ולידציית Pydantic כבר נבדק ב-isinstance).

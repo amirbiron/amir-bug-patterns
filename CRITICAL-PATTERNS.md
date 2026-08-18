@@ -298,11 +298,11 @@ except Exception:
 3. **Context של tenant עם fallback שקט.** `ContextVar("tenant", default=None)` או `default=DEFAULT_TENANT` — נתיב ששכח לקבוע context לא נכשל, הוא רץ על הדייר הלא נכון. גרוע מדליפה: כתיבה לדייר הלא נכון.
 
 ### כלל לזיהוי
-1. כל שאילתה (קריאה **וכתיבה**) בטבלה עם עמודת `tenant_id`/`account_id`/`org_id` חייבת סינון לפי ה-tenant הנוכחי — כולל get-by-id, exports, aggregations, חיפוש, ומחיקות.
+1. חוזה לפי סוג הפעולה, בטבלה עם עמודת `tenant_id`/`account_id`/`org_id`: **SELECT / UPDATE / DELETE** — predicate על ה-tenant המאומת בכל שאילתה, כולל get-by-id, exports, aggregations, חיפוש ומחיקות. **INSERT / UPSERT** — אין WHERE שיציל אותך: ה-`tenant_id` הנכתב נגזר מה-context המאומת של הבקשה, לעולם לא מערך שהגיע מהלקוח; וב-UPSERT מפתח ה-conflict כולל את ה-tenant, אחרת דייר אחד דורס שורה של אחר.
 2. עדיף אכיפה מרכזית על משמעת נקודתית: scoped session / query builder שמזריק את הסינון, RLS ב-Postgres, או repository שמקבל tenant כפרמטר חובה.
 3. Context של tenant: **fail-closed** — בלי default; נתיב בלי context זורק, לא נופל בשקט לברירת מחדל. דגל `TENANCY_STRICT` כבוי בפרודקשן = הדפוס הזה בהמתנה.
 4. מפתחות cache, session, וקבצים זמניים כוללים את ה-tenant — אחרת ה-cache מגיש נתוני דייר אחד לאחר.
-5. בדיקת בידוד היא בדיקת חובה: שני tenants, פעולה זהה, ואימות ששום תשובה לא מכילה נתונים של השני (ראה `TESTING-PATTERNS.md` T2 — להריץ עם ההגנה כבויה ולוודא שהבדיקה נופלת).
+5. בדיקת בידוד היא בדיקת חובה: שני tenants **סינתטיים** על מסד בדיקה זמני, פעולה זהה, ואימות ששום תשובה לא מכילה נתונים של השני. שלב ה-T2 — הרצה עם ההגנה כבויה כדי לוודא שהבדיקה נופלת — רץ **רק** ב-local או ב-CI על המסד הזמני; לעולם לא בפרודקשן, ב-staging, או בכל סביבה עם נתונים משותפים.
 
 ### False positives
 - טבלאות גלובליות באמת (קונפיג מערכת, קטלוג ציבורי) — מסומנות ככאלה במפורש.
