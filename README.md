@@ -25,7 +25,7 @@
 | `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
 | `BY-STACK/hebrew-source.md` + `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
 
-זה ~75 שורות שמתווספות ל-`CLAUDE.md` שמכסות את ה-baseline האוניברסלי, האבטחה, הבדיקות והעברית.
+זה ~90 שורות שמתווספות ל-`CLAUDE.md` שמכסות את ה-baseline האוניברסלי, האבטחה, הבדיקות והעברית.
 
 ### 2. ואז לפי stack
 
