@@ -158,8 +158,8 @@ amir-bug-patterns/
 │   ├── background-thread-liveness.md
 │   ├── content-hash-normalization.md
 │   ├── pii-in-logs.md                       # CRITICAL
-│   ├── secret-in-error-response.md
-│   ├── secret-in-derived-text.md          # CRITICAL
+│   ├── secret-in-error-response.md          # CRITICAL
+│   ├── secret-in-derived-text.md            # CRITICAL
 │   ├── xss-innerhtml.md                     # CRITICAL
 │   ├── rate-limit-xff-spoofing.md           # CRITICAL
 │   ├── auth-before-irreversible-action.md   # CRITICAL
