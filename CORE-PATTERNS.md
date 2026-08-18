@@ -107,8 +107,8 @@
 
 ## U3. ולידציה של external input / boundary
 
-**תדירות:** 3/3 מקורות, ~12 מופעים
-**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, routine
+**תדירות:** 4 מקורות, ~13 מופעים
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, routine, Markdown-Docs
 **חומרה:** MEDIUM (קריסות בטראפיק אמיתי) / HIGH (כשמשולב עם SQL או eval)
 
 ### איך זה נראה
@@ -126,6 +126,7 @@
 - **Shipment-bot (`97bf0bc`):** `AmountValidator` לא בדק NaN/Inf; `NaN < 0` הוא `False`, `NaN > max` הוא `False` → NaN נכנס לארנק כסכום.
 - **Facebook-Leads-New (`fadc0dc`):** `\b` ב-Python triple-quoted string הוא backspace, לא word boundary → ה-regex לא רץ.
 - **routine (`e5c26ad` / `2571c91`):** מפתחות VAPID פגומים / חסר prefix של `mailto:` → exception לא נתפס ב-`setVapidDetails` → השרת קורס בעלייה.
+- **Markdown-Docs (P5):** `form-action` נבנה מ-`urlsplit(redirect_uri).netloc` — שכולל userinfo, שאינו `host-source` חוקי ב-CSP. דפדפן שפוסל את ההנחיה חוסם את הטופס בשקט. גם התיקון הראשון (לחתוך userinfo) נפל — IPv6 בסוגריים גם הוא מחוץ לדקדוק. הפתרון: אימות allowlist מול הדקדוק עצמו.
 
 ### כלל לזיהוי
 לפני כל `.get()`, `.append()`, `.strip()`, `[key]`, או iteration על ערך חיצוני, חייב:
@@ -136,6 +137,7 @@
 5. ל-regex על טקסט חיצוני: raw strings (`r"..."`) ו-word boundaries; עדיף `json.JSONDecoder().raw_decode()` על regex ל-JSON משובץ.
 6. לקריאות SDK: לתפוס את ה-base class של ה-SDK (`anthropic.APIError`, `googleapiclient.errors.HttpError`), לסדר את ה-`except` subclass-לפני-superclass.
 7. לאתחול SDK בזמן startup (VAPID keys, env vars, OAuth secrets): לעטוף את האתחול ב-try/except + לוודא פורמט ב-boot.
+8. להזרקת ערך חיצוני למחרוזת עם דקדוק ללא הפרדת נתונים/קוד (CSP, כותרות HTTP, שמות קבצים): לאמת מול הדקדוק ב-allowlist עם `fullmatch` — לא לנקות תווים אסורים (blocklist לעולם אינו שלם, וערך פגום בהנחיית מדיניות גרוע מערך חסר). לא חל על SQL/shell — שם קיימת הפרדה אמיתית (parameterized queries, `shell=False`) וולידציה אינה תחליף לה.
 
 ### False positives
 - מבני נתונים פנימיים שנוצרו על ידי הקוד שלנו (קלט FastAPI שעבר ולידציית Pydantic כבר נבדק ב-isinstance).
@@ -149,6 +151,8 @@
 - `BY-STACK/external-sdk.md`
 - `bugbot-rules/external-input-isinstance.md`
 - `bugbot-rules/sdk-error-completeness.md`
+- `bugbot-rules/blanket-policy-silent-block.md` §3–4 — זווית הדקדוק (P5)
+- `docs/source-projects/markdown-docs-mcp-patterns.md` P5 — ההיגיון המלא, כולל למה לא חותכים userinfo
 
 ---
 
