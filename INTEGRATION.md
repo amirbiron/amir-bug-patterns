@@ -186,7 +186,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 - **qodo** תומך ב-best practices file ברמת ריפו (`best_practices.md`) —
   אפשר במקום ההדבקה בממשק.
 - **הבלוק הוא הליבה הכללית, לא כל 28 הכללים.** הוא מכסה את הדפוסים
-+  שחלים על כל stack (סעיפים 1–7) ואת ה-CRITICAL של אבטחה שכבר כלולים בסעיף 6.
+  שחלים על כל stack (סעיפים 1–7) ואת ה-CRITICAL של אבטחה שכבר כלולים בסעיף 6.
   כללי stack מהתיקייה — `postgres-null-cas`, `react-stale-state-on-prop`,
   `cron-terminal-state`, `pagination-tiebreaker`, וכו' — **לא** נכנסים
   לכאן; הם מוזרקים רק בריפו עם ה-stack התואם, לפי המיפוי ב-§2. הזרקת כל
