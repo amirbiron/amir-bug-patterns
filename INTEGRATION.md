@@ -170,6 +170,13 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
    ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security,
    קרדנציאל שנשלח לפני שנשמר (fail closed).
 
+7. קלט חיצוני ופילטרים: לפני `.get()`/`.strip()`/iteration על ערך מ-API /
+   webhook / output של LLM — `isinstance` guard; מספר חיצוני — `isfinite`.
+   פילטר על ערוץ/type יחיד כשיש לישות כמה variants — דגל. סדר הפילטרים:
+   security/deny קודם, business/override אחריו — לא הפוך. פיצ'ר שנחסם
+   בשקט (blocklist במקום allowlist, CSP `'none'` בלי היתר לחריג) נראה
+   למשתמש ככפתור שבור — דגל.
+
 עברית בהערות קוד היא המוסכמה בריפו — אל תדגל עליה.
 ```
 
@@ -178,6 +185,12 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
   העדיפות (הדפוסים שחזרו בפועל); 6 מכוסה חלקית על ידי הסורקים שלו ממילא.
 - **qodo** תומך ב-best practices file ברמת ריפו (`best_practices.md`) —
   אפשר במקום ההדבקה בממשק.
+- **הבלוק הוא הליבה הכללית, לא כל 28 הכללים.** הוא מכסה את הדפוסים
+  שחלים על כל stack (סעיפים 1–7) ואת כל ה-CRITICAL של אבטחה (סעיף 6).
+  כללי stack מהתיקייה — `postgres-null-cas`, `react-stale-state-on-prop`,
+  `cron-terminal-state`, `pagination-tiebreaker`, וכו' — **לא** נכנסים
+  לכאן; הם מוזרקים רק בריפו עם ה-stack התואם, לפי המיפוי ב-§2. הזרקת כל
+  28 לכל ריוויו מדללת את תשומת הלב לכל כלל בודד — לכן הבלוק מכוון ולא ממצה.
 - כלל שמתווסף לריפו הזה → לעדכן גם את הבלוק הזה, אם הוא מספיק כללי.
 
 ---
