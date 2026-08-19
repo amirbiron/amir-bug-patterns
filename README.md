@@ -149,6 +149,8 @@ amir-bug-patterns/
 │   ├── migration-model-drift.md
 │   ├── pagination-tiebreaker.md
 │   ├── sdk-error-completeness.md
+│   ├── sdk-lazy-object-not-validated.md
+│   ├── side-effect-riding-on-log-line.md
 │   ├── window-open-protocol-handoff.md
 │   ├── cron-terminal-state.md
 │   ├── filter-too-narrow.md
