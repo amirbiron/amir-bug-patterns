@@ -351,4 +351,5 @@ except Exception:
 ### ראה גם
 - `bugbot-rules/secret-in-derived-text.md`
 - K6 — הקצה השני: סוד שדולף **ללקוח** ב-response; כאן הדליפה פנימית
+- `bugbot-rules/side-effect-riding-on-log-line.md` — התאום ההפוך: שם סוד רוכב על טקסט נגזר ודולף החוצה, כאן פעולה רוכבת על טקסט לוג ונעלמת פנימה כשמנקים אותו. תיקון של K13 הוא הטריגר הנפוץ ביותר לדפוס ההוא.
 - `docs/source-projects/codebot-patterns.md` Pattern 5

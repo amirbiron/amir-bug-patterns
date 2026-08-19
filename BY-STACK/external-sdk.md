@@ -225,9 +225,54 @@ if override is not None:
 
 ---
 
+## דפוס 10 — אובייקט עצל שנחשב לאימות שקרה
+
+```python
+self.github = Github(token)
+self.user = self.github.get_user()   # ❌ לא נשלחה שום בקשה
+# ...
+def is_available(self):
+    return self.github is not None and self.user is not None   # ❌ תמיד True
+```
+
+`Github.get_user()` ללא ארגומנט מחזיר `AuthenticatedUser` עם `completed=False` — אובייקט עצל. ה-`GET /user` נשלח רק בגישה הראשונה לשדה, דרך `_completeIfNotSet`. כלומר טוקן שנשלל "מתחבר" בהצלחה, `is_available` מחזיר אמת, וה-`except GithubException` שנכתב סביב הקריאה לא רץ לעולם. הכשל מתגלה מאוחר, בניסיון לבצע פעולה, עם הודעה שלא מצביעה על המקור.
+
+### תיקון
+
+```python
+self.github = Github(token)
+user = self.github.get_user()
+# ``get_user()`` מחזיר אובייקט עצל: הבקשה יוצאת רק בגישה לשדה.
+# בלי השורה הבאה טוקן שנשלל היה עובר כתקין. הערך עצמו לא נרשם.
+_ = user.login
+self.user = user
+```
+
+השורה נראית כמו קוד מת ולכן היא חייבת הערה — אחרת היא תוסר בניקוי הבא. במקרה האמיתי היא הוסרה בדיוק כך: הגישה ל-`login` ישבה בתוך `logger.info(...)`, והוסרה כתיקון ל-PII (ראה `bugbot-rules/side-effect-riding-on-log-line.md`).
+
+### בדיקה
+
+כפיל שזורק כבר ב-`get_user()` יעבור גם על קוד שאינו מאמת דבר, ויסתיר את הבאג. הכפיל חייב להיכשל **בגישה לשדה**:
+
+```python
+class _LazyFailingUser:
+    @property
+    def login(self):
+        raise BadCredentialsException(401, "Bad credentials", None)
+```
+
+### סיווג הכשל
+
+PyGithub כבר ממפה את התגובה לתת-מחלקות ב-`Requester.createException` — `RateLimitExceededException` (403 של מכסה), `BadCredentialsException` (401), `TwoFactorException`. להישען על הסיווג שלו במקום לנחש לפי קוד סטטוס: 403 הוא גם הגבלת קצב וגם הרשאה חסרה, ובקשה לחבר טוקן מחדש בגלל מכסה שנגמרה שולחת את המשתמש לתקן משהו תקין.
+
+### Commits אמיתיים
+- CodeBot PR #3241 (אוגוסט 2026).
+
+---
+
 ## הפניות צולבות
 
 - **CORE U3** — ולידציה של boundary (תיאוריה כללית)
 - **R4** — שלמות exception של SDK (הקובץ הזה הוא ה-deep-dive)
 - **BY-STACK/state-machine.md** — אי-התאמת Pydantic schema
-- **`bugbot-rules/external-input-isinstance.md`**, **`sdk-error-completeness.md`**
+- **`bugbot-rules/external-input-isinstance.md`**, **`sdk-error-completeness.md`**, **`sdk-lazy-object-not-validated.md`**
