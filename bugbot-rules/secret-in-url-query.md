@@ -23,14 +23,23 @@
    קבוע בקוד ואינו מותנה ב-`send_default_pii`; הרצה על URL בצורה הזו
    מחזירה את הערך המלא, מול `key=[Filtered]` כש-`sanitize=True`.
 
-2. **האינטגרציה שאינה בקונפיגורציה.** ב-`sentry-sdk` 2.x,
-   `HttpxIntegration` נמצאת ב-`_AUTO_ENABLING_INTEGRATIONS` ונדלקת לבד
-   כשהספרייה מותקנת. **היעדרה מ-`integrations=[...]` שב-`init` אינו ראיה
-   שהיא כבויה** — וזה מה שמכשיל סקירה שמסתכלת רק על הקונפיגורציה.
+2. **האינטגרציה שאינה בקונפיגורציה.** **ב-`sentry-sdk` 2.42.1 — הגרסה
+   שנבדקה** — `HttpxIntegration` נמצאת ב-`_AUTO_ENABLING_INTEGRATIONS`
+   ונדלקת לבד כשהספרייה מותקנת. **היעדרה מ-`integrations=[...]` שב-`init`
+   אינו ראיה שהיא כבויה** — וזה מה שמכשיל סקירה שמסתכלת רק על
+   הקונפיגורציה.
 
-   התקנה לבדה אינה הוכחה: לאשר שהאינטגרציה אכן פעילה — שהיא ברשימת
-   ה-auto-enabling של הגרסה המותקנת, ושלא הועברו `default_integrations=False`
-   או `auto_enabling_integrations=False`. שלושת התנאים יחד, לא אחד מהם.
+   **גרסאות אחרות לא נבדקו**, וההרכב של הרשימה הזו יכול להשתנות בין
+   מהדורות. לאמת בגרסה שמותקנת בפרויקט, לא להסיק מכאן:
+
+   ```python
+   from sentry_sdk.integrations import _AUTO_ENABLING_INTEGRATIONS
+   print([i for i in _AUTO_ENABLING_INTEGRATIONS if "httpx" in i])
+   ```
+
+   התקנה לבדה אינה הוכחה: צריך גם שהאינטגרציה תהיה ברשימה של אותה
+   גרסה, וגם שלא הועברו `default_integrations=False` או
+   `auto_enabling_integrations=False`. שלושת התנאים יחד, לא אחד מהם.
 
    **לא נבדק:** האם ל-OpenTelemetry או ל-Datadog יש התנהגות מקבילה. סביר
    שיש להם auto-instrumentation ל-HTTP, אבל מדיניות הניקוי שלהם לא נבדקה
@@ -51,7 +60,11 @@
    `clientSecret`, `privateKey`, `authToken` ו-`xApiKey` הם אותם שמות
    בכתיב אחר, וספקים משתמשים בשניהם. תחילית שמסתיימת רק במפריד
    (`_`, `-`, `.`) תופסת חצי מהם. הגבול הוא מפריד **או** מעבר
-   אות-קטנה-לאות-גדולה.
+   `[a-z0-9]` ← `[A-Z]`.
+
+   **הספרה בצד השמאלי אינה קישוט.** גרסאות ואלגוריתמים נכנסים לשמות
+   כמעט תמיד: `v2Token`, `oauth2Token`, `sha256Token`, `x509Key`. גבול
+   שמוגדר כ"אות קטנה ← אות גדולה" בלבד מפספס את כולם.
 
    **והגבול הזה חייב להיות רגיש-רישיות.** בדפוס שכולו תחת דגל
    חוסר-רגישות (`(?i)`), `[A-Z]` תופס גם אותיות קטנות, והגבול מתדרדר
@@ -60,9 +73,10 @@
    הדפוס.
 
    **מקרי בדיקה בשני הכיוונים.** חייב לנקות: `?apiKey=`, `?accessToken=`,
-   `?clientSecret=`, `?auth_token=`, `?x-api-key=`, `?PRIVATE_KEY=`.
-   חייב להשאיר: `?monkey=`, `?donkey=`, `?keys=`, `?author=`,
-   `?key_id=`, `?keyId=`, `?tokenizer=`.
+   `?clientSecret=`, `?auth_token=`, `?x-api-key=`, `?PRIVATE_KEY=`,
+   `?v2Token=`, `?sha256Token=`, `?x509Key=`. חייב להשאיר: `?monkey=`,
+   `?donkey=`, `?keys=`, `?author=`, `?key_id=`, `?keyId=`,
+   `?tokenizer=`, `?v2token=` (כולו קטן — אין גבול, אין מקטע).
 
    **וללא quantifier מקונן.** `(?:[A-Za-z0-9]+[sep])*` הוא הצורה
    הקלאסית של ReDoS, והדפוס הזה רץ על כל שורת לוג ועל כל אירוע. ניסוח
