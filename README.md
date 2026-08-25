@@ -20,7 +20,7 @@
 | `CORE-PATTERNS.md` | לזרוק ל-`docs/` של הפרויקט החדש, או לקשר מ-`CLAUDE.md`. |
 | `CRITICAL-PATTERNS.md` | אותו דבר. |
 | `claude-md-snippets/universal.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
-| `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 12 כללים). |
+| `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 13 כללים). |
 | `TESTING-PATTERNS.md` | לזרוק ל-`docs/`, או לקשר מ-`CLAUDE.md`. |
 | `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
 | `BY-STACK/hebrew-source.md` + `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
@@ -52,7 +52,7 @@
 `bugbot-rules/*.md` — קובץ אחד לכל כלל, stack-agnostic. השתמש בהם דרך אחת מהבאות:
 - העתקת קבצים בודדים להגדרת bugbot של Cursor / דומה.
 - הדבקת התוכן ל-prompt של סקירת קוד עם Claude אחד בכל פעם בעת סקירת PR.
-- שילוב כמה ל-prompt אחד לסקירה ממוקדת (למשל סקירת אבטחה = כללי K1..K10 + K12 בידוד דיירים + K13 סוד במחרוזת נגזרת; K11 הוא שלמות-נתונים, לא אבטחה — צרף אותו לסקירות correctness).
+- שילוב כמה ל-prompt אחד לסקירה ממוקדת (למשל סקירת אבטחה = כללי K1..K10 + K12 בידוד דיירים + K13 סוד במחרוזת נגזרת + K14 סוד בשורת שאילתה; K11 הוא שלמות-נתונים, לא אבטחה — צרף אותו לסקירות correctness).
 
 הכללים המתויגים CRITICAL (`pii-in-logs`, `xss-innerhtml`, `rate-limit-xff-spoofing`, וכו') צריכים תמיד לרוץ על PRs שנוגעים ב-auth, endpoints חשופים-לציבור, או קלט משתמש.
 
@@ -105,7 +105,7 @@ amir-bug-patterns/
 ├── README.md                    # הקובץ הזה
 ├── INTEGRATION.md               # איך הידע מגיע לסשנים: טריגרים ל-CLAUDE.md, נוסח לבאגבוטים, תהליך פרויקט חדש
 ├── CORE-PATTERNS.md             # U1..U6 — 3/3 מקורות, החל בכל מקום
-├── CRITICAL-PATTERNS.md         # K1..K13 — חומרה גבוהה, החל בכל מקום
+├── CRITICAL-PATTERNS.md         # K1..K14 — חומרה גבוהה, החל בכל מקום
 ├── RECURRING-PATTERNS.md        # R1..R5 — 2/3 מקורות, החל אם ה-stack תואם
 ├── TESTING-PATTERNS.md          # T1..T3 — הבדיקה כמקור הבאג, החל בכל מקום
 ├── MIGRATION-NOTES.md           # meta-analysis, top-3 day-1 picks
@@ -162,6 +162,7 @@ amir-bug-patterns/
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL
+│   ├── secret-in-url-query.md               # CRITICAL
 │   ├── xss-innerhtml.md                     # CRITICAL
 │   ├── rate-limit-xff-spoofing.md           # CRITICAL
 │   ├── auth-before-irreversible-action.md   # CRITICAL
