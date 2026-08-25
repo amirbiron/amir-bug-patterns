@@ -9,19 +9,28 @@
 ## דווח כשמתקיים אחד מהבאים
 
 1. **סוד מועבר כפרמטר URL.** `params={"key": ...}`, `params={"token": ...}`,
-   או שרשור ידני של `?key=`/`&token=` — בכל ספריית HTTP (`httpx`,
-   `requests`, `aiohttp`). זה נראה תמים כי זו הצורה שמופיעה בתיעוד של
+   או שרשור ידני של `?key=`/`&token=` — בספריות שנבדקו למטה (`httpx`,
+   `aiohttp`, ו-`requests`/`urllib` דרך stdlib). זה נראה תמים כי זו הצורה שמופיעה בתיעוד של
    ספקים רבים, ולכן הוא נסקר כ"קריאה סטנדרטית".
 
    הבדיקה אינה "האם הקוד רושם את ה-URL" — התשובה כמעט תמיד לא. הבדיקה
    היא **האם קיים ערוץ שמתעד את הכתובת**.
 
-   **מה שנבדק ומאומת:** `sentry-sdk` 2.42.1 עם `httpx` מותקן.
-   `sentry_sdk/integrations/httpx.py` קורא
-   `parse_url(str(request.url), sanitize=False)` ואז
-   `span.set_data(SPANDATA.HTTP_QUERY, parsed_url.query)`. ה-`sanitize=False`
-   קבוע בקוד ואינו מותנה ב-`send_default_pii`; הרצה על URL בצורה הזו
-   מחזירה את הערך המלא, מול `key=[Filtered]` כש-`sanitize=True`.
+   **הכיסוי הוא פר-ספרייה, וכל אחת עם הראיה שלה** (הכול ב-`sentry-sdk`
+   2.42.1; ספרייה בלי ראיה — לבדוק, לא להסיק):
+
+   - **`httpx` — מאומת בהרצה.** `integrations/httpx.py:58` קורא
+     `parse_url(str(request.url), sanitize=False)` ואז
+     `span.set_data(SPANDATA.HTTP_QUERY, parsed_url.query)`. ה-`sanitize=False`
+     קבוע בקוד ואינו מותנה ב-`send_default_pii`; הרצה מחזירה את הערך
+     המלא, מול `key=[Filtered]` כש-`sanitize=True`.
+   - **`aiohttp` — מאומת בקריאת המקור** (הרצה לא בוצעה):
+     `integrations/aiohttp.py:234` — אותו `sanitize=False` ואותו
+     `HTTP_QUERY` בדיוק.
+   - **`requests` / `urllib` — מכוסים דרך `StdlibIntegration`**, שמנטרת
+     את `http.client` שמתחת לשתיהן: `integrations/stdlib.py:93` — אותו
+     צמד. והיא אף חזקה מ-auto-enabling: היא ב-`_DEFAULT_INTEGRATIONS`,
+     כלומר פעילה בלי תלות בשאלה אילו ספריות מותקנות.
 
 2. **האינטגרציה שאינה בקונפיגורציה.** **ב-`sentry-sdk` 2.42.1 — הגרסה
    שנבדקה** — `HttpxIntegration` נמצאת ב-`_AUTO_ENABLING_INTEGRATIONS`
@@ -40,6 +49,18 @@
    התקנה לבדה אינה הוכחה: צריך גם שהאינטגרציה תהיה ברשימה של אותה
    גרסה, וגם שלא הועברו `default_integrations=False` או
    `auto_enabling_integrations=False`. שלושת התנאים יחד, לא אחד מהם.
+
+   **ואינטגרציה פעילה עדיין אינה דליפה בפועל.** ה-span שנושא את
+   השאילתה מגיע ל-Sentry רק כשמסלול השליחה שלם, ולכן לפני שמסווגים
+   כדליפה **מאושרת** מאמתים גם:
+   - `sentry_sdk.init` אכן רץ עם DSN בסביבה הרלוונטית;
+   - tracing פעיל והבקשה רצה בתוך transaction שנדגם (ב-CodeBot:
+     `traces_sample_rate=0.1` — זה מה שהפך את הדליפה לאמיתית);
+   - האירוע שורד את `before_send_transaction` ואת רשתות הניקוי.
+
+   **לא אימתת את המסלול המלא ⇒ דווח כחשד/סיכון רדום, לא כ-true
+   positive מאושר.** גם החשד שווה דיווח — הקוד נמצא במרחק שינוי
+   קונפיגורציה אחד מדליפה — אבל הניסוח חייב לשקף מה אומת ומה לא.
 
    **לא נבדק:** האם ל-OpenTelemetry או ל-Datadog יש התנהגות מקבילה. סביר
    שיש להם auto-instrumentation ל-HTTP, אבל מדיניות הניקוי שלהם לא נבדקה
