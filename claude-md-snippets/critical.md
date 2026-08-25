@@ -24,4 +24,6 @@
 
 12. **שאילתה רב-דיירית בלי tenant scope.** SELECT/UPDATE/DELETE בטבלה עם `tenant_id` — predicate על ה-tenant המאומת, כולל get-by-id, exports, aggregations. INSERT/UPSERT — ה-tenant נגזר מה-context המאומת, לא מערך של הלקוח; conflict key כולל tenant. Context של tenant: fail-closed — בלי default; נתיב בלי context זורק. מפתחות cache/session כוללים tenant. בדיקת בידוד (שני tenants סינתטיים, מסד בדיקה בלבד) היא חובה. חריגים מוצהרים: טבלאות גלובליות באמת ונתיבי admin מבוקרים.
 
+13. **סוד בשורת שאילתה — ה-SDK של הניטור מתעד אותו בעצמו.** `params={"key": ...}` נראה תמים כי אף שורה שלך לא רושמת אותו, אבל אינטגרציית ה-HTTP של Sentry נדלקת לבד כשהספרייה מותקנת (`_AUTO_ENABLING_INTEGRATIONS` — היעדרה מ-`init` אינו ראיה שהיא כבויה), ורושמת את השאילתה בכל בקשה **מוצלחת**. הסוד עובר ל-header ייעודי, על **הלקוח** ולא באתר הקריאה. ורשימת דפוסי ניקוי שכולה דפוסי-צורה (`ghp_`, `Bearer`) היא רשימה שחורה — חייב להיות בה כלל שמנקה לפי **שם** הפרמטר, שמטפל בשם כמקטע (`auth_token`, `x-api-key`) ותופס גם מחרוזת עירומה בלי `?` מוביל.
+
 ראה `CRITICAL-PATTERNS.md` להגיון מלא וכללי זיהוי.
