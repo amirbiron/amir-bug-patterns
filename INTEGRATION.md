@@ -94,6 +94,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 |---|---|
 | שמירה/מחיקה שמסתיימת בהודעת ✅ למשתמש | `CRITICAL-PATTERNS.md` K11 |
 | קאש / invalidation | `bugbot-rules/return-value-failure-unchecked.md` §4 |
+| דגל שמצהיר "מטא-דאטה בלבד" (`npm install --package-lock-only`, `django-admin migrate --fake`), או רשומה שמתעדכנת בנפרד מהעבודה שהיא מתארת | `bugbot-rules/state-record-without-state-change.md` |
 | callbacks / handlers מקביליים, מזהים מבוססי-זמן | `CORE-PATTERNS.md` U1 |
 | PyGithub / קריאות SDK חיצוני | `BY-STACK/external-sdk.md` |
 | קריאה ל-API עם מפתח/טוקן בפרמטרים, או שינוי ברשימת דפוסי הניקוי | `CRITICAL-PATTERNS.md` K14 + `bugbot-rules/secret-in-url-query.md` |
