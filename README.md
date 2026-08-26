@@ -159,6 +159,7 @@ amir-bug-patterns/
 │   ├── widened-exception-scope.md
 │   ├── background-thread-liveness.md
 │   ├── content-hash-normalization.md
+│   ├── state-record-without-state-change.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL
