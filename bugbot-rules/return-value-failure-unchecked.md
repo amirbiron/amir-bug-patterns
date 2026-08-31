@@ -29,6 +29,20 @@ rowcount) כשהקורא לא בודק את הערך — ובמיוחד כשהו
    מסמן כשל — דגל את חוסר החוזה (זה מה שמלכד את ה-caller הבא), לא את
    עצם קיום שני הערוצים.
 
+6. **צד המפיק — sentinel ambiguity.** פונקציה מחזירה sentinel יחיד
+   (`None` / `[]` / `False` / `0`) שיכול לפרש שני מצבים שונים:
+   - "לא נמצא" **ו-**"לא רץ בכלל" (אין credentials / feature disabled).
+   - "success empty" **ו-**"transient failure".
+   - Campaign AI P70 (`delete_event` no-op = `None` = "נמחק"), P113
+     (`get_fb_token` `None` = גם "לא מחובר" וגם "secret חסר"), P59
+     (`get_user_email_by_id` `None` = כל שגיאה + "אין email").
+
+   הכלל: פונקציה חדשה מחייבת ערוץ כשל **יחיד ומתועד** ב-docstring.
+   פונקציה קיימת שמאובחנת כזו: לפצל להחזרת `Optional[T]` **וגם**
+   ל-`(found, value)` tuple, או להעביר את המקרה השני ל-exception. זה
+   דפוס מפיק (producer-side) — קרוב המשפחה של הכלל שלמעלה שהוא צד
+   הקורא (consumer-side). שניהם צריכים להיאכף באותו PR.
+
 ## False positives
 
 - פונקציות raise-on-error מתועדות: try/except הוא הטיפול הנכון שם.

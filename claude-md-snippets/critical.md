@@ -28,4 +28,6 @@
 
     (המספור כאן רציף; הפריט הזה הוא **K14** ב-`CRITICAL-PATTERNS.md`. K13 — סוד רוכב על מחרוזת נגזרת — אינו בסניפט הזה.)
 
+14. **(K15) הסקה על מצב חיצוני מסיגנל עקיף.** אל תסיק "לא קיים / לא קרה" מסיגנל **שלילי** — cookie חסר לא מוכיח שאין session, `[]` מ-Google לא מוכיח שאין event, `200` עם `errors` לא מוכיח שהפעולה הצליחה, `delete` no-op לא מוכיח שנמחק, `trial_ends_at` עתידי לא מוכיח שיש paid access, `not is_transient` לא מוכיח ש-token מת. Query directly — שאל את המקור. Fail-closed on ambiguity — אם ה-signal דו-משמעי, ה-default הוא `UNKNOWN` (retry / escalation / human review), לא "לא קרה". קרא שדות שגיאה **לפני** שדות תוצאה בכל response הטרוגני.
+
 ראה `CRITICAL-PATTERNS.md` להגיון מלא וכללי זיהוי.

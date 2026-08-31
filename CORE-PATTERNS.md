@@ -2,7 +2,7 @@
 
 דפוסי באגים אוניברסליים — אלה מופיעים ב**כל שלושת** מסמכי המקור (Noa_Leads, EmailFlow, וסט 8-הפרויקטים) על stacks שונים, פרויקטים שונים וטווחי זמן שונים. הם משקפים הרגלים אישיים וחוסרי שיקול דעת, לא בעיות ספציפיות לפרויקט. **החל אותם על כל פרויקט חדש, ללא קשר ל-stack.**
 
-מוסכמת הספירה: `X/3 מקורות` מתייחסת תמיד לשלושת מסמכי ההצלבה המקוריים. מסמכי מקור מאוחרים (Markdown-Docs, CodeBot) שמוסיפים ראיות לדפוס קיים מסומנים בשורת התדירות כתוספת מפורשת — הם מחזקים את הדפוס אבל לא משנים את הקיבוץ ל-tiers.
+מוסכמת הספירה: `X/3 מקורות` מתייחסת תמיד לשלושת מסמכי ההצלבה המקוריים. מסמכי מקור מאוחרים (Markdown-Docs, CodeBot, Campaign AI) שמוסיפים ראיות לדפוס קיים מסומנים בשורת התדירות כתוספת מפורשת — הם מחזקים את הדפוס אבל לא משנים את הקיבוץ ל-tiers.
 
 לכל דפוס: commits אמיתיים מצוטטים, כלל זיהוי גנרי, false positives, ומצב אכיפה מומלץ.
 
@@ -11,7 +11,8 @@
 ## U1. Race conditions / async TOCTOU
 
 **תדירות:** 3/3 מקורות, ~15 מופעים
-**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, Markdown-Academy, routine
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, Markdown-Academy, routine, Campaign AI
+**מקור מאוחר:** Campaign AI (2026-08-31) — ~12 מופעים; ראה `docs/source-projects/campaign-ai-patterns.md` (P5, P6, P9, P10, P14, P22–P25, P38, P78, P82, P132)
 **חומרה:** HIGH
 
 ### איך זה נראה
@@ -39,6 +40,9 @@
 - **Shipment-bot (`f1e0fbb`):** `_is_ip_blocked()` הפך ל-async, אבל הקורא לא הוסיף `await` → ה-coroutine תמיד truthy → כל webhook החזיר 429.
 - **Facebook-Leads-New (`5823724`):** `_check_daily_limit()` רץ מחוץ ל-`scan_lock` → שתי קריאות מקבילות עברו את הבדיקה, שתיהן הריצו scans.
 - **Markdown-Academy (`7c955f1`):** עליית השרת קראה ל-seed כמה פעמים במקביל בלי הגנה → שיעורים נוצרו פעמיים.
+- **Campaign AI (`c7b4f08`):** `open_optimization_push_action` השתמש ב-`pg_advisory_xact_lock` שמשתחרר בסוף ה-RPC; approve מקביל שני ראה את השורה כבר ב-`pushing` והחזיר אותה → עד 6 מודעות חיות. תיקון: CAS-lease עם expiry.
+- **Campaign AI (`baa6a16`):** שני upgrades מאותו old-state קיבלו `idempotency_key` שונה (target חלק מה-key) → שתי INSERTs → שני חיובים ב-J4. תיקון: partial-unique index.
+- **Campaign AI (`a8e02bf`):** `asyncio.wait_for(to_thread(fn), 60)` לא יכול לבטל את ה-thread; `FacebookSession` נבנה בלי `timeout=` → `requests` תקוע לנצח → retry רץ שוב בזמן שה-zombie thread ממשיך. וריאציה קלה של (a): ה-timeout אינו בשכבת ה-I/O.
 
 ### כלל לזיהוי (להעתקה ל-CLAUDE.md / bugbot)
 דווח על כל אחד מהבאים:
@@ -110,7 +114,8 @@
 ## U3. ולידציה של external input / boundary
 
 **תדירות:** 3/3 מקורות + Markdown-Docs (מקור מאוחר), ~13 מופעים
-**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, routine, Markdown-Docs
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, Facebook-Leads-New, routine, Markdown-Docs, Campaign AI
+**מקור מאוחר:** Campaign AI (2026-08-31) — הוסיף וריאציית `bool ⊂ int` ב-4 אתרים (P109 — `DebitTotal=True` הפך ל-1 agora; `code=True` תפס `_META_TRANSIENT_CODES`; `count=True` נחשב כ-1 lead). Whitespace-only token (P111), `error=""` blocked valid OAuth code (P112).
 **חומרה:** MEDIUM (קריסות בטראפיק אמיתי) / HIGH (כשמשולב עם SQL או eval)
 
 ### איך זה נראה
@@ -211,7 +216,8 @@
 ## U5. עדכוני atomic חלקיים / סטייה ב-linked fields
 
 **תדירות:** 3/3 מקורות, ~10 מופעים
-**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, routine, Web
+**פרויקטים:** Noa_Leads, EmailFlow, Shipment-bot, routine, Web, Campaign AI
+**מקור מאוחר:** Campaign AI (2026-08-31) — חיזוק חזק. P15/P42 = 4 sibling push flows כותבים לאותו GIN array `meta_ad_ids` אבל רק אחד עודכן (לוסטים לידים; משפחת linked-field). P83 = `ads` המקומי נשאר stale אחרי creative-swap → misattribution + double-spend על approve שני. P95 = handoff owner-alert failure השאיר conversation ללא terminal state.
 **חומרה:** HIGH (שחיתות נתונים שקטה + צרכנים downstream תלויים ב-cascade)
 
 ### איך זה נראה

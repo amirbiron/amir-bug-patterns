@@ -14,6 +14,10 @@
 
 5. עדכון CAS / cursor שמשווה עמודה nullable עם `=` (ב-Postgres: `col = NULL` מוערך כ-NULL, לא TRUE — חייב להשתמש בהסתעפות `IS NULL`).
 
+6. **Timeout לא בשכבת ה-I/O.** `asyncio.wait_for(to_thread(fn), N)` **אינו** מבטל thread; ה-thread רץ עד סופו גם אחרי ה-timeout. עלול לגרום ל-double write אם ה-caller עושה retry. הפתרון: הגדר timeout ברמת ה-HTTP client (`requests` `Session(timeout=...)`, `httpx.Client(timeout=...)`, `AsyncOpenAI(timeout=...)`) — לא ב-`wait_for` בלבד. `wait_for` נשאר כ-watchdog עם ערך **גבוה** מ-socket timeout. Campaign AI P14 = double write ל-Meta; P45 = `AsyncOpenAI` בלי `timeout=` חסם את ה-worker היחיד ל-30 דקות.
+
+7. **מזהה ייחודי מבוסס-timestamp ברזולוציית שנייה.** `f"backup_{user_id}_{int(timestamp)}"` — שתי שמירות באותה שנייה מתנגשות; השנייה דורסת. Campaign AI CodeBot PR #3232 = מופע חוצה-פרויקטים של אותו דפוס. הפתרון: להוסיף `secrets.token_hex(4)` או להשתמש ב-UUID.
+
 ## False positives
 
 - script של תהליך יחיד, single-threaded, בלי runners concurrent.

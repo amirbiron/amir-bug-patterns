@@ -26,3 +26,10 @@
 ## חומרה
 
 MEDIUM — דפדוף מציג שורות כפולות בדף אחד וחסרות בבא; משתמשים רואים רשימות "זזות".
+
+## דוגמאות אמיתיות
+
+- **Campaign AI P157** (`3ef2b4b`): `idx_jobs_claim` לא כלל `id` בזנב האינדקס → resort מאולץ + tiebreaker לא-דטרמיניסטי על `created_at` שווים. Cron job claim פספס jobs.
+- **Campaign AI P159** (`789a8bd`): **keyset cursor** בלי tiebreaker — leads עם `created_at` שווים (batch webhook) → הדף הבא דילג על שורות. Keyset cursor הוא מקרה קריטי במיוחד: בלי tiebreaker הוא **מדלג** בקביעות, לא רק בסבירות.
+
+**Sub-rule ל-keyset cursor:** cursor שנשמר כ-`(timestamp, ?)` חייב את ה-`?` הזה, ובמקום שני של ה-`ORDER BY`. בלעדיו, שני leads עם timestamp זהה יגרמו לדף הבא להתחיל **אחרי** שניהם, ולדלג על אחד מהם. השווה: cursor `(2024-01-01T00:00:00Z, 123)` מדפדף בבטחה גם על ties.
