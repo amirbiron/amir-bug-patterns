@@ -122,6 +122,7 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 ## R4. שלמות exception של External SDK
 
 **תדירות:** 2/3 מקורות (Noa + 8-Projects)
+**מקור מאוחר:** Campaign AI (2026-08-31) — חיזוק חזק, 10+ מופעים. בין המרכזיים: P39 (`FbServiceError` יחיד תפס permanent + transient + unknown → 3 branches מפורשים); P40 (`_is_transient` עם tuple ידני → `TransientError` mixin על 46 מחלקות); P44 (worker עשה retry על כל exception → `HANDLER_TRANSIENT` flag); P51 (`classify_auth_error` נפל ל-`SERVICE_DOWN` במקום `UNKNOWN` → active retry הסתיר באגים); P56 (`APIError` גולמי במקום `TransientError` → cron re-enqueue לנצח); P58 (SQLSTATE class 40 כולה סווגה transient במקום allowlist `{"40001","40P01"}`); P205 (`thinkingBudget` של Gemini דלק לבד ואכל את `maxOutputTokens`).
 **חומרה:** MEDIUM — בליעה שקטה / קריסת startup
 
 ### איך זה נראה
@@ -133,6 +134,8 @@ SDKs זורקים היררכיות exception רחבות, ו-subclasses של `Bas
 - **Noa (`95b82e5`):** OAuth scope drift טופל כקטלני; נדרש `OAUTHLIB_RELAX_TOKEN_SCOPE=1`.
 - **Shipment-bot (`e0f4d59`):** `isinstance(r, Exception)` לא תפס `CancelledError` (subclass של `BaseException`) → tasks מבוטלים נספרו כהצלחה.
 - **routine (`2571c91` / `e5c26ad`):** מפתחות VAPID פגומים → exception לא נתפס ב-`setVapidDetails` → השרת קרס בעלייה.
+- **Campaign AI (`0403d9d` → `dba09e9`):** manual tuple של 4 exception types הוחלף ב-`TransientError` mixin על 46 מחלקות → inheritance-based typing מנצח enumeration ידני. הדפוס חוזר: `campaign_push` הוגן, `lead_form_push` לא (sibling-flow asymmetry — ראה `bugbot-rules/sibling-flow-asymmetry.md`).
+- **Campaign AI (`df2a767`, `d32a05e`, `6f03c0f`):** provider parameter deprecation — gpt-5.x דוחה `max_tokens` → `max_completion_tokens`; adaptive seam מסיר params שנדחים מ-allowlist; `temperature` הוחזר fail-loud לאחר ניסיון קודם להסיר בשקט.
 
 ### כלל לזיהוי
 1. לכל קריאת SDK חיצוני, ה-`except` צריך לתפוס את ה-base class המתועד של ה-SDK (`anthropic.APIError`, `googleapiclient.errors.HttpError`, `stripe.error.StripeError`).
@@ -153,6 +156,7 @@ SDKs זורקים היררכיות exception רחבות, ו-subclasses של `Bas
 ## R5. שגיאות scope של filter
 
 **תדירות:** 2/3 מקורות (Noa + 8-Projects/Facebook-Leads-New)
+**מקור מאוחר:** Campaign AI (2026-08-31) — cron re-pick loops היו הדפוס הדומיננטי בפרויקט. P86 (`has_prior_session` היה true לכל session ב-30 יום כולל `done`/`failed`); P97 (5 באגים ב-state-machine transition matrix של appointment cancel); P126 (`cancel_subscription` דילג על `charge_unknown` — `status IN` חסר state); P150 (dedup key צר על `webhook_events(ad_id)` בזמן ש-ad_id לא ייחודי לרעה כל אירוע).
 **חומרה:** MEDIUM — UI ריק / cron בלולאה אינסופית / משתמש חסום שעדיין מקבל leads
 
 ### איך זה נראה

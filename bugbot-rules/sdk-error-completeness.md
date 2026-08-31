@@ -14,6 +14,8 @@
 
 5. **`isinstance(r, Exception)` מול `r is True`** על אובייקטי תוצאה של SDK. ערכי החזרה של SDK עשויים להיות אובייקטים בלי `__bool__` מוגדר; השוואת identity עם `True` לעולם לא מתאימה.
 
+6. **Provider parameter deprecation בלי adaptive seam.** ספק חיצוני (OpenAI gpt-5.x, Gemini) דוחה פרמטרים ישנים (`max_tokens` → `max_completion_tokens`; `temperature` שנעלם ואז חזר). ה-SDK client חייב **allowlist מפורש של params פר-מודל** ו-strip של params שנדחים, עם fail-loud על unknown model. אל תשתמש ב-adaptive layer שקט שמסיר params בלי דיווח — זה מדביר לך תיקון בסבב הבא (P18, P205). דגל דיף שמוסיף try/except סביב cal SDK "כדי לתפוס `unsupported_parameter`" — זה patch, לא fix. גם: `thinkingBudget` של Gemini דלוק כברירת מחדל ואוכל את `maxOutputTokens` על קריאות קצרות → response ריק שמזוהה כ-"corrupt". דרוש דגלי-config של הספק מתועדים בקוד ולא בדוקומנטציה בלבד.
+
 ## False positives
 
 - `except` צר ל-propagation מכוון (למשל זריקה מחדש של `AppException` ש-FastAPI מטפל בה גלובלית).

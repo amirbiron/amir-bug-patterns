@@ -9,6 +9,7 @@
 ## K1. השתלטות על חשבון OAuth דרך flow של signup
 
 **מקור:** 8-Projects C1 (routine — commit `8a39df6`)
+**מקור מאוחר:** Campaign AI (2026-08-31) — P2: `sign_up` קרא ל-Supabase ישירות בלי pre-check; עם `auto-link` פעיל ב-dashboard, signup עם אותו email חטף חשבון OAuth. וריאציה ב-Supabase Auth: הסתמכות מלאה על config של הספק (single point of failure). תיקון: RPC `email_has_oauth_identity` (migration 0075) כ-defense-in-depth (`7ff65c5`).
 **חומרה:** CRITICAL — השתלטות מלאה על חשבון
 
 ### איך זה נראה
@@ -108,6 +109,7 @@ flow של signup מאפשר קביעת סיסמה לחשבון שכבר קיים
 ## K6. password hash / secret נדלף ב-response או error message
 
 **מקור:** 8-Projects C6 (routine `06ca796`), C24 (Shipment-bot `59a5e3c`)
+**מקור מאוחר:** Campaign AI (2026-08-31) — P33: `StartBillingResponse` החזיר את ה-`ConfirmationKey` של Pelecard ללקוח; לפי Pelecard SKILL זה server-side secret לאימות IPN. P115: `_parse_campaign_row` — `KeyError`/`ValidationError` לא ירשו מ-`CampaignServiceError` → עקפו את mapping של ה-router → 500 עם פרטים פנימיים.
 **חומרה:** CRITICAL — חשיפת חומר סודי
 
 ### איך זה נראה
@@ -184,6 +186,7 @@ flow של signup מאפשר קביעת סיסמה לחשבון שכבר קיים
 ## K9. credential auth נשלח לפני storage (OTP / link / token)
 
 **מקור:** 8-Projects C4 (Shipment-bot — commits `552f0f7`, `155aa81`)
+**מקור מאוחר:** Campaign AI (2026-08-31) — P27: Pelecard IPN reserve-before-fill (3 וריאציות). Early-IPN מגיע לפני שה-`confirmation_key` נשמר: `None.encode()` AttributeError שבר את חוזה 200; silent return עם 200 (Pelecard לא retryed); ואז `BillingWebhookRetryError` → 500 → retry storm (`3723385`, `9231f7a`, `461cb62`).
 **חומרה:** HIGH — חוסר עקביות ב-lifecycle של auth, אפשרות לעקיפה דרך נתיב אימות חלופי
 
 ### איך זה נראה
@@ -243,6 +246,7 @@ catch (err) {
 ## K11. כשל שמדווח בערך החזרה נבלע — הצלחה מדומה למשתמש
 
 **מקור:** CodeBot P1 (PR #3232, PR #3172, ומופע cache invalidation) — 3 מופעים באותו ריפו
+**מקור מאוחר:** Campaign AI (2026-08-31) — 8 מופעים ריאליים באותו פרויקט (P115, P117, P118, P119, P121, P143, P169, P200). כולל: `_finalize` / `_finalize_invoice_row` / `_charge_subscription` / `update_tier` / `start_trial` שכולם החזירו PostgREST 200 כהצלחה בלי לבדוק rowcount (`9e69ce9`, `d1a9785`, `ee4945c`, `bd97a94`, `5c34a50`); Green Invoice webhook סימן `processed` בלי PDF (`7440705`); `always-200` webhook contract לא נאכף (`08269d1`).
 **חומרה:** HIGH — אובדן נתונים שקט: המשתמש מקבל אישור על פעולה שלא קרתה
 
 ### איך זה נראה
@@ -289,6 +293,7 @@ except Exception:
 ## K12. שאילתה רב-דיירית בלי tenant scope — דליפה בין לקוחות
 
 **מקור:** EmailFlow (3 מופעי auth/tenant isolation, HIGH — נספח "מחוץ ל-Top 7"); הקשר חי: ai-business-bot (ContextVar של tenant עם `default=None`)
+**מקור מאוחר:** Campaign AI (2026-08-31) — P32: `push_rejection_fix` טען מודעה דחויה דרך `fetch_ad_by_meta_id` (admin path, בלי user filter) ושחזר את ה-`image_url` — הבעלות נאכפה ב-webhook, לא ב-push. וריאציה single-tenant IDOR (לא multi-tenant), אבל אותו detection surface: קריאה שעוקפת את שכבת ה-scoping.
 **חומרה:** CRITICAL — דליפת נתונים בין לקוחות: הלקוח של דנה רואה את הלידים של יוסי
 
 ### איך זה נראה
@@ -428,3 +433,50 @@ allowlist לפני הוספת הכותרת.
 - `bugbot-rules/secret-in-derived-text.md` — סעיף ה-false-positives שם
   תוקן בעקבות הדפוס הזה.
 - `docs/source-projects/codebot-patterns.md` Pattern 8
+
+---
+
+## K15. הסקה על מצב חיצוני מסיגנל עקיף
+
+**מקור:** Campaign AI Meta-pattern A (2026-08-31) — 7 מופעים בעלי מוצא נפרד ב-`docs/source-projects/campaign-ai-patterns.md`
+**חומרה:** CRITICAL — חיוב כפול, מודעות שממשיכות לרוץ, sessions שנחשבים תקפים אחרי logout, ימים שנחשבים פנויים כשיש אירועים. הדליפה שקטה: הקוד רץ, לא זורק, מחזיר "תקין".
+
+### איך זה נראה
+מסקנה על state חיצוני (auth session, calendar event, row של ספק, מכסת quota) נגזרת מ**סיגנל עקיף** — header חסר, רשימה ריקה, `None` מקריאה שיכולה להיכשל, `200` עם שדה `errors`, no-op של API, ברירת מחדל חסרה — במקום מ-query מכוון שהיה מחזיר תשובה חיובית ("כן / לא / לא ידוע"). ה-signal יכול להיות "לא קרה" **או** "לא ידעתי", והקוד סוגר על הפירוש הראשון.
+
+### דוגמאות אמיתיות (כל אחת ב-`docs/source-projects/campaign-ai-patterns.md`)
+- **Campaign AI (`944b45c`):** refresh cookie חסר בבקשת `logout` פורש כ"אין session" — במקום להסתכל ב-DB אם יש session פעיל למשתמש. תוצאה: session נשאר תקף אחרי logout.
+- **Campaign AI (`bc71425`):** שגיאה שלא סווגה `transient` הוגדרה כ"ה-token מת" — כשהיא יכלה להיות `NotFound`, `BadRequest`, או פשוט לא-מסווגת. תוצאה: revoke מיותר של tokens תקפים.
+- **Campaign AI (`c0ac42c`):** `list_events_by_appointment_id` מ-Google החזיר `[]` בהיעדר credentials — הקוד פירש כ"אין event", ומחק את ה-`google_event_id` מ-DB. אזעקות orphan שווא.
+- **Campaign AI (`760c84f`):** Google FreeBusy החזיר `200` עם `{errors:[...]}` בלי שדה `busy`. הקוד עשה `entry.get("busy", [])` וקרא ליום "פנוי לגמרי" — בזמן שהיו אירועים.
+- **Campaign AI (`5deee2f`):** `delete_event` היה no-op כשאין credentials, ופנה כ"success" ל-reconciler. ה-reconciler סימן את השורה כ-deleted מ-DB. Event אמיתי בלוח נשאר.
+- **Campaign AI (`5813e00`):** נתיב insights ריק (`raw_campaign=None`) החזיר `leads=0` מיד, בלי fallback ל-DB count. Dashboards הראו "0 leads" למרות עשרות במסד.
+- **Campaign AI (`d4a6911`):** `trial_ends_at` עתידי פורש כ"למשתמש יש paid access" — למרות ש-`status` יכל להיות `canceled`. תוצאה: 23 ימים של גישה בחינם אחרי ביטול.
+
+### כלל לזיהוי
+דגל כל תנאי שסוגר assertion על **state חיצוני** מסיגנל **שלילי** (`None`, `[]`, שדה חסר, `not X`, exception גנרי) בלי query מכוון שהיה מחזיר confirmation חיובי. במיוחד:
+1. `if not X: return "state Y"` על ערך שמקורו חיצוני.
+2. `response.status_code == 200` בלי לבדוק `response.get("errors")` לפני קריאת ה-data.
+3. סיווג שלילי (`not is_transient`, `not is_valid`) → מסקנה חיובית על מצב.
+4. `default=` שקט על env / ContextVar / dict lookup שמסתיר "לא נקבע" בפני "לא קיים".
+5. `if not exists: create(...)` בלי CAS — גם race וגם מסקנה שגויה.
+
+### תבנית תיקון
+- **query directly, don't infer.** במקום "האם ה-cookie קיים?" — "האם ה-session תקף?"
+- **fail-closed on ambiguity.** אם ה-signal דו-משמעי, ה-default הוא `UNKNOWN` (retry / escalation / human), לא "לא קרה".
+- **הפרד 3 מצבים:** success, failure known, failure unknown. Sentinel יחיד שמכסה שניים מהם הוא באג בהמתנה.
+- **קרא שדות שגיאה לפני שדות תוצאה** בכל response של API הטרוגני.
+
+### False positives
+- Sentinels מתועדים במפורש בחוזה (`Optional[User]` עם docstring "None = not found, raises on transient").
+- Local state שלנו זה עתה השמנו (`x = None` שהקוד עצמו אתחל).
+- Documented API contracts שבהם היעדר יש לו משמעות מפורשת (למשל `Retry-After` חסר = ללקוח).
+
+### מצב מומלץ
+**strict** לנתיבי security / auth / financial / provider state. **warning** במקומות אחרים.
+
+### ראה גם
+- `bugbot-rules/inferring-external-state-from-indirect-indicator.md`
+- K11 — הקצה הפנימי: כאן ה-signal מגיע מספק חיצוני; שם ה-signal הוא ערך החזרה של פונקציה משלנו. שני הצדדים של אותה משפחה.
+- `bugbot-rules/tenant-row-scoping.md` — ContextVar עם `default=None` הוא מופע של הדפוס הזה על tenant state.
+- `docs/source-projects/campaign-ai-patterns.md` Meta-pattern A

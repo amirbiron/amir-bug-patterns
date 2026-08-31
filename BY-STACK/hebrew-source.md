@@ -85,6 +85,7 @@ def test_no_bidi_controls_in_source():
 ## H2. `secrets.compare_digest` נופל על non-ASCII
 
 **חומרה:** MEDIUM — מפיל את האימות עצמו
+**מקור מאוחר:** Campaign AI (2026-08-31) — P114: 4 מופעים ריאליים באותו פרויקט (`verify_meta_signature`, OAuth state cookie, `meta_leads_challenge`, `_verify_state`). הכשל חזר על עצמו כי `hmac.compare_digest` על `str` עם non-ASCII זורק `TypeError` במקום להחזיר `False` — התוצאה היא **500 במקום 403**, שדולף פרטים פנימיים + נותן סיגנל לתוקף. Fix: עטיפה מרכזית `safe_compare` שמעטיפה encode-to-UTF-8 + החזרת `False` בכשל (`3217a85`, `3fb7936`, `43aeedf`).
 
 ```python
 secrets.compare_digest("סוד", user_input)   # TypeError
@@ -102,7 +103,7 @@ secrets.compare_digest(expected.encode("utf-8"), given.encode("utf-8"))
 ### כלל לזיהוי
 
 כל `compare_digest` על ערך שיכול להגיע מקונפיג, ENV, או DB — לקודד
-את שני הצדדים.
+את שני הצדדים. גם — `hmac.compare_digest` באותה סמנטיקה. אל תסמוך על "המשתמש יראה 500, זה טוב" — 500 בגלל TypeError מדליק סיגנל שהוולידציה קורסת, ואפילו יותר גרוע: יש נתיבים שבהם 500 מפורש כ-"בעיה זמנית, retry" ומופעל loop.
 
 ---
 

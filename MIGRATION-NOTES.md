@@ -84,3 +84,32 @@ Noa (`2c8263a`) הוסיף ערך `StrEnum` חדש ארוך מ-`VARCHAR(20)`. Sh
 - **מבנה מסמך המקור משנה.** המסמך של EmailFlow היה הכי שימושי — רשימה מפורשת P1..P7 עם commits, false positives, ו-mode מומלץ. למסמך 8-projects יש breadth עשירה יותר אבל מבנה שטוח יותר; קשה יותר להצליב. **מסמכים עתידיים: השתמש בתבנית של EmailFlow.**
 - **חומרה vs תדירות צריכים להיות מופרדים מההתחלה.** התחלתי לערבב אותם בתוכנית, ואתה (בצדק) דחפת חזרה. הוסף שדה `severity` לכל דפוס מתועד מיום ראשון כדי שהצלבה לא תאבד מידע.
 - **מקור אחד ≠ לא חשוב.** האשכול של 8-projects של אבטחה (OAuth takeover, XSS, rate-limit spoofing, hash leak, panel exposure) כולם הגיעו ממקור אחד. קידום שלהם ל-CRITICAL בכל זאת הוא נכון — תדירות היא proxy רועש לחומרה.
+
+---
+
+## מסמכי מקור מאוחרים (Markdown-Docs, CodeBot, Campaign AI)
+
+מסמך מקור שנוסף אחרי ההצלבה המקורית של 3 (מאי 2026) מסומן ב-`**מקור מאוחר:**` על דפוס קיים, או במקור עצמאי על דפוס חדש שקידמנו. הם מחזקים ראיה אבל **לא סופרים ב-`X/3 מקורות`** — הספירה נשארת מעוגנת בשלושת הראשונים.
+
+### Markdown-Docs (2026-08-13) — מקור T1–T3
+מסמך פוסט-מורטם של MCP server ל-Markdown-Docs, 4 PRs רצופים (#18, #19, #20, #21). כל אחד היה באג שהופיע רק כשה-client האמיתי (claude.ai) התחבר, אחרי שכל הטסטים עברו. **3 מתוך 4 הבאגים לא היו בקוד** — הם היו בפער בין מה שהבדיקות אימתו לבין מה שהמערכת עושה. שם נולד ה-tier T.
+
+### CodeBot (2026-08-15..08-26) — מקור K11, K13, K14, ו-BY-STACK/external-sdk.md דפוס 10
+מסמכי סשן של Claude Code על `amirbiron/CodeBot` (bot טלגרם + webapp + Sphinx docs + MCP). הריפו החשוב ביותר לתדירות הריוויוור: 130 commits שמייחסים ל-cubic Bugbot בכותרת, ו-45 fix-of-fix. K11 עלה שלוש פעמים באותו ריפו לפני שתועד (הלקח בסעיף 2 של README מאמצע 2026).
+
+### Campaign AI (2026-08-31) — מקור K15, `sibling-flow-asymmetry`, `fix-followup-regression`, ו-5 bullets על כללים קיימים
+מסמך פוסט-מורטם של Campaign AI (FastAPI + Supabase + Meta Marketing API + Pelecard/Green Invoice + vanilla-JS SPA + LLMs), 210 באגים מ-935 commits (`docs/source-projects/campaign-ai-patterns.md`). ~40% מתוך ה-210 הם concurrency + provider error classification + terminal-state re-pick — הפרויקט הוא backend-heavy עם provider integrations רבים.
+
+**5 meta-patterns שהמסמך עצמו מזהה** ("דפוסים שקלאוד קוד פספס"), וההצבה שלהם בספרייה:
+
+- **Meta-A. הסקה על מצב חיצוני מסיגנל עקיף** (7 באגים HIGH-severity: header חסר → אין session, `[]` מ-Google → אין event, delete no-op → נמחק, `raw_campaign=None` → `leads=0`, `trial_ends_at` עתידי → שילם). **→ קודם ל-K15** בסניפט `critical.md` ובקובץ `CRITICAL-PATTERNS.md`, עם `bugbot-rules/inferring-external-state-from-indirect-indicator.md`. חומרה מצדיקה קידום single-source, כמו K1/K3/K4/K5/K8.
+
+- **Meta-B. אסימטריה בין sibling flows** (10+ מופעים: `optimization_push` הוגן, `lead_form_push` לא; `delete_event` תוקן, `list_events` לא; `_today_count` best-effort ב-branch אחד ולא בשני). **→ bugbot-rule** `sibling-flow-asymmetry.md`. מובחן מ-U5 (linked-field atomicity, שהוא בתוך ישות אחת).
+
+- **Meta-C. תיקון שיוצר את הבאג הבא** (45 fix-of-fix commits — רבע מזמן ה-QA היה תיקון ריגרסיות של תיקונים). **→ bugbot-rule** `fix-followup-regression.md`. שקלנו T4 והחלטנו bugbot בלבד: זה process-pattern, לא code-pattern. מובחן מ-T2 (שם וידוא שהטסט יכול ליפול; כאן וידוא שה-fix ריץ בכל ה-flows שהוא נגע בהם).
+
+- **Meta-D. שינוי סמנטי שקט בגבול library** (`maybe_single` מחזיר `dict` או `list` יחיד, `bool ⊂ int`, PostgREST 1000-row cap, `.or_()` שנשבר על ISO timestamp). **→ bullets על כללים קיימים**: bullet 7 ב-`external-input-isinstance.md` (bool-as-int), הרחבה של `return-value-failure-unchecked.md` (producer-side sentinel), הרחבה של `postgres.md` על PostgREST-specific gotchas.
+
+- **Meta-E. טסט שלא יכול ליפול** — `flex mock (*args, **kwargs)` שמסתיר signature drift; ערך מקודד ב-Python + SQL בלי CI diff; migrations שלא רצות בטסטים. **→ כבר מכוסה ב-T2**; הוספת ראיות Campaign AI (`2e452f1`, `9b6712c`, `8ceaf0b`) והרחבה של `test-infra-shared-state.md`.
+
+**מסקנה על התהליך:** המסמך של Campaign AI הוא הראשון שכתב **בעצמו** את ה-meta-patterns שפספסתי, ולא רק ערכים גולמיים. זה סיגנל שכשמסמך המקור זמין (935 commits עם body מלא לכל אחד), עדיף לחלץ meta-patterns מתוך המסמך ולעטוף אותם ב-tier/rule מאוחר יותר, במקום לנסות להסיק כל דפוס ריק מריק. `docs/source-projects/campaign-ai-patterns.md` הוא ה-template המומלץ מכאן והלאה — עם סעיף מפורש של "דפוסים שהעוזר פספס" + המלצות ל-`CLAUDE.md`.

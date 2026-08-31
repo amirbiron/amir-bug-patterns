@@ -37,6 +37,7 @@
 - לפני כתיבת טסט חדש → `claude-md-snippets/testing.md`
 - אחרי שטסט נופל על חריגה → `bugbot-rules/widened-exception-scope.md` (אל תרחיב except)
 - לפני העברת סוד כפרמטר URL (`params={"key": ...}`) → `CRITICAL-PATTERNS.md` K14. ה-SDK של הניטור רושם את השאילתה בעצמו, בכל בקשה מוצלחת.
+- לפני מסקנה על state חיצוני מ-`None`/`[]`/no-op/header חסר → `CRITICAL-PATTERNS.md` K15. Query directly, אל תסיק; ambiguity → `UNKNOWN`, לא "לא קרה".
 
 ### סגירת הלולאה (חובה, לא רשות)
 1. **ריוויוור (cubic/qodo/CodeRabbit/claude) תפס דפוס אמיתי** שאינו ב-amir-bug-patterns → פתח שם PR שמוסיף אותו (מסמך מקור + הצלבה לפי ה-README), **וגם** הוסף שורת טריגר לטבלה כאן.
@@ -119,14 +120,20 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 
 ### Campaign AI (FastAPI + Supabase/Postgres + Meta Marketing API + סליקה)
 
+הפרויקט הוא מקור P1..P210 (`docs/source-projects/campaign-ai-patterns.md`, 2026-08-31) — 5 meta-patterns משם עודכנו לתוך הספרייה: A→K15, B→`sibling-flow-asymmetry`, C→`fix-followup-regression`, D→bullets ב-`external-input-isinstance` + `return-value-failure-unchecked`, E→כבר T2.
+
 | כשאתה נוגע ב... | קרא |
 |---|---|
 | migrations / שאילתות / pagination | `BY-STACK/postgres.md` |
 | webhook Upay→Summit, חיוב פר-קמפיין | `BY-STACK/webhooks.md` + `CORE-PATTERNS.md` U1 (כסף = strict) |
 | Meta Marketing API / OpenAI | `BY-STACK/external-sdk.md` |
-| endpoints של auth / roles | `claude-md-snippets/critical.md` (K1, K3, K10) |
+| endpoints של auth / roles | `claude-md-snippets/critical.md` (K1, K3, K10, K15) |
 | סטטוסים של קמפיין/חיוב | `BY-STACK/state-machine.md` |
 | jobs מתוזמנים (חיוב מחזורי, סיום trial, סנכרון קמפיינים) | `BY-STACK/cron-jobs.md` |
+| כל flow שמתקן sibling handler (`*_push`, `handle_*`, reconciler) | `bugbot-rules/sibling-flow-asymmetry.md` (fix ל-handler אחד = לבדוק את השאר) |
+| fix ב-helper משותף (3+ callers) | `bugbot-rules/fix-followup-regression.md` (45 fix-of-fix commits בפרויקט הזה — לא במקרה) |
+| מסקנה מ-`None`/`[]`/no-op/response עם `errors` | `CRITICAL-PATTERNS.md` K15 (Meta-pattern A — 7 מופעים ריאליים) |
+| שגיאות ספק חיצוני (Meta / OpenAI / Google) | `BY-STACK/external-sdk.md` + `bugbot-rules/sdk-error-completeness.md` — Campaign AI מייצר classification errors בקצב שדורש `TransientError` mixin ולא tuple ידני |
 
 ### Noa_Leads (FastAPI + Next.js + Supabase + Calendar/Gmail)
 הפרויקט הוא מקור P1..P14 — רוב הדפוסים כבר נולדו כאן. הטריגרים:
@@ -165,7 +172,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 5. הפניות שורה: `literalinclude` עם `:lines:` כשיש חלופת `:pyobject:` — דגל. הפניית file.py:123 בתיעוד ארוך-חיים — דגל.
 
-6. אבטחה (strict תמיד): PII בלוגים (email/phone/message body), secrets ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security, קרדנציאל שנשלח לפני שנשמר (fail closed), ובטבלה רב-דיירית — SELECT/UPDATE/DELETE עם predicate על ה-tenant המאומת (כולל get-by-id ו-exports), INSERT/UPSERT עם tenant שנגזר מה-context המאומת ולא מהלקוח (ו-conflict key שכולל tenant), ו-context של tenant בלי default שקט.
+6. אבטחה (strict תמיד): PII בלוגים (email/phone/message body), secrets ב-response, innerHTML בלי sanitizer, X-Forwarded-For להחלטות security, קרדנציאל שנשלח לפני שנשמר (fail closed), ובטבלה רב-דיירית — SELECT/UPDATE/DELETE עם predicate על ה-tenant המאומת (כולל get-by-id ו-exports), INSERT/UPSERT עם tenant שנגזר מה-context המאומת ולא מהלקוח (ו-conflict key שכולל tenant), ו-context של tenant בלי default שקט. הסקה על state חיצוני מסיגנל עקיף (K15) — cookie חסר ≠ אין session, `[]` מ-API ≠ אין נתונים, `200` עם `errors` ≠ הצלחה, `not is_transient` ≠ token מת: query directly, fail-closed on ambiguity.
 
 7. קלט חיצוני ופילטרים: לפני `.get()`/`.strip()`/iteration על ערך מ-API /  webhook / output של LLM — `isinstance` guard; מספר חיצוני — `isfinite`.  פילטר על ערוץ/type יחיד כשיש לישות כמה variants — דגל. סדר הפילטרים: security/deny קודם, business/override אחריו — לא הפוך. פיצ'ר שנחסם בשקט (blocklist במקום allowlist, CSP `'none'` בלי היתר לחריג) נראה למשתמש ככפתור שבור — דגל.
 

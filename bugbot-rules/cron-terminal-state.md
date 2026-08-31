@@ -33,3 +33,17 @@
 ## חומרה
 
 HIGH — לולאות אינסופיות מרוקנות compute, מכסת API, ומייצרות התראות / הודעות כפולות למשתמשי קצה.
+
+## דוגמאות אמיתיות
+
+Campaign AI היה הפרויקט הצפוף ביותר בדפוס הזה — 11%+ מהבאגים (23 מ-210):
+- **P12** (`20ee07c`): `_handle_no_connection` / `_handle_token_unavailable` תמיד כתבו `status='failed'`, גם על retry אחרי שנוצרו IDs; `cleanup_stuck_campaigns` סרק רק `pushing`. תוצאה: orphan Meta campaigns ששרפו תקציב לנצח.
+- **P46** (`14b65af`): `process_job` כתב status סופי דרך best-effort `_update_job`; DB failure לא retried; `claim_next_job` בוחר רק `pending` → jobs תקועים `running` לנצח.
+- **P60** (`36b433a`): `send_notification` handler זרק `ValueError` על סוג לא מוכר; runner התייחס לזריקה כ-transient → 3 retries → `job=failed` בזמן שההתראה נשארה `pending` לנצח.
+- **P64** (`095f8f9`): "skipped" בלי סגירת action → action נשאר `due` → fetch תפס אותו כל שעה + spam ל-Sentry. תיקון: permanent/unknown → terminal `escalated`.
+- **P66** (`a75ab3b`): CAS ל-`push_failed` רץ **לפני** `escalate_session`; זריקה של escalate → השורה כבר לא בסלקציה. תיקון: signal-first (escalate), commit-last (CAS).
+- **P77** (`ef7933c`): flag `offer_generating` בלי TTL → כשל אחרי הצלחת claim נעל לנצח. תיקון: TTL recovery במיגרציה 0060.
+- **P124** (`7968842`): `.lt("trial_ends_at", "now()")` — מחרוזת literal ב-PostgREST, לא DB function. Cron של day-8 שהיה אמור לעבוד בסוף trial לא רץ.
+- **P197** (`283a3ca`): `charge_campaign` "SKIPPED" בלי מעבר terminal → crons תפסו את הקמפיין בכל tick → `capture_alert` 1440 פעם/יום/קמפיין.
+
+הדפוס הפרונטי-דומיננטי בפרויקטים עם reconcilers ו-workers מרובים.
