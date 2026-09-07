@@ -114,7 +114,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | callbacks / handlers מקביליים, מזהים מבוססי-זמן | `CORE-PATTERNS.md` U1 |
 | PyGithub / קריאות SDK חיצוני | `BY-STACK/external-sdk.md` |
 | **ערך שהגיע מחוץ לתהליך** — גוף JSON, payload, כותרת, ENV, פלט של LLM, CSV, או ערך שמשתמש הקליד | `CORE-PATTERNS.md` U3 + `bugbot-rules/external-input-isinstance.md` |
-| חיתוך או מדידת אורך של טקסט (`$substrBytes`, `$strLenBytes`, `encode()[a:b]`, תקרת אורך שנשלחת החוצה) | `BY-STACK/hebrew-source.md` H6 |
+| חיתוך או מדידת אורך של טקסט (`$substrBytes`, `$strLenBytes`, `encode()[a:b]`, תקרת אורך שנשלחת החוצה) | `BY-STACK/hebrew-source.md` H6 + `bugbot-rules/hebrew-source-and-data.md` §6 |
 | קריאה ל-API עם מפתח/טוקן בפרמטרים, או שינוי ברשימת דפוסי הניקוי | `CRITICAL-PATTERNS.md` K14 + `bugbot-rules/secret-in-url-query.md` |
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
