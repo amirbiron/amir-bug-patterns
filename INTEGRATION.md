@@ -115,7 +115,9 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | PyGithub / קריאות SDK חיצוני | `BY-STACK/external-sdk.md` |
 | **ערך שהגיע מחוץ לתהליך** — גוף JSON, payload, כותרת, ENV, פלט של LLM, CSV, או ערך שמשתמש הקליד | `CORE-PATTERNS.md` U3 + `bugbot-rules/external-input-isinstance.md` |
 | חיתוך או מדידת אורך של טקסט (`$substrBytes`, `$strLenBytes`, `encode()[a:b]`, תקרת אורך שנשלחת החוצה) | `BY-STACK/hebrew-source.md` H6 + `bugbot-rules/hebrew-source-and-data.md` §6 |
+| הרכבת URL/מחרוזת שמכילה סוד, הודעות חריגה, ניקוי לוגים/Sentry | `CRITICAL-PATTERNS.md` K13 + `bugbot-rules/secret-in-derived-text.md` |
 | קריאה ל-API עם מפתח/טוקן בפרמטרים, או שינוי ברשימת דפוסי הניקוי | `CRITICAL-PATTERNS.md` K14 + `bugbot-rules/secret-in-url-query.md` |
+| מסיר שורת לוג, או עוטף אותה ב-guard שמונע הערכת ארגומנטים (הטריגר הנפוץ: תיקון PII) | `bugbot-rules/side-effect-riding-on-log-line.md` |
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
@@ -197,12 +199,12 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
   העדיפות (הדפוסים שחזרו בפועל); 6 מכוסה חלקית על ידי הסורקים שלו ממילא.
 - **qodo** תומך ב-best practices file ברמת ריפו (`best_practices.md`) —
   אפשר במקום ההדבקה בממשק.
-- **הבלוק הוא הליבה הכללית, לא כל 28 הכללים.** הוא מכסה את הדפוסים
+- **הבלוק הוא הליבה הכללית, לא כל 38 הכללים.** הוא מכסה את הדפוסים
   שחלים על כל stack (סעיפים 1–7) ואת ה-CRITICAL של אבטחה שכבר כלולים בסעיף 6.
   כללי stack מהתיקייה — `postgres-null-cas`, `react-stale-state-on-prop`,
   `cron-terminal-state`, `pagination-tiebreaker`, וכו' — **לא** נכנסים
   לכאן; הם מוזרקים רק בריפו עם ה-stack התואם, לפי המיפוי ב-§2. הזרקת כל
-  28 לכל ריוויו מדללת את תשומת הלב לכל כלל בודד — לכן הבלוק מכוון ולא ממצה.
+  38 לכל ריוויו מדללת את תשומת הלב לכל כלל בודד — לכן הבלוק מכוון ולא ממצה.
 - כלל שמתווסף לריפו הזה → לעדכן גם את הבלוק הזה, אם הוא מספיק כללי.
 
 ---

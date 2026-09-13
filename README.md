@@ -20,7 +20,7 @@
 | `CORE-PATTERNS.md` | לזרוק ל-`docs/` של הפרויקט החדש, או לקשר מ-`CLAUDE.md`. |
 | `CRITICAL-PATTERNS.md` | אותו דבר. |
 | `claude-md-snippets/universal.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
-| `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 13 כללים). |
+| `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 15 כללים). |
 | `TESTING-PATTERNS.md` | לזרוק ל-`docs/`, או לקשר מ-`CLAUDE.md`. |
 | `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
 | `BY-STACK/hebrew-source.md` + `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
@@ -52,7 +52,7 @@
 `bugbot-rules/*.md` — קובץ אחד לכל כלל, stack-agnostic. השתמש בהם דרך אחת מהבאות:
 - העתקת קבצים בודדים להגדרת bugbot של Cursor / דומה.
 - הדבקת התוכן ל-prompt של סקירת קוד עם Claude אחד בכל פעם בעת סקירת PR.
-- שילוב כמה ל-prompt אחד לסקירה ממוקדת (למשל סקירת אבטחה = כללי K1..K10 + K12 בידוד דיירים + K13 סוד במחרוזת נגזרת + K14 סוד בשורת שאילתה; K11 הוא שלמות-נתונים, לא אבטחה — צרף אותו לסקירות correctness).
+- שילוב כמה ל-prompt אחד לסקירה ממוקדת (למשל סקירת אבטחה = כללי K1..K10 + K12 בידוד דיירים + K13 סוד במחרוזת נגזרת + K14 סוד בשורת שאילתה; K11 (שלמות-נתונים) ו-K15 (זמינות) אינם אבטחה — צרף אותם לסקירות correctness).
 
 הכללים המתויגים CRITICAL (`pii-in-logs`, `xss-innerhtml`, `rate-limit-xff-spoofing`, וכו') צריכים תמיד לרוץ על PRs שנוגעים ב-auth, endpoints חשופים-לציבור, או קלט משתמש.
 
@@ -65,7 +65,7 @@
 2. **הצלב מול ה-tiers הקיימים:**
    - אם 3 מסמכי מקור מאשרים עכשיו את אותו דפוס → קדם ל-`CORE-PATTERNS.md`.
    - אם 2 מתוך 3 מאשרים → `RECURRING-PATTERNS.md`.
-   - אם החומרה היא HIGH (אבטחה, אובדן נתונים, פרטיות) ללא קשר לתדירות → `CRITICAL-PATTERNS.md`.
+   - אם החומרה היא HIGH (אבטחה, אובדן נתונים, פרטיות, או השבתה שקטה של שירות — הציר שעליו נכנס K15) ללא קשר לתדירות → `CRITICAL-PATTERNS.md`.
    - אחרת → רק `BY-STACK/*.md` הרלוונטי.
 
 3. **הוסף `bugbot-rules/<name>.md`** לכל דפוס עם detection signature נקייה לאוטומציה.
@@ -77,7 +77,15 @@
    תוקנו כבאגי קוד, בזמן שהשורש המשותף היה שהבדיקות עקבו אחרי המפרט
    ולא אחרי הלקוח.
 
-4. **עדכן `claude-md-snippets/*.md`** אם הדפוס תמציתי מספיק להיכנס ב-≤20 שורות.
+4. **עדכן את הסניפט המשויך למסמך שהדפוס נכנס אליו.** צעד 2 קובע את המסמך, וממנו נגזר הסניפט — ה-≤20 שורות הן תקרת גודל, לא ההחלטה:
+   - נכנס ל-`CORE-PATTERNS.md` (U) — הסניפט: `claude-md-snippets/universal.md`.
+   - נכנס ל-`CRITICAL-PATTERNS.md` (K) — הסניפט: `claude-md-snippets/critical.md`, **באותו מספר**: פריט N שם הוא KN.
+   - נכנס ל-`TESTING-PATTERNS.md` (T) — הסניפט: `claude-md-snippets/testing.md`.
+   - נכנס ל-`BY-STACK/<x>.md` — הסניפט: `claude-md-snippets/<x>.md`, אותו שם קובץ.
+   - נכנס ל-`RECURRING-PATTERNS.md` (R) — הסניפט של הסטאק התואם. ל-R אין סניפט משלו, כי R1..R5 כולם stack-bound; הכלל הבסיסי של R2 ו-R4 יושב גם ב-`universal.md`.
+   - **נשאר רק ב-`bugbot-rules/` + מסמך המקור — אין לו סניפט, וזו החלטה ולא פטור.**
+
+   השורה האחרונה היא העיקר: הסניפטים הם מה שמודבק **במלואו** לפרויקט חדש, ולכן הם מוגבלים לשכבות שחלות בכל מקום. דפוס ממקור אחד שלא קודם לאף tier מגיע לפרויקטים דרך **ההפניה בלבד** — בדיוק העיקרון שב-`INTEGRATION.md` ("לא מעתיקים את הידע לפרויקטים, מעתיקים רק את ההפניה"). ולכן, בשבילו, שורת הטריגר שבצעד 5 אינה תוספת נחמדה אלא **מסלול ההגעה היחיד שלו**.
 
 5. **הוסף שורת טריגר ב-`CLAUDE.md` של הפרויקטים הרלוונטיים** (התבנית
    והמיפוי ב-`INTEGRATION.md`). דפוס בלי טריגר הוא דפוס שלא ייקרא בזמן
@@ -105,7 +113,7 @@ amir-bug-patterns/
 ├── README.md                    # הקובץ הזה
 ├── INTEGRATION.md               # איך הידע מגיע לסשנים: טריגרים ל-CLAUDE.md, נוסח לבאגבוטים, תהליך פרויקט חדש
 ├── CORE-PATTERNS.md             # U1..U6 — 3/3 מקורות, החל בכל מקום
-├── CRITICAL-PATTERNS.md         # K1..K14 — חומרה גבוהה, החל בכל מקום
+├── CRITICAL-PATTERNS.md         # K1..K15 — חומרה גבוהה, החל בכל מקום
 ├── RECURRING-PATTERNS.md        # R1..R5 — 2/3 מקורות, החל אם ה-stack תואם
 ├── TESTING-PATTERNS.md          # T1..T3 — הבדיקה כמקור הבאג, החל בכל מקום
 ├── MIGRATION-NOTES.md           # meta-analysis, top-3 day-1 picks
@@ -160,6 +168,8 @@ amir-bug-patterns/
 │   ├── background-thread-liveness.md
 │   ├── content-hash-normalization.md
 │   ├── state-record-without-state-change.md
+│   ├── lazy-init-guard-publish-order.md
+│   ├── silent-fallback-to-worse-path.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL
