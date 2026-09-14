@@ -138,7 +138,8 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | מחיקה / שיתוף / שינוי שם לפי `_id` שהגיע מהממשק, ‏`created_at`, או פעולה גורפת על `code_snippets` ו-`large_files` | `bugbot-rules/logical-entity-vs-version-document.md` |
 | שליחה לספק עם תקרת קלט (טוקנים, אורך שדה), או `value[:LIMIT]` לפני שמירה | `bugbot-rules/silent-truncation-at-sink.md` |
 | `clientX` בחיסור, ‏`left`/`right`, גרירה, שינוי גודל, או הצמדה ל-viewport | `BY-STACK/hebrew-source.md` H7 + `bugbot-rules/rtl-geometry-and-clamp.md` |
-| `ewma`, `threshold`, `cooldown`, `first_ts`, `baseline`, `anomaly` | `RECURRING-PATTERNS.md` R9 + `BY-STACK/observability.md` |
+| `EWMA` / `_ewma`, ‏`anomaly_detected`, ‏`cooldown`, ‏`first_ts`, ‏`adaptive_*_threshold_*` | `RECURRING-PATTERNS.md` R9 + `BY-STACK/observability.md` |
+| הרצה ראשונה של ג'וב סנכרון: ‏`baseline`, ‏`last_*_check_time`, ‏`if not last_seen` | `BY-STACK/cron-jobs.md` דפוס 10 — לקבוע סמן בלי לשלוח, אחרת ההרצה הראשונה שולחת את כל הבקלוג |
 | תגית `<script>` / `<link>` חדשה בתבנית, או כתיבת `Cache-Control` | `BY-STACK/browser-policy.md` B4–B5 + `bugbot-rules/stale-asset-cache-policy.md` |
 | פונקציה שמחזירה מחרוזת לתצוגה — גודל, תאריך, אייקון, שם שפה | `RECURRING-PATTERNS.md` R6: ‏`grep` על שם התופעה לפני שכותבים. יש עותק — מאחדים |
 | `except TypeError` / `except AttributeError` סביב קריאה ל-SDK חיצוני | `bugbot-rules/dead-parameter-external-api.md` |
