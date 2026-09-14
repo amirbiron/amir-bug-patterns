@@ -16,7 +16,12 @@
 
 2. **בדיקת נתיב בלי `resolve()` / `realpath()`.** בלעדיו `base/../../etc` עובר את אותה בדיקה, גם כשהיא כתובה נכון.
 
-3. **`url.startswith("https://api.example.com")`** — `https://api.example.com.evil.net` עובר. להשוות `urlsplit(url).hostname` לערך מלא.
+3. **`url.startswith("https://api.example.com")`** — `https://api.example.com.evil.net` עובר.
+   מפרקים ומשווים רכיב-רכיב, ו**מה משווים תלוי בשאלה**: ל-allowlist של
+   מארחים — `urlsplit(url).hostname` מול ערך מלא; להחלטת **origin**
+   (הפניה, בקשה יוצאת, בדיקת `Origin`/`Referer`, `postMessage`) —
+   ‏**scheme + hostname + פורט אפקטיבי**, כי `hostname` לבדו מקבל `http://`
+   במקום `https://` ופורט אחר לגמרי.
 
 4. **`host.endswith("example.com")`** — `notexample.com` עובר. נדרש `host == d or host.endswith("." + d)`.
 

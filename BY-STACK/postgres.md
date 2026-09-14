@@ -222,7 +222,7 @@ if notes:
 ## Footnote — DBs אחרים
 
 - **MySQL:** אין `ADD COLUMN IF NOT EXISTS`. CHECK constraints לא נאכפים לפני 8.0.16. `utf8` אינו UTF-8 אמיתי (השתמש ב-`utf8mb4`). פרודקשן דורש SSL config מפורש (routine `230e0c1`).
-- **MongoDB:** aggregation pipeline בלי `{allowDiskUse: true}` פוגע ב-100MB RAM limit על `$sort` (CodeBot `4824ad9`). תמיד העבר את זה לכל pipeline לא טריוויאלי.
+- **MongoDB:** יש לו עכשיו קובץ משלו — **`BY-STACK/mongodb.md`**. השורה שישבה כאן ("תמיד העבר `allowDiskUse`") נכונה אבל חלקית: הדגל אינו עוזר באשכולות Atlas Free ו-Flex, שמתעלמים ממנו, וההיטלה לפני ה-`$sort` היא התיקון האמיתי. מוסר לשם כדי שלא יהיו שני עותקים של אותו כלל — הדפוס שמתועד כ-**R6**.
 
 ---
 

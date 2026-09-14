@@ -129,7 +129,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
 | `getattr(x, "y", None)` או `except` שאחריו **מסלול חלופי בגלל כשל** — לא ערך ברירת מחדל, ולא זיהוי יכולת סטטי | `bugbot-rules/silent-fallback-to-worse-path.md` |
 | CSP, כותרות תגובה, או עמוד שנגיש בלי התחברות | `BY-STACK/browser-policy.md` |
-| `create_index` — ובמיוחד `partialFilterExpression` או `sparse=True` | `BY-STACK/mongodb.md` דפוס 1 + `bugbot-rules/mongo-index-and-operator-traps.md`. ‏`$ne`/`$not`/`$nin` אינם נתמכים שם, האינדקס פשוט לא נוצר, והקוד ממשיך |
+| `create_index` — ובמיוחד `partialFilterExpression` או `sparse=True` | `BY-STACK/mongodb.md` דפוס 1 + `bugbot-rules/mongo-index-and-operator-traps.md`. ‏`$ne`/`$not`/`$nin` אינם נתמכים שם ו-`create_index` זורק; אם האתחול בולע וממשיך, האינדקס פשוט אינו קיים |
 | צינור `aggregate` — `$project`, `$sort`, `$group` — או `find_one` בתוך לולאה | `RECURRING-PATTERNS.md` R8 + `bugbot-rules/work-disproportionate-to-answer.md` |
 | `startswith` / `endswith` על נתיב, URL או דומיין | `CRITICAL-PATTERNS.md` K16 |
 | `replace(tzinfo=`, ‏`datetime.now()`, ‏`date.today()`, או פורמוט תאריך למסך | `RECURRING-PATTERNS.md` R7 |
@@ -224,12 +224,13 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
   העדיפות (הדפוסים שחזרו בפועל); 6 מכוסה חלקית על ידי הסורקים שלו ממילא.
 - **qodo** תומך ב-best practices file ברמת ריפו (`best_practices.md`) —
   אפשר במקום ההדבקה בממשק.
-- **הבלוק הוא הליבה הכללית, לא כל 38 הכללים.** הוא מכסה את הדפוסים
+- **הבלוק הוא הליבה הכללית, לא כל הכללים שבתיקייה.** הוא מכסה את הדפוסים
   שחלים על כל stack (סעיפים 1–7) ואת ה-CRITICAL של אבטחה שכבר כלולים בסעיף 6.
   כללי stack מהתיקייה — `postgres-null-cas`, `react-stale-state-on-prop`,
   `cron-terminal-state`, `pagination-tiebreaker`, וכו' — **לא** נכנסים
-  לכאן; הם מוזרקים רק בריפו עם ה-stack התואם, לפי המיפוי ב-§2. הזרקת כל
-  38 לכל ריוויו מדללת את תשומת הלב לכל כלל בודד — לכן הבלוק מכוון ולא ממצה.
+  לכאן; הם מוזרקים רק בריפו עם ה-stack התואם, לפי המיפוי ב-§2. הזרקת
+  **כולם** לכל ריוויו מדללת את תשומת הלב לכל כלל בודד — לכן הבלוק מכוון
+  ולא ממצה. (בכוונה בלי מספר: הוא מתיישן בכל כלל שנוסף, וזה בדיוק R6.)
 - כלל שמתווסף לריפו הזה → לעדכן גם את הבלוק הזה, אם הוא מספיק כללי.
 
 ---
