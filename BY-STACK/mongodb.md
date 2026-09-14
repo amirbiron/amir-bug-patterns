@@ -24,7 +24,17 @@
 
 מקור: https://www.mongodb.com/docs/manual/core/index-partial/
 
-‏`$ne`, ‏`$not` ו-`$nin` **אינם ברשימה**. יצירת האינדקס נכשלת, ולכן האילוץ או האינדקס **פשוט אינם קיימים** — והקוד ממשיך לרוץ. באינדקס ייחודי זו הזמנה לכפילויות בנתונים; באינדקס של שאילתת פולינג זו סריקה מלאה בלולאה.
+‏`$ne`, ‏`$not` ו-`$nin` **אינם ברשימה**, ו-`create_index` **זורק** — `OperationFailure`.
+
+**ומכאן הנקודה שקובעת אם זה רועש או שקט:** אם הקריאה יושבת בפונקציית אתחול שעוטפת ב-`try/except` וממשיכה (הצורה הנפוצה: ‏`ensure_*_indexes()` שנקראת בעלייה ולא אמורה להפיל את השירות), האילוץ הייחודי או האינדקס **פשוט אינם קיימים** — והמערכת עולה כרגיל. באינדקס ייחודי זו הזמנה לכפילויות בנתונים; באינדקס של שאילתת פולינג זו סריקה מלאה בלולאה. בלי הבליעה, לעומת זאת, השירות נופל בעלייה ואי אפשר לפספס את זה.
+
+```python
+def ensure_indexes():
+    try:
+        coll.create_index(...)      # ← זורק OperationFailure
+    except Exception:
+        logger.warning("index setup failed")   # ← וכאן האילוץ נעלם בשקט
+```
 
 ```python
 # ❌ נכשל בשקט — האינדקס לא נוצר
@@ -45,13 +55,17 @@ coll.create_index("username", unique=True,
 
 ## דפוס 2 — סדר מפתחות באינדקס שאינו סדר השאילתה
 
-אינדקס מורכב משמש שאילתה רק אם סדר המפתחות תואם את הקידומת שהשאילתה מסננת לפיה, ואת המיון שהיא דורשת. אינדקס בסדר אחר נבנה, תופס מקום, מאט כתיבות — ואינו משרת את מי שלמענו נוצר.
+**קודם מה שאינו נכון:** סדר השדות **בשאילתה** אינו צריך להתאים לסדר המפתחות באינדקס. המתכנן מתאים predicate למפתח בלי קשר לסדר הכתיבה, ומפתחות שוויון יכולים להופיע ביניהם בכל סדר.
+
+מה שכן קובע הוא **ESR** — הכלל הרשמי לסדר המפתחות בהגדרת האינדקס: ‏**E**quality קודם, אחריו **S**ort, ובסוף **R**ange. התיעוד מנסח את זה כך: *"An index can have multiple equality keys. They can appear in any order relative to each other, but all equality keys must precede any sort or range fields"*, ו-*"An index supports sort operations on a subset of its keys only when the query includes equality conditions on all prefix keys that precede the sort keys"*. (מקור: https://www.mongodb.com/docs/manual/tutorial/equality-sort-range-guideline/ — אומת מול התיעוד.) והחריג המתועד: כשה-range סלקטיבי במיוחד, ‏ERS עדיף.
+
+אינדקס שסדרו מפר את ESR נבנה, תופס מקום, מאט כתיבות — ואינו משרת את השאילתה שלמענה נוצר, או משרת אותה בלי המיון.
 
 - `user_file_version_desc` נוצר `(user_id, file_name, version)` בזמן שהשאילתות דורשות `(file_name, user_id, version)` — CodeBot PR #2517.
 - אינדקס פולינג של תזכורות נוצר `(status, remind_at, needs_push)` בזמן שהשאילתה ממיינת לפי `remind_at`; ‏`remind_at` הועבר לראש — CodeBot PR #2627.
 
 ### כלל
-לכל `create_index` — לכתוב בהערה את השאילתה שהוא משרת (`filter` + `sort`), ולוודא ב-`explain` שהיא באמת בוחרת בו (`IXSCAN` ולא `COLLSCAN`, והאינדקס בשם). ובקוד שמנסה "לתקן" אינדקסים: **לא** `try/except: pass` סביב `drop_index` — מחיקה שנכשלת בשקט משאירה שני אינדקסים סותרים.
+לכל `create_index` — לכתוב בהערה את השאילתה שהוא משרת (`filter` + `sort`), לסדר את המפתחות לפי ESR, ו**לאמת ב-`explain`** שהשאילתה באמת בוחרת בו (`IXSCAN` ולא `COLLSCAN`, והאינדקס בשם). ‏`explain` הוא הקובע כאן, לא קריאת הסדר בעין. ובקוד שמנסה "לתקן" אינדקסים: **לא** `try/except: pass` סביב `drop_index` — מחיקה שנכשלת בשקט משאירה שני אינדקסים סותרים.
 
 ---
 
@@ -81,7 +95,7 @@ coll.update_one(flt, {"$setOnInsert": {"username": u}, "$set": {"username": u}},
 
 ## דפוס 5 — השדות הכבדים נגררים דרך המיון (ו-`allowDiskUse` אינו התשובה)
 
-הצינור שבונה "האחרון לכל מפתח" חייב להסיר את השדה הכבד **לפני** `$sort` ו-`$group`, לא אחריהם.
+הצינור שבונה "האחרון לכל מפתח" מרוויח מהסרת השדה הכבד **לפני** `$sort` ו-`$group` — **אבל רק כשהשלבים המאוחרים באמת לא צריכים אותו.**
 
 ```python
 # ❌ code נגרר דרך המיון והקיבוץ
@@ -90,7 +104,11 @@ coll.update_one(flt, {"$setOnInsert": {"username": u}, "$set": {"username": u}},
 [{"$match": q}, {"$project": {"code": 0}}, {"$sort": {...}}, {"$group": {...}}]
 ```
 
-וכשמגיעה שגיאה 292 — **לקרוא את שמה**: ‏`QueryExceededMemoryLimitNoDiskUseAllowed`. ב-Atlas `allowDiskUse` מועבר בפועל ואינו עוזר, כלומר הדגל אינו הפתרון וגם אינו האבחנה. הנפילה למסלול חלופי (`find` + `skip` במנות) עולה יותר מהבעיה: `/files` לקח 3.1–3.4 שניות בטעינה רגילה (CodeBot PR #3336).
+**התנאי אינו קישוט:** אם ה-`$group` משתמש בשדה — ‏`$first: "$$ROOT"`, ‏`$push`, ‏`$addToSet`, או כל accumulator שנוגע בו — ההסרה המוקדמת **משנה את התוצאה**, וזה באג ולא אופטימיזציה. הכלל חל על צינור שבו השדה אינו נקרא אחרי שלב ההסרה, ואת זה בודקים בקריאת הצינור, לא בהנחה.
+
+**ועל שגיאה 292 — `QueryExceededMemoryLimitNoDiskUseAllowed` — מה שנכון ומה שלא:** ‏`allowDiskUse: true` **כן** מתיר ל-`$sort` ול-`$group` לכתוב קבצים זמניים ולחרוג מ-100MB; זו בדיוק מטרתו (https://www.mongodb.com/docs/manual/core/aggregation-pipeline-limits/). מה שנכון בצמצום: **אשכולות Atlas Free ו-Flex אינם תומכים בכתיבת קבצים זמניים כלל** — *"Atlas ignores the `allowDiskUse` option and the corresponding commands behave as if the `allowDiskUse` option is set to `false`"* (https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/), ובאשכול Free גם מגבלת המיון בזיכרון היא 32MB ולא 100. כלומר ב-CodeBot הדגל הועבר ולא עזר **מפני שהאשכול שם אינו תומך בו**, ולא מפני ש-`allowDiskUse` אינו עובד ב-Atlas.
+
+המסקנה המעשית זהה בשני המקרים ובאה מכיוון אחר: הנפילה למסלול החלופי (`find` + `skip` במנות) עלתה יותר מהבעיה — `/files` לקח 3.1–3.4 שניות בטעינה רגילה (CodeBot PR #3336) — ולכן מתקנים את הצינור. ‏**ואין להסיר את הדגל** באשכול שכן תומך בו: שם הוא רשת הביטחון.
 
 ראה `RECURRING-PATTERNS.md` R8 לשאר המשפחה — N+1, בנייה לפני בדיקה, וסריאלייזר עם denylist.
 

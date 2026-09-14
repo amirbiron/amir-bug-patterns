@@ -34,10 +34,20 @@
    שנראית למגביל כמו תוקף.
 
 8. **`errorhandler(Exception)` גורף שתופס גם את חריגות ה-HTTP של המסגרת.**
-   ‏`werkzeug.exceptions.HTTPException` (ומקבילותיה) הן **חלק מהחוזה
-   התקין** — 404, 403, 405 — ולכן טיפול גורף הופך אותן ל-500 עם traceback,
-   מייצר רעש שמסתיר תקלות אמיתיות, ומחזיר ללקוח מצב שגוי. הדגל: handler
-   על `Exception` בלי ענף מוקדם שמחזיר `HTTPException` כמות שהיא.
+   ‏`HTTPException` ותתי-המחלקות שלה הן **חלק מהחוזה התקין** — 404, 403,
+   405 — והתיעוד של Flask אומר את זה במפורש: handler על `Exception`
+   *"will capture all otherwise unhandled errors, including all HTTP status
+   codes"*. התוצאה: קוד מצב תקין הופך ל-500 עם traceback, רעש שמסתיר
+   תקלות אמיתיות, ולקוח שמקבל מצב שגוי.
+
+   **דווח רק כששלושת אלה מתקיימים**, כי המסגרת עצמה נותנת שתי דרכי מילוט
+   והן נפוצות: (א) אין handler רשום ל-`HTTPException` או לתת-מחלקה שלה
+   ולא ל-`404`/`403`/`405` לפי קוד — *"If you register handlers for both
+   `HTTPException` and `Exception`, the `Exception` handler will not handle
+   `HTTPException` subclasses"*; (ב) גוף ה-handler אינו פותח בענף
+   `if isinstance(e, HTTPException): return e`, שהוא המתכון הרשמי; ו-(ג)
+   הוא באמת ממיר — מחזיר 500 או מדפיס traceback — ולא מעביר הלאה.
+   (מקור: https://flask.palletsprojects.com/en/stable/errorhandling/)
 
 ## False positives
 
