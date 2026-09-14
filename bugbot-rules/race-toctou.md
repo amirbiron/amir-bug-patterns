@@ -16,7 +16,10 @@
 
 ## False positives
 
-- script של תהליך יחיד, single-threaded, בלי runners concurrent.
+- script של תהליך יחיד, single-threaded, בלי runners concurrent. **מסלול
+  שנקרא גם מעובד רקע וגם מבקשה אינו כזה** — אפילו אם כל אחד מהם לבדו
+  הוא חד-חוטי. זה הבירור הראשון כשמסתכלים על `find_one_and_update`
+  או `upsert`: מי עוד קורא לפונקציה הזו.
 - הקריאה מתבצעת בתוך `SELECT FOR UPDATE`.
 - הכתיבה משתמשת ב-`INSERT ... ON CONFLICT DO NOTHING` / `ON CONFLICT DO UPDATE`.
 - קריאה חיצונית read-only (status fetch, analytics fire-and-forget).

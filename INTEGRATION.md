@@ -42,6 +42,7 @@
 1. **ריוויוור (cubic/qodo/CodeRabbit/claude) תפס דפוס אמיתי** שאינו ב-amir-bug-patterns → פתח שם PR שמוסיף אותו (מסמך מקור + הצלבה לפי ה-README), **וגם** הוסף שורת טריגר לטבלה כאן.
 2. **אתה בעצמך זיהית דפוס חוזר אצלך** (תיקנת פעמיים את אותו סוג טעות) → אותו תהליך בדיוק.
 3. דפוס בלי שורת טריגר = דפוס שלא ייקרא. שני הצעדים הם צעד אחד.
+4. **טריגר מזהה מה אתה מקליד, לא באיזה מצב אתה נמצא.** ‏`LOCK_FAIL_OPEN` ו-`0.0.0.0` רואים על המסך; "מסלול שרץ גם ברקע" ו"אחד מארבעת הנתיבים האלה" הם דברים שצריך **לדעת**. שורה שדורשת את הידע הזה כתנאי כניסה דורשת בדיוק את התשובה שהיא אמורה לתת, ולכן לא תידלק — התנאי שייך למסמך, לא לשורה. ומאותה סיבה: לתאר **מחלקה** ולא למנות מופעים, כי רשימה מתיישנת ברגע שנוסף המופע הבא.
 
 > [!IMPORTANT]
 > **שורה ממופתחת לפי מה שיהיה מול העיניים, לא לפי הקטגוריה של הדפוס.**
@@ -112,7 +113,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | קאש / invalidation | `bugbot-rules/return-value-failure-unchecked.md` §4 |
 | דגל שמצהיר "מטא-דאטה בלבד" (`npm install --package-lock-only`, `django-admin migrate --fake`), או רשומה שמתעדכנת בנפרד מהעבודה שהיא מתארת | `bugbot-rules/state-record-without-state-change.md` |
 | callbacks / handlers מקביליים, מזהים מבוססי-זמן | `CORE-PATTERNS.md` U1 |
-| תפיסת ג'וב / `claim` / `find_one_and_update` / `upsert` במסלול שרץ גם בעובד רקע וגם בבקשה (`services/repo_sync_service.py`) | `CORE-PATTERNS.md` U1 + `bugbot-rules/race-toctou.md` |
+| `find_one_and_update` / `upsert` / תפיסת ג'וב | `CORE-PATTERNS.md` U1 + `bugbot-rules/race-toctou.md` |
 | PyGithub / קריאות SDK חיצוני | `BY-STACK/external-sdk.md` |
 | **ערך שהגיע מחוץ לתהליך** — גוף JSON, payload, כותרת, ENV, פלט של LLM, CSV, או ערך שמשתמש הקליד | `CORE-PATTERNS.md` U3 + `bugbot-rules/external-input-isinstance.md` |
 | חיתוך או מדידת אורך של טקסט (`$substrBytes`, `$strLenBytes`, `encode()[a:b]`, תקרת אורך שנשלחת החוצה) | `BY-STACK/hebrew-source.md` H6 + `bugbot-rules/hebrew-source-and-data.md` §6 |
@@ -126,7 +127,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
 | `getattr(x, "y", None)` או `except` שאחריו **מסלול חלופי בגלל כשל** — לא ערך ברירת מחדל, ולא זיהוי יכולת סטטי | `bugbot-rules/silent-fallback-to-worse-path.md` |
-| CSP, כותרות תגובה, סקריפט inline שה-hash שלו יושב ב-CSP, או העמודים הציבוריים `/share/<share_id>`, `/share/<share_id>/download`, `/shared/<token>` ו-`/shared/styled/<token>` (ה-API שמייצר את הקישורים עצמו דורש התחברות) | `BY-STACK/browser-policy.md` |
+| CSP, כותרות תגובה, או עמוד שנגיש בלי התחברות | `BY-STACK/browser-policy.md` |
 
 **המימוש הנכון של K11 בריפו הזה — להעתיק ממנו, לא רק להיזהר:** `mcp_server/backend.py:save_file` מחזיר `{"ok": False, "error": "save_failed"}` **כשמסלול השמירה מחזיר false** (חריגת מסד עולה הלאה ואינה מומרת לתשובת כשל), ובהצלחה קורא את המסמך מחדש מהמסד במקום להחזיר את מה שביקשנו לכתוב. הלקח הוא *קרא את המצב, אל תהדהד את הבקשה* — ולא שזה אטומי: הקריאה החוזרת היא לפי שם הקובץ ולא לפי המזהה שנכתב, ומספר הגרסה נבחר ב-read-then-write, ולכן שתי שמירות מקבילות לאותו שם יכולות להחזיר זו את הגרסה של זו. זה עצמו מופע של U1 בתוך הקוד שמשמש כדוגמה ל-K11. ולכן אין כאן שורת טריגר על "כלי MCP שכותבים": K11 כבר תמיד-דלוק ב-§1, והאתר הזה כבר עומד בו — שורה שמצביעה על כלל שחל תמיד, באתר שכבר תקין, מלמדת לדלג על הטבלה.
 
