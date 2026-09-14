@@ -1,0 +1,134 @@
+# BY-STACK: MongoDB (אינדקסים, אגרגציה, pymongo)
+
+## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+
+- MongoDB / Atlas, עם pymongo או motor
+- אינדקסים שנוצרים מהקוד (`create_index` בעלייה או ב-`ensure_*_indexes`)
+- צינורות אגרגציה — חיפוש, קיבוץ גרסאות, דוחות
+- מסמכים עם שדה גדול (`code`, `content`, `html`, `embedding`) לצד שדות קטנים
+
+**המודל המנטלי:** מונגו כמעט לא אומרת "לא". היא מקבלת מסמך שאומר משהו אחר ממה שהתכוונת, מריצה אותו, ומחזירה תשובה תקינה לפעולה שלא ביקשת. רוב הדפוסים כאן הם לא קריסות — הם **הסכמה שקטה לדבר הלא נכון**.
+
+---
+
+## דפוס 1 — `$ne` / `$not` / `$nin` בתוך `partialFilterExpression`
+
+התיעוד הרשמי מונה **רשימה סגורה** של מה שמותר בתוך `partialFilterExpression`:
+
+- ביטויי שוויון — `field: value` או `$eq`
+- `$exists: true`
+- `$gt`, `$gte`, `$lt`, `$lte`
+- `$type`
+- `$and`, `$or`, `$in`
+- `$geoWithin`, `$geoIntersects`
+
+מקור: https://www.mongodb.com/docs/manual/core/index-partial/
+
+‏`$ne`, ‏`$not` ו-`$nin` **אינם ברשימה**. יצירת האינדקס נכשלת, ולכן האילוץ או האינדקס **פשוט אינם קיימים** — והקוד ממשיך לרוץ. באינדקס ייחודי זו הזמנה לכפילויות בנתונים; באינדקס של שאילתת פולינג זו סריקה מלאה בלולאה.
+
+```python
+# ❌ נכשל בשקט — האינדקס לא נוצר
+coll.create_index("username", unique=True,
+                  partialFilterExpression={"username": {"$type": "string", "$ne": ""}})
+
+# ✅
+coll.create_index("username", unique=True,
+                  partialFilterExpression={"username": {"$exists": True, "$type": "string"}})
+```
+
+ושים לב לחצי השני של התיקון: `$exists` + `$type` **אינם** אותה סמנטיקה כמו `$ne: ""` — הם לא מוציאים מחרוזת ריקה. לכן הכלל השלם הוא *"ולוודא שהערך הריק לא נכתב מלכתחילה"*, בוולידציה בשכבת הכתיבה.
+
+### Commits אמיתיים
+- CodeBot PR #895 (`anchor_id: {"$ne": ""}`) → PR #2121 (`username_unique`) → PR #2627 (`needs_push: {"$ne": False}`) — **אותה טעות ארבע פעמים**, עם הערות בקוד שנקראות רק אחרי שכבר הגעת לשורה הנכונה.
+
+---
+
+## דפוס 2 — סדר מפתחות באינדקס שאינו סדר השאילתה
+
+אינדקס מורכב משמש שאילתה רק אם סדר המפתחות תואם את הקידומת שהשאילתה מסננת לפיה, ואת המיון שהיא דורשת. אינדקס בסדר אחר נבנה, תופס מקום, מאט כתיבות — ואינו משרת את מי שלמענו נוצר.
+
+- `user_file_version_desc` נוצר `(user_id, file_name, version)` בזמן שהשאילתות דורשות `(file_name, user_id, version)` — CodeBot PR #2517.
+- אינדקס פולינג של תזכורות נוצר `(status, remind_at, needs_push)` בזמן שהשאילתה ממיינת לפי `remind_at`; ‏`remind_at` הועבר לראש — CodeBot PR #2627.
+
+### כלל
+לכל `create_index` — לכתוב בהערה את השאילתה שהוא משרת (`filter` + `sort`), ולוודא ב-`explain` שהיא באמת בוחרת בו (`IXSCAN` ולא `COLLSCAN`, והאינדקס בשם). ובקוד שמנסה "לתקן" אינדקסים: **לא** `try/except: pass` סביב `drop_index` — מחיקה שנכשלת בשקט משאירה שני אינדקסים סותרים.
+
+---
+
+## דפוס 3 — מחרוזת ב-`$project` היא קבוע, לא שדה
+
+```python
+{"$project": {"file_name": "<value>"}}     # ❌ "החזר את הקבוע <value>"
+{"$project": {"file_name": "$file_name"}}  # ✅ "החזר את השדה"
+```
+
+מחרוזת שאינה מתחילה ב-`$` בתוך היטלה היא **ערך קבוע**. הכשל שקט לגמרי: בניגוד ל-`$limit`, מחרוזת בהיטלה אינה גורמת למונגו לזרוק. נמדד מול MongoDB 8.0.32: ה-`queryShapeHash` שונה — **המנוע עצמו סופר את שתי הצורות כשתי שאילתות**, כלומר שלב שמושך את `code` נותח כשלב שאינו קורא שום שדה (CodeBot PR #3350).
+
+**המשפחה הרחבה:** שאילתה שנשמרת, מנורמלת או עוברת סיבוב דרך JSON אינה בהכרח השאילתה שרצה. אותו ריפו, אותו דשבורד: תאריכים נשמרו כמחרוזות JSON (ל-JSON אין טיפוס תאריך), והתוצאה הייתה `explain` מהיר עם אפס סריקה ויעילות מושלמת — על שאילתה שתאמה **0 מסמכים** במקום 1,157. דוח שנראה מצוין ומסקנתו הפוכה, וזה גרוע מ-`<value>` כי `<value>` לפחות נראה שבור. התיקון: Extended JSON (`bson.json_util`) בשני הכיוונים (CodeBot PR #3346).
+
+---
+
+## דפוס 4 — `$setOnInsert` ו-`$set` על אותו שדה
+
+```python
+coll.update_one(flt, {"$setOnInsert": {"username": u}, "$set": {"username": u}}, upsert=True)
+# ❌ Updating the path 'username' would create a conflict
+```
+
+מונגו זורקת והעדכון נכשל כולו (CodeBot PR #2182). שדה שצריך להיכתב רק ביצירה שייך ל-`$setOnInsert` בלבד; שדה שמתעדכן תמיד — ל-`$set` בלבד.
+
+---
+
+## דפוס 5 — השדות הכבדים נגררים דרך המיון (ו-`allowDiskUse` אינו התשובה)
+
+הצינור שבונה "האחרון לכל מפתח" חייב להסיר את השדה הכבד **לפני** `$sort` ו-`$group`, לא אחריהם.
+
+```python
+# ❌ code נגרר דרך המיון והקיבוץ
+[{"$match": q}, {"$sort": {...}}, {"$group": {...}}, {"$project": {"code": 0}}]
+# ✅
+[{"$match": q}, {"$project": {"code": 0}}, {"$sort": {...}}, {"$group": {...}}]
+```
+
+וכשמגיעה שגיאה 292 — **לקרוא את שמה**: ‏`QueryExceededMemoryLimitNoDiskUseAllowed`. ב-Atlas `allowDiskUse` מועבר בפועל ואינו עוזר, כלומר הדגל אינו הפתרון וגם אינו האבחנה. הנפילה למסלול חלופי (`find` + `skip` במנות) עולה יותר מהבעיה: `/files` לקח 3.1–3.4 שניות בטעינה רגילה (CodeBot PR #3336).
+
+ראה `RECURRING-PATTERNS.md` R8 לשאר המשפחה — N+1, בנייה לפני בדיקה, וסריאלייזר עם denylist.
+
+---
+
+## דפוס 6 — בדיקת אמת בוליאנית על `Collection` / `Database`
+
+```python
+if collection:          # ❌ NotImplementedError
+if not default_db:      # ❌ NotImplementedError
+if collection is not None:   # ✅
+```
+
+pymongo **זורק בכוונה**, כדי למנוע את הבלבול בין "האובייקט קיים" ל"האוסף אינו ריק". ב-CodeBot שמירת סקילים נכשלה בגלל זה (PR #3199), ובמופע מוקדם הבוט עשה `sys.exit(1)` על מסד תקין לחלוטין (`4e20f7b5`). אותו כלל חל על `Cursor` ועל תוצאות אגרגציה: להשוות ל-`None` במפורש.
+
+---
+
+## דפוס 7 — אופרטורים על בייטים מול אופרטורים על תווים
+
+`$substrBytes` / `$strLenBytes` / `$indexOfBytes` מודדים בבייטים; ‏`$regexFind ← idx` מחזיר **תווים**. בעברית אלה שני מספרים שונים, והחיתוך נוחת באמצע תו ומפיל את כל האגרגציה.
+
+הכלל המלא, עם הטבלה המדודה ושתי הודעות השגיאה: `BY-STACK/hebrew-source.md` **H6**.
+
+---
+
+## דפוס 8 — אתחול עצל של החיבור, ואינדקסים בתוך הנעילה
+
+`get_db()` שמפרסם את השומר לפני הערך הוא **K15** — הכלל המלא ב-`CRITICAL-PATTERNS.md`, והוא נולד בדיוק בקובץ הזה.
+
+ובן-משפחה שלו מאותו ריפו: `get_db` קרא ל-`ensure_recent_opens_indexes()` ול-`ensure_code_snippets_indexes()` **בתוך הנעילה שהוא מחזיק**, והן קוראות ל-`get_db` בעצמן — קריאה re-entrant בזמן האתחול, שהופיעה כתקיעה (CodeBot PR #1003). יצירת אינדקסים היא צרכן של החיבור, לא חלק מהקמתו.
+
+---
+
+## הפניות צולבות
+
+- **`CRITICAL-PATTERNS.md` K15** — שומר שמתפרסם לפני הערך
+- **`RECURRING-PATTERNS.md` R8** — עבודה ומטען שאינם פרופורציונליים
+- **`BY-STACK/hebrew-source.md` H6** — בייטים מול תווים
+- **`BY-STACK/postgres.md`** — המקבילה ב-SQL; דפוס 4 שם (tiebreaker) חל כאן מילה במילה
+- **`bugbot-rules/mongo-index-and-operator-traps.md`**
+- **`docs/source-projects/codebot-history-scan-patterns.md` P15**

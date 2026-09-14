@@ -29,6 +29,15 @@
    - `429` → "Too many attempts."
    לעולם אל תציג "invalid credentials" לשגיאות DB.
 
+5. **פעולה הרסנית מאחורי `GET`.** ‏route שמוחק, מאפס, מריץ `killOp`,
+   מוחק אינדקסים או מבטל מנוי — במתודה שהדפדפן מתייחס אליה כבטוחה.
+   אימות אינו השאלה כאן: ‏`@admin_required` היה במקומו, ובכל זאת prefetch
+   של דפדפן, כניסה מההיסטוריה, סימנייה, סורק קישורים בצ'אט או הרחבה
+   שמריצה preconnect **מפעילים את הפעולה בניווט לכתובת**. הצורה הנכונה:
+   ‏`POST`/`DELETE` עם CSRF, אישור מפורש, וברישום audit. הדגל: כל
+   `@app.route(..., methods=["GET"])` (או ברירת מחדל של GET) שבגוף שלו
+   יש `drop`, `delete`, `reset`, `truncate`, `kill`, `revoke`, `purge`.
+
 ## False positives
 
 - storage סינכרוני שבו ה-dispatch וה-persist בטרנזקציה אחת (atomic).

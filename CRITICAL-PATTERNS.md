@@ -506,3 +506,64 @@ def get_db():
   מצב משותף; כאן היא **סדר הפרסום** של שני משתנים, וסעיף 2 אינו מרוץ
   כלל.
 - `docs/source-projects/codebot-patterns.md` Pattern 11
+
+---
+
+## K16. גבול נתיב שנבדק כקידומת מחרוזת — מחיקה מחוץ ל-allowlist
+
+**מקור:** CodeBot P13 (PR #3249, אוגוסט 2026)
+**חומרה:** HIGH — `rmtree` על תיקייה שמחוץ לרשימה המותרת. בלתי הפיך, ונראה בקוד כמו בדיקת בטיחות תקינה
+
+### איך זה נראה
+
+השאלה היא "האם הנתיב הזה נמצא **בתוך** התיקייה המותרת". התשובה נכתבת כהשוואת **תווים**:
+
+```python
+def safe_rmtree(p: Path, allow_under: Path):
+    if not str(p).startswith(str(allow_under)):   # ❌ השוואת תווים
+        raise ValueError("outside allowlist")
+    shutil.rmtree(p)
+```
+
+עם `allow_under=/tmp/app-test`, המחרוזת `/tmp/app-test-evil` **עוברת** — היא באמת מתחילה באותם תווים, ואין ביניהן שום קשר היררכי. ‏`shutil.rmtree` מוחק תיקייה שלמה שמחוץ ל-allowlist. שוחזר אמפירית ב-CodeBot לפני התיקון: נתיב-אח נמחק בפועל.
+
+### התיקון
+
+```python
+p, base = p.resolve(), allow_under.resolve()      # ‏..‏ וקישורים סימבוליים קודם
+if not (p == base or base in p.parents):          # ✅ השוואת נתיב
+    raise ValueError("outside allowlist")
+```
+
+‏`parents` היא רשימת תיקיות, לא רצף תווים, ולכן היא אינה יכולה לענות "כן" ל-`-evil`. ה-`resolve()` אינו קישוט: בלעדיו `base/../../etc` עובר את אותה בדיקה.
+
+### המשפחה המלאה — כל גבול היררכי שנבדק כמחרוזת
+
+| הדומיין | הצורה השבורה | מה עובר אותה |
+|---|---|---|
+| נתיב קבצים | `str(p).startswith(str(base))` | `/tmp/app-test-evil` |
+| URL / origin | `url.startswith("https://api.example.com")` | `https://api.example.com.evil.net` |
+| דומיין | `host.endswith("example.com")` | `notexample.com` |
+| מפתח קאש / prefix | `key.startswith(f"user:{uid}")` | `user:12` תופס את `user:123` |
+
+בכל ארבעתם הצורה הנכונה היא להשוות עם המבנה שיודע מה הדומיין — `Path.parents`, ‏`urlsplit().hostname`, גבול מפורש (`base + os.sep`, ‏`"." + domain`, ‏`prefix + ":"`).
+
+### כלל לזיהוי
+
+1. `startswith` / `endswith` / `in` על מחרוזת, כשהערך שנבדק הוא נתיב, URL, דומיין או מפתח מרחב-שמות — **ובמיוחד** כשהתוצאה שולטת בפעולה בלתי הפיכה (`rmtree`, ‏`unlink`, ‏`DROP`, הפניה, החלטת הרשאה).
+2. בדיקת נתיב בלי `resolve()` / `realpath()` על **שני** הצדדים לפני ההשוואה.
+3. השוואת קידומת בלי מפריד מפורש בסופה.
+
+### False positives
+
+- קידומת שהיא באמת קידומת טקסטואלית: שם קובץ שמתחיל ב-`tmp_`, בדיקת סכמה `url.startswith("https://")`, ניתוב לפי prefix בשכבת תצוגה.
+- ‏`startswith` על ערך פנימי קבוע שלא מגיע מקלט ולא נגזר ממנו.
+
+### מצב מומלץ
+
+**strict** כשהתוצאה שולטת במחיקה, בכתיבה או בהחלטת הרשאה. **warning** אחרת.
+
+### ראה גם
+- `bugbot-rules/path-prefix-not-boundary.md`
+- `CRITICAL-PATTERNS.md` K8 — `LIKE` wildcard injection: גם שם הטעות היא טיפול בערך מובנה כמחרוזת שטוחה
+- `docs/source-projects/codebot-history-scan-patterns.md` P13

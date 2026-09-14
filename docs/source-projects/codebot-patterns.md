@@ -8,6 +8,8 @@
 > positives, ומצב מומלץ — כדי שההצלבה מול ה-tiers תהיה מכנית.
 >
 > **דירוג**: priority = frequency × severity. P1 = critical & recurring.
+>
+> **המשך**: ‏`codebot-history-scan-patterns.md` באותה תיקייה ממשיך את המספור מ-**P13**. אותו פרויקט, בסיס ראיות אחר — סריקת 2,718 הקומיטים המלאה במקום שני סשנים חיים.
 
 ---
 

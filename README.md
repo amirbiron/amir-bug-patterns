@@ -20,7 +20,7 @@
 | `CORE-PATTERNS.md` | לזרוק ל-`docs/` של הפרויקט החדש, או לקשר מ-`CLAUDE.md`. |
 | `CRITICAL-PATTERNS.md` | אותו דבר. |
 | `claude-md-snippets/universal.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
-| `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 15 כללים). |
+| `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 16 כללים). |
 | `TESTING-PATTERNS.md` | לזרוק ל-`docs/`, או לקשר מ-`CLAUDE.md`. |
 | `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
 | `BY-STACK/hebrew-source.md` + `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
@@ -38,6 +38,8 @@
 | Webhooks / Pub-Sub / queue consumers | `BY-STACK/webhooks.md` | `claude-md-snippets/webhooks.md` |
 | Cron / tasks מתוזמנים | `BY-STACK/cron-jobs.md` | `claude-md-snippets/cron-jobs.md` |
 | Postgres (או כל SQL עם migrations & pagination) | `BY-STACK/postgres.md` | `claude-md-snippets/postgres.md` |
+| MongoDB / Atlas — אינדקסים שנוצרים מהקוד, אגרגציה, pymongo | `BY-STACK/mongodb.md` | `claude-md-snippets/mongodb.md` |
+| מדדי בריאות, התראות, או מנגנון שפועל אוטומטית לפי מספר | `BY-STACK/observability.md` | `claude-md-snippets/observability.md` |
 | Anthropic / Google / Stripe / OAuth / FCM SDKs | `BY-STACK/external-sdk.md` | `claude-md-snippets/external-sdk.md` |
 | קוד דפדפן עם `mailto:` / clipboard / blob URLs | `BY-STACK/browser-handoff.md` | `claude-md-snippets/browser-handoff.md` |
 | State machines / status enums | `BY-STACK/state-machine.md` | `claude-md-snippets/state-machine.md` |
@@ -45,7 +47,7 @@
 
 ### 3. אופציונלי — אם יש זמן
 
-`RECURRING-PATTERNS.md` מכסה דפוסים מ-2 מתוך 3 פרויקטי המקור (R1–R5). קונטקסט נוסף שימושי לטווח ארוך; לא נדרש לסקירה הראשונה.
+`RECURRING-PATTERNS.md` מכסה דפוסים שאושרו בשני פרויקטי מקור שונים (R1–R9). קונטקסט נוסף שימושי לטווח ארוך; לא נדרש לסקירה הראשונה.
 
 ### 4. כללי bugbot
 
@@ -64,7 +66,7 @@
 
 2. **הצלב מול ה-tiers הקיימים:**
    - אם 3 מסמכי מקור מאשרים עכשיו את אותו דפוס → קדם ל-`CORE-PATTERNS.md`.
-   - אם 2 מתוך 3 מאשרים → `RECURRING-PATTERNS.md`.
+   - אם **שני פרויקטי מקור שונים** מאשרים → `RECURRING-PATTERNS.md`. (הניסוח המקורי היה "2 מתוך 3", מהתקופה שבה היו שלושה מסמכי מקור בלבד. עם שישה מקורות יחס מספרי מאבד משמעות, והבר הוא מה שהכלל התכוון אליו: שני פרויקטים, לא שני שלישים.)
    - אם החומרה היא HIGH (אבטחה, אובדן נתונים, פרטיות, או השבתה שקטה של שירות — הציר שעליו נכנס K15) ללא קשר לתדירות → `CRITICAL-PATTERNS.md`.
    - אחרת → רק `BY-STACK/*.md` הרלוונטי.
 
@@ -82,7 +84,7 @@
    - נכנס ל-`CRITICAL-PATTERNS.md` (K) — הסניפט: `claude-md-snippets/critical.md`, **באותו מספר**: פריט N שם הוא KN.
    - נכנס ל-`TESTING-PATTERNS.md` (T) — הסניפט: `claude-md-snippets/testing.md`.
    - נכנס ל-`BY-STACK/<x>.md` — הסניפט: `claude-md-snippets/<x>.md`, אותו שם קובץ.
-   - נכנס ל-`RECURRING-PATTERNS.md` (R) — הסניפט של הסטאק התואם. ל-R אין סניפט משלו, כי R1..R5 כולם stack-bound; הכלל הבסיסי של R2 ו-R4 יושב גם ב-`universal.md`.
+   - נכנס ל-`RECURRING-PATTERNS.md` (R) — הסניפט של הסטאק התואם. ל-R אין סניפט משלו: ‏R1–R5 כולם stack-bound (והכלל הבסיסי של R2 ו-R4 יושב גם ב-`universal.md`), ‏R8 ו-R9 נשענים על `mongodb.md` ו-`observability.md`. ‏**R6 (עותק שני של כלל) ו-R7 (אזור זמן) הם היוצאים מן הכלל — חוצי-סטאק ובלי סניפט**, ולכן מסלול ההגעה היחיד שלהם הוא שורת הטריגר. זו החלטה: הם לא נכנסו ל-`universal.md` כי הוא ממופה אחד-לאחד ל-U1..U6, והוספה שם הייתה שוברת את המיפוי שעליו נשען צעד 2.
    - **נשאר רק ב-`bugbot-rules/` + מסמך המקור — אין לו סניפט, וזו החלטה ולא פטור.**
 
    השורה האחרונה היא העיקר: הסניפטים הם מה שמודבק **במלואו** לפרויקט חדש, ולכן הם מוגבלים לשכבות שחלות בכל מקום. דפוס ממקור אחד שלא קודם לאף tier מגיע לפרויקטים דרך **ההפניה בלבד** — בדיוק העיקרון שב-`INTEGRATION.md` ("לא מעתיקים את הידע לפרויקטים, מעתיקים רק את ההפניה"). ולכן, בשבילו, שורת הטריגר שבצעד 5 אינה תוספת נחמדה אלא **מסלול ההגעה היחיד שלו**.
@@ -114,22 +116,24 @@ amir-bug-patterns/
 ├── README.md                    # הקובץ הזה
 ├── INTEGRATION.md               # איך הידע מגיע לסשנים: טריגרים ל-CLAUDE.md, נוסח לבאגבוטים, תהליך פרויקט חדש
 ├── CORE-PATTERNS.md             # U1..U6 — 3/3 מקורות, החל בכל מקום
-├── CRITICAL-PATTERNS.md         # K1..K15 — חומרה גבוהה, החל בכל מקום
-├── RECURRING-PATTERNS.md        # R1..R5 — 2/3 מקורות, החל אם ה-stack תואם
+├── CRITICAL-PATTERNS.md         # K1..K16 — חומרה גבוהה, החל בכל מקום
+├── RECURRING-PATTERNS.md        # R1..R9 — אושרו בשני פרויקטים, החל אם ה-stack תואם
 ├── TESTING-PATTERNS.md          # T1..T3 — הבדיקה כמקור הבאג, החל בכל מקום
 ├── MIGRATION-NOTES.md           # meta-analysis, top-3 day-1 picks
-├── BY-STACK/                    # 10 קבצים, מאורגנים לפי מודל מנטלי
+├── BY-STACK/                    # 12 קבצים, מאורגנים לפי מודל מנטלי
 │   ├── react-frontend.md
 │   ├── async-orm.md
 │   ├── state-machine.md
 │   ├── webhooks.md
 │   ├── cron-jobs.md
 │   ├── postgres.md
+│   ├── mongodb.md
+│   ├── observability.md
 │   ├── external-sdk.md
 │   ├── browser-handoff.md
 │   ├── browser-policy.md
 │   └── hebrew-source.md
-├── claude-md-snippets/          # ≤30 שורות כל אחד, להדבקה ל-CLAUDE.md של הפרויקט
+├── claude-md-snippets/          # קצר, להדבקה ל-CLAUDE.md של הפרויקט (critical.md חורג: כלל אחד לכל K)
 │   ├── universal.md
 │   ├── critical.md
 │   ├── react.md
@@ -138,6 +142,8 @@ amir-bug-patterns/
 │   ├── webhooks.md
 │   ├── cron-jobs.md
 │   ├── postgres.md
+│   ├── mongodb.md
+│   ├── observability.md
 │   ├── external-sdk.md
 │   ├── browser-handoff.md
 │   ├── browser-policy.md
@@ -171,6 +177,18 @@ amir-bug-patterns/
 │   ├── state-record-without-state-change.md
 │   ├── lazy-init-guard-publish-order.md
 │   ├── silent-fallback-to-worse-path.md
+│   ├── naive-datetime-no-conversion.md
+│   ├── duplicate-rule-second-copy.md
+│   ├── work-disproportionate-to-answer.md
+│   ├── metric-mixes-sources.md
+│   ├── linter-fix-changes-runtime-behavior.md
+│   ├── import-time-side-effects.md
+│   ├── logical-entity-vs-version-document.md
+│   ├── silent-truncation-at-sink.md
+│   ├── rtl-geometry-and-clamp.md
+│   ├── mongo-index-and-operator-traps.md
+│   ├── stale-asset-cache-policy.md
+│   ├── dead-parameter-external-api.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL
@@ -181,13 +199,16 @@ amir-bug-patterns/
 │   ├── privilege-escalation-unverified.md   # CRITICAL
 │   ├── network-exposed-without-auth.md      # CRITICAL
 │   ├── like-wildcard-injection.md           # CRITICAL
-│   └── tenant-row-scoping.md                 # CRITICAL
+│   ├── tenant-row-scoping.md                # CRITICAL
+│   └── path-prefix-not-boundary.md          # CRITICAL
 └── docs/source-projects/        # מסמכי post-mortem מקוריים (reference)
     ├── noa-leads-patterns.md
     ├── emailflow-patterns.md
     ├── eight-projects-patterns.md
     ├── markdown-docs-mcp-patterns.md
-    └── codebot-patterns.md
+    ├── campaign-ai-patterns.md
+    ├── codebot-patterns.md
+    └── codebot-history-scan-patterns.md
 ```
 
 ## ראה גם

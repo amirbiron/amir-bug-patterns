@@ -23,6 +23,15 @@
 
 6. **Filter שמסתמך על truthy של nullable boolean** במקום השוואה מפורשת. דוגמה: `if closed:` במקום `if closed is True` כש-`closed` יכול להיות `None` / `False` / `True`. ב-Python, `None` ו-`False` שניהם falsy, אבל הסמנטיקה לרוב דורשת הבחנה — `None` = "לא נקבע" (אקטיבי כברירת מחדל היסטורית), `False` = "סגור במפורש שלילי", `True` = "סגור". הכשל הקלאסי: filter שאמור להוציא רק לידים סגורים (`closed is True`) משאיר לידים עם `closed=None` ברשימת האקטיביים — או הפוך, תופס לידים עם `None` כאילו הם סגורים. דווח על `if <bool_col>:` / `if not <bool_col>:` / `.filter(model.col)` כש-העמודה nullable, בלי `is True` / `is False` / `is None` או `!= True` מפורש. שווה ערך ב-SQL: `WHERE col` במקום `WHERE col IS TRUE`.
 
+7. **`setdefault` / `||=` / `?? =` על מפתח שקיים אבל ריק.** ‏`setdefault`
+   **אינו נוגע** במפתח שקיים, גם כשערכו `None` או `""` — ולכן
+   `doc.setdefault("story_id", doc.get("id") or uuid4().hex)` משאיר
+   מזהה ריק בדיוק במקרה שבשבילו הוא נכתב. זה אח של סעיף 6: שם ההבחנה
+   בין `None` ל-`False`, כאן בין "לא קיים" ל"קיים וריק". הצורה הנכונה
+   היא בדיקה מפורשת (`if not doc.get("k"): doc["k"] = ...`), ובאותה
+   הזדמנות — המרת טיפוס מפורשת, כי מזהה שנשמר כמספר לא יימצא בשאילתה
+   שמחפשת מחרוזת.
+
 ## False positives
 
 - צמצום scope מכוון (owner-scoped, role-scoped, tenant-scoped) כש-ה-filter *הוא* הפיצ'ר.
