@@ -112,20 +112,23 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | קאש / invalidation | `bugbot-rules/return-value-failure-unchecked.md` §4 |
 | דגל שמצהיר "מטא-דאטה בלבד" (`npm install --package-lock-only`, `django-admin migrate --fake`), או רשומה שמתעדכנת בנפרד מהעבודה שהיא מתארת | `bugbot-rules/state-record-without-state-change.md` |
 | callbacks / handlers מקביליים, מזהים מבוססי-זמן | `CORE-PATTERNS.md` U1 |
+| תפיסת ג'וב / `claim` / `find_one_and_update` / `upsert` במסלול שרץ גם בעובד רקע וגם בבקשה (`services/repo_sync_service.py`) | `CORE-PATTERNS.md` U1 + `bugbot-rules/race-toctou.md` |
 | PyGithub / קריאות SDK חיצוני | `BY-STACK/external-sdk.md` |
 | **ערך שהגיע מחוץ לתהליך** — גוף JSON, payload, כותרת, ENV, פלט של LLM, CSV, או ערך שמשתמש הקליד | `CORE-PATTERNS.md` U3 + `bugbot-rules/external-input-isinstance.md` |
 | חיתוך או מדידת אורך של טקסט (`$substrBytes`, `$strLenBytes`, `encode()[a:b]`, תקרת אורך שנשלחת החוצה) | `BY-STACK/hebrew-source.md` H6 + `bugbot-rules/hebrew-source-and-data.md` §6 |
 | הרכבת URL/מחרוזת שמכילה סוד, הודעות חריגה, ניקוי לוגים/Sentry | `CRITICAL-PATTERNS.md` K13 + `bugbot-rules/secret-in-derived-text.md` |
 | קריאה ל-API עם מפתח/טוקן בפרמטרים, או שינוי ברשימת דפוסי הניקוי | `CRITICAL-PATTERNS.md` K14 + `bugbot-rules/secret-in-url-query.md` |
 | מסיר שורת לוג, או עוטף אותה ב-guard שמונע הערכת ארגומנטים (הטריגר הנפוץ: תיקון PII) | `bugbot-rules/side-effect-riding-on-log-line.md` |
+| גייטינג אדמין — רשימת היתר, התחזות (`/admin/impersonate/*`), או דגל שמרחיב הרשאה בהיעדר קונפיג (`CHATOPS_ALLOW_ALL_IF_NO_ADMINS`) | `CRITICAL-PATTERNS.md` K3 + `bugbot-rules/privilege-escalation-unverified.md`; לדגל עצמו — K12 סעיף 3 (fail-closed, בלי default שקט) |
+| `LOCK_FAIL_OPEN` — מריץ polling בלי מנעול ה-singleton, כלומר שני מריצים במקום אחד | `CORE-PATTERNS.md` U1 |
+| העלאת שרת HTTP או שינוי כתובת האזנה (`0.0.0.0`) | `CRITICAL-PATTERNS.md` K5 + `bugbot-rules/network-exposed-without-auth.md` |
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
 | `getattr(x, "y", None)` או `except` שאחריו **מסלול חלופי בגלל כשל** — לא ערך ברירת מחדל, ולא זיהוי יכולת סטטי | `bugbot-rules/silent-fallback-to-worse-path.md` |
-| כלי MCP שכותבים (save/edit/append) | `CRITICAL-PATTERNS.md` K11 — `save_file` שמחזיר `ok:true` בלי לעדכן הוא בדיוק הדפוס |
-| Repo Sync Engine / mirrors | `CORE-PATTERNS.md` U1 |
-| ChatOps / admin gating | `claude-md-snippets/critical.md` §5 (רשת) + fail-open flags |
-| endpoints של ה-webapp | `BY-STACK/browser-policy.md` |
+| CSP, כותרות תגובה, סקריפט inline שה-hash שלו יושב ב-CSP, או העמודים הציבוריים `/share/<share_id>`, `/share/<share_id>/download`, `/shared/<token>` ו-`/shared/styled/<token>` (ה-API שמייצר את הקישורים עצמו דורש התחברות) | `BY-STACK/browser-policy.md` |
+
+**המימוש הנכון של K11 בריפו הזה — להעתיק ממנו, לא רק להיזהר:** `mcp_server/backend.py:save_file` מחזיר `{"ok": False, "error": "save_failed"}` **כשמסלול השמירה מחזיר false** (חריגת מסד עולה הלאה ואינה מומרת לתשובת כשל), ובהצלחה קורא את המסמך מחדש מהמסד במקום להחזיר את מה שביקשנו לכתוב. הלקח הוא *קרא את המצב, אל תהדהד את הבקשה* — ולא שזה אטומי: הקריאה החוזרת היא לפי שם הקובץ ולא לפי המזהה שנכתב, ומספר הגרסה נבחר ב-read-then-write, ולכן שתי שמירות מקבילות לאותו שם יכולות להחזיר זו את הגרסה של זו. זה עצמו מופע של U1 בתוך הקוד שמשמש כדוגמה ל-K11. ולכן אין כאן שורת טריגר על "כלי MCP שכותבים": K11 כבר תמיד-דלוק ב-§1, והאתר הזה כבר עומד בו — שורה שמצביעה על כלל שחל תמיד, באתר שכבר תקין, מלמדת לדלג על הטבלה.
 
 ### ai-business-bot (Flask + SQLite WAL + OpenAI/Gemini + Twilio/Meta + multi-tenant)
 
