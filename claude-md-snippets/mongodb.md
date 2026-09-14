@@ -12,6 +12,6 @@
 
 6. **`if collection:` זורק `NotImplementedError`.** pymongo אוסר בכוונה על בדיקת אמת בוליאנית על `Collection` / `Database` / `Cursor`. תמיד `is not None`.
 
-7. **חיתוך טקסט בתווים ולא בבייטים** — `$substrCP` / `$strLenCP`. ‏`$regexFind ← idx` הוא אינדקס **תווים**. ראה `hebrew.md` §6.
+7. **חיתוך טקסט בתווים ולא בבייטים** — `$substrCP` / `$strLenCP`. ‏`$regexFind ← idx` הוא אינדקס **תווים**. ראה `BY-STACK/hebrew-source.md` H6.
 
 ראה `BY-STACK/mongodb.md`.

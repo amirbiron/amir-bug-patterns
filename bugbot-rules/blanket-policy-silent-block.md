@@ -41,12 +41,25 @@
    תקלות אמיתיות, ולקוח שמקבל מצב שגוי.
 
    **דווח רק כששלושת אלה מתקיימים**, כי המסגרת עצמה נותנת שתי דרכי מילוט
-   והן נפוצות: (א) אין handler רשום ל-`HTTPException` או לתת-מחלקה שלה
-   ולא ל-`404`/`403`/`405` לפי קוד — *"If you register handlers for both
-   `HTTPException` and `Exception`, the `Exception` handler will not handle
-   `HTTPException` subclasses"*; (ב) גוף ה-handler אינו פותח בענף
-   `if isinstance(e, HTTPException): return e`, שהוא המתכון הרשמי; ו-(ג)
-   הוא באמת ממיר — מחזיר 500 או מדפיס traceback — ולא מעביר הלאה.
+   והן נפוצות:
+
+   ‏(א) **אין handler ספציפי יותר שיתפוס את החריגה קודם** — לא ל-`HTTPException`,
+   לא לאף תת-מחלקה שלה (`NotFound`, ‏`Forbidden`, ‏`MethodNotAllowed`, וכל
+   `HTTPException` מותאם), ולא לאף **קוד** רשום. ‏Flask מחפש קודם לפי קוד ואז
+   לפי היררכיית המחלקות ובוחר את הספציפי ביותר, ולכן גם `@app.errorhandler(404)`
+   בודד מוציא את 404 מהמשוואה. לספור את כל ה-handlers הרשומים, לא רק את
+   השלישייה הנפוצה — *"If you register handlers for both `HTTPException` and
+   `Exception`, the `Exception` handler will not handle `HTTPException`
+   subclasses"*.
+
+   ‏(ב) גוף ה-handler אינו פותח בענף `if isinstance(e, HTTPException): return e`,
+   שהוא המתכון הרשמי.
+
+   ‏(ג) הוא באמת **ממיר את התגובה** — משנה את קוד המצב (`, 500`) או את הגוף
+   (`render_template`, ‏`jsonify`) במקום להחזיר את החריגה כמות שהיא. ‏**הדפסת
+   traceback או `logger.exception` לבדן אינן המרה** — הן רעש, ואולי דליפת
+   פרטים, אבל הלקוח עדיין מקבל את הקוד הנכון. אם הרעש הוא הבעיה, זה ממצא
+   אחר ולא זה.
    (מקור: https://flask.palletsprojects.com/en/stable/errorhandling/)
 
 ## False positives
