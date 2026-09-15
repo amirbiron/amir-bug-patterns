@@ -362,7 +362,7 @@ CLAUDE.md כללים 12+14 כתובים על זה במפורש. החזרה כל-
        where_clause = Model.col.is_(None)
    else:
        where_clause = Model.col == expected_old
-   ```
+```
    דווח על UPDATE/DELETE עם WHERE על עמודה nullable, בלי הבדלה.
 
 2. בדיקת truthy על שדה string מ-DB:
