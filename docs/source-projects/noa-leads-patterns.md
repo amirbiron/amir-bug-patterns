@@ -354,7 +354,7 @@ CLAUDE.md כללים 12+14 כתובים על זה במפורש. החזרה כל-
 **סיבה שורשית:** Postgres ו-SQLAlchemy יש להם semantics לא-אינטואיטיביים: NULL = NULL מחזיר NULL (לא TRUE), implicit casting on `WHERE col = value` שונה מ-`ANY(array)`, postgresql-specific keyword params (`postgresql_ops`, `postgresql_where`).
 
 **Custom rule prompt:**
-```
+````
 1. CAS UPDATE / DELETE עם value שיכול להיות None:
    `WHERE col = :val` לא תופס NULL. ודא שיש branch מפורש:
    ```python
@@ -383,7 +383,7 @@ CLAUDE.md כללים 12+14 כתובים על זה במפורש. החזרה כל-
      לא sort). השתמש ב-`desc("col")` מ-sqlalchemy.
    - לכל partial index ב-migration, ודא שגם `__table_args__` ב-
      model מכיל אותו (אחרת alembic autogenerate ימחק אותו).
-```
+````
 
 **False positives:**
 - ⚠️ ORM updates דרך session.merge() / session.flush() — לא raw SQL, ה-rule לא רלוונטי.
