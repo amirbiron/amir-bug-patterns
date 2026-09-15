@@ -27,6 +27,41 @@
 6. העברת בקשה פנימית שממחזרת endpoint של תת-אפליקציה במקום להעביר
    לאפליקציה כולה — מדלגת על מידלוור האימות שלה.
 
+7. **מגבלת קצב גורפת שחלה גם על נתיבי בדיקת דופק.** ‏`/` ו-`/health`
+   נדגמים על ידי מוניטור חיצוני בתדירות קבועה; בלי פטור מפורש הם מקבלים
+   `429`, והמוניטור מכריז על שירות בריא כמנותק. אותו היגיון חל על
+   webhook של ספק ועל callback של תשלום — תעבורה לגיטימית בתדירות גבוהה
+   שנראית למגביל כמו תוקף.
+
+8. **`errorhandler(Exception)` גורף שתופס גם את חריגות ה-HTTP של המסגרת.**
+   ‏`HTTPException` ותתי-המחלקות שלה הן **חלק מהחוזה התקין** — 404, 403,
+   405 — והתיעוד של Flask אומר את זה במפורש: handler על `Exception`
+   *"will capture all otherwise unhandled errors, including all HTTP status
+   codes"*. התוצאה: קוד מצב תקין הופך ל-500 עם traceback, רעש שמסתיר
+   תקלות אמיתיות, ולקוח שמקבל מצב שגוי.
+
+   **דווח רק כששלושת אלה מתקיימים**, כי המסגרת עצמה נותנת שתי דרכי מילוט
+   והן נפוצות:
+
+   ‏(א) **אין handler ספציפי יותר שיתפוס את החריגה קודם** — לא ל-`HTTPException`,
+   לא לאף תת-מחלקה שלה (`NotFound`, ‏`Forbidden`, ‏`MethodNotAllowed`, וכל
+   `HTTPException` מותאם), ולא לאף **קוד** רשום. ‏Flask מחפש קודם לפי קוד ואז
+   לפי היררכיית המחלקות ובוחר את הספציפי ביותר, ולכן גם `@app.errorhandler(404)`
+   בודד מוציא את 404 מהמשוואה. לספור את כל ה-handlers הרשומים, לא רק את
+   השלישייה הנפוצה — *"If you register handlers for both `HTTPException` and
+   `Exception`, the `Exception` handler will not handle `HTTPException`
+   subclasses"*.
+
+   ‏(ב) גוף ה-handler אינו פותח בענף `if isinstance(e, HTTPException): return e`,
+   שהוא המתכון הרשמי.
+
+   ‏(ג) הוא באמת **ממיר את התגובה** — משנה את קוד המצב (`, 500`) או את הגוף
+   (`render_template`, ‏`jsonify`) במקום להחזיר את החריגה כמות שהיא. ‏**הדפסת
+   traceback או `logger.exception` לבדן אינן המרה** — הן רעש, ואולי דליפת
+   פרטים, אבל הלקוח עדיין מקבל את הקוד הנכון. אם הרעש הוא הבעיה, זה ממצא
+   אחר ולא זה.
+   (מקור: https://flask.palletsprojects.com/en/stable/errorhandling/)
+
 ## False positives
 
 - שירות API בלי HTML — CSP לא רלוונטי.

@@ -34,6 +34,7 @@
 
 תמיד, בכל פרויקט:
 - לפני עטיפת קריאה ב-try/except → `CRITICAL-PATTERNS.md` K11 (כשל בערך החזרה)
+- כותב `except` שבולע — `pass`, ערך falsy, או המשך כאילו הצליח → לוג, או הערה שאומרת למה הכשל הזה אינו מעניין. בלעדיהם זה ממצא, גם כשאין ✅ למשתמש במסלול. ‏(`raise` מחדש אינו בליעה) (K11, הצד ההפוך)
 - לפני כתיבת טסט חדש → `claude-md-snippets/testing.md`
 - אחרי שטסט נופל על חריגה → `bugbot-rules/widened-exception-scope.md` (אל תרחיב except)
 - לפני העברת סוד כפרמטר URL (`params={"key": ...}`) → `CRITICAL-PATTERNS.md` K14. ה-SDK של הניטור רושם את השאילתה בעצמו, בכל בקשה מוצלחת.
@@ -128,6 +129,22 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
 | `getattr(x, "y", None)` או `except` שאחריו **מסלול חלופי בגלל כשל** — לא ערך ברירת מחדל, ולא זיהוי יכולת סטטי | `bugbot-rules/silent-fallback-to-worse-path.md` |
 | CSP, כותרות תגובה, או עמוד שנגיש בלי התחברות | `BY-STACK/browser-policy.md` |
+| `create_index` — ובמיוחד `partialFilterExpression` או `sparse=True` | `BY-STACK/mongodb.md` דפוס 1 + `bugbot-rules/mongo-index-and-operator-traps.md`. ‏`$ne`/`$not`/`$nin` אינם נתמכים שם ו-`create_index` זורק; אם האתחול בולע וממשיך, האינדקס פשוט אינו קיים |
+| צינור `aggregate` — `$project`, `$sort`, `$group` — או `find_one` בתוך לולאה | `RECURRING-PATTERNS.md` R8 + `bugbot-rules/work-disproportionate-to-answer.md` |
+| `startswith` / `endswith` על נתיב, URL או דומיין | `CRITICAL-PATTERNS.md` K16 |
+| `replace(tzinfo=`, ‏`datetime.now()`, ‏`date.today()`, או פורמוט תאריך למסך | `RECURRING-PATTERNS.md` R7 |
+| `Thread(` / `.start()` / `scheduler` ברמה העליונה של מודול, או לקוח שנבנה שם מ-`os.environ` | `bugbot-rules/import-time-side-effects.md` |
+| שינוי שנעשה כדי לספק לינטר: הזזת `import`, ניקוי אזהרת escape, הרחבת `except` | `bugbot-rules/linter-fix-changes-runtime-behavior.md` |
+| מחיקה / שיתוף / שינוי שם לפי `_id` שהגיע מהממשק, ‏`created_at`, או פעולה גורפת על `code_snippets` ו-`large_files` | `bugbot-rules/logical-entity-vs-version-document.md` |
+| שליחה לספק עם תקרת קלט (טוקנים, אורך שדה), או `value[:LIMIT]` לפני שמירה | `bugbot-rules/silent-truncation-at-sink.md` |
+| `clientX` בחיסור, ‏`left`/`right`, גרירה, שינוי גודל, או הצמדה ל-viewport | `BY-STACK/hebrew-source.md` H7 + `bugbot-rules/rtl-geometry-and-clamp.md` |
+| `EWMA` / `_ewma`, ‏`anomaly_detected`, ‏`cooldown`, ‏`first_ts`, ‏`adaptive_*_threshold_*` | `RECURRING-PATTERNS.md` R9 + `BY-STACK/observability.md` |
+| הרצה ראשונה של ג'וב סנכרון: ‏`baseline`, ‏`last_*_check_time`, ‏`if not last_seen` | `BY-STACK/cron-jobs.md` דפוס 10 — לקבוע סמן בלי לשלוח, אחרת ההרצה הראשונה שולחת את כל הבקלוג |
+| תגית `<script>` / `<link>` חדשה בתבנית, או כתיבת `Cache-Control` | `BY-STACK/browser-policy.md` B4–B5 + `bugbot-rules/stale-asset-cache-policy.md` |
+| פונקציה שמחזירה מחרוזת לתצוגה — גודל, תאריך, אייקון, שם שפה | `RECURRING-PATTERNS.md` R6: ‏`grep` על שם התופעה לפני שכותבים. יש עותק — מאחדים |
+| `except TypeError` / `except AttributeError` סביב קריאה ל-SDK חיצוני | `bugbot-rules/dead-parameter-external-api.md` |
+| route ב-`GET` שגופו מוחק, מאפס או מריץ פעולה בלתי הפיכה | `bugbot-rules/auth-before-irreversible-action.md` §5 |
+| `errorhandler(Exception)` גורף, או מגבלת קצב שחלה על `/` ועל `/health` | `bugbot-rules/blanket-policy-silent-block.md` §7–8 |
 
 **המימוש הנכון של K11 בריפו הזה — להעתיק ממנו, לא רק להיזהר:** `mcp_server/backend.py:save_file` מחזיר `{"ok": False, "error": "save_failed"}` **כשמסלול השמירה מחזיר false** (חריגת מסד עולה הלאה ואינה מומרת לתשובת כשל), ובהצלחה קורא את המסמך מחדש מהמסד במקום להחזיר את מה שביקשנו לכתוב. הלקח הוא *קרא את המצב, אל תהדהד את הבקשה* — ולא שזה אטומי: הקריאה החוזרת היא לפי שם הקובץ ולא לפי המזהה שנכתב, ומספר הגרסה נבחר ב-read-then-write, ולכן שתי שמירות מקבילות לאותו שם יכולות להחזיר זו את הגרסה של זו. זה עצמו מופע של U1 בתוך הקוד שמשמש כדוגמה ל-K11. ולכן אין כאן שורת טריגר על "כלי MCP שכותבים": K11 כבר תמיד-דלוק ב-§1, והאתר הזה כבר עומד בו — שורה שמצביעה על כלל שחל תמיד, באתר שכבר תקין, מלמדת לדלג על הטבלה.
 
@@ -147,6 +164,10 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 
 | כשאתה נוגע ב... | קרא |
 |---|---|
+| `date.today()` / `datetime.now()` / השוואת תאריך מול קלט משתמש | `RECURRING-PATTERNS.md` R7 |
+| baseline, חלון השוואה, או מדד שמפעיל פעולה אוטומטית | `RECURRING-PATTERNS.md` R9 + `BY-STACK/observability.md` |
+| רשימת ערכים או קבוע שמופיע גם ב-Python וגם ב-SQL / JS | `RECURRING-PATTERNS.md` R6 — טסט שמשווה, לא הערה שמבקשת לזכור |
+| `/health` או כל endpoint שנדגם בתדירות גבוהה | `bugbot-rules/work-disproportionate-to-answer.md` §6 |
 | migrations / שאילתות / pagination | `BY-STACK/postgres.md` |
 | webhook Upay→Summit, חיוב פר-קמפיין | `BY-STACK/webhooks.md` + `CORE-PATTERNS.md` U1 (כסף = strict) |
 | Meta Marketing API / OpenAI | `BY-STACK/external-sdk.md` |
@@ -203,12 +224,13 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
   העדיפות (הדפוסים שחזרו בפועל); 6 מכוסה חלקית על ידי הסורקים שלו ממילא.
 - **qodo** תומך ב-best practices file ברמת ריפו (`best_practices.md`) —
   אפשר במקום ההדבקה בממשק.
-- **הבלוק הוא הליבה הכללית, לא כל 38 הכללים.** הוא מכסה את הדפוסים
+- **הבלוק הוא הליבה הכללית, לא כל הכללים שבתיקייה.** הוא מכסה את הדפוסים
   שחלים על כל stack (סעיפים 1–7) ואת ה-CRITICAL של אבטחה שכבר כלולים בסעיף 6.
   כללי stack מהתיקייה — `postgres-null-cas`, `react-stale-state-on-prop`,
   `cron-terminal-state`, `pagination-tiebreaker`, וכו' — **לא** נכנסים
-  לכאן; הם מוזרקים רק בריפו עם ה-stack התואם, לפי המיפוי ב-§2. הזרקת כל
-  38 לכל ריוויו מדללת את תשומת הלב לכל כלל בודד — לכן הבלוק מכוון ולא ממצה.
+  לכאן; הם מוזרקים רק בריפו עם ה-stack התואם, לפי המיפוי ב-§2. הזרקת
+  **כולם** לכל ריוויו מדללת את תשומת הלב לכל כלל בודד — לכן הבלוק מכוון
+  ולא ממצה. (בכוונה בלי מספר: הוא מתיישן בכל כלל שנוסף, וזה בדיוק R6.)
 - כלל שמתווסף לריפו הזה → לעדכן גם את הבלוק הזה, אם הוא מספיק כללי.
 
 ---
