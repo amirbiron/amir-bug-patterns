@@ -132,6 +132,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | `LOCK_FAIL_OPEN` — מריץ polling בלי מנעול ה-singleton, כלומר שני מריצים במקום אחד | `CORE-PATTERNS.md` U1 |
 | העלאת שרת HTTP או שינוי כתובת האזנה (`0.0.0.0`) | `CRITICAL-PATTERNS.md` K5 + `bugbot-rules/network-exposed-without-auth.md` |
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
+| כותב ב-docstring, בהערה או בעמוד תיעוד **ערך או התנהגות שמוגדרים במקום אחר** — ברירת מחדל, קבוע עם המספר שלו, ספירה, קוד שגיאה, מה רכיב אחר עושה — או **משנה** ערך או התנהגות כאלה | `bugbot-rules/prose-restates-code-fact.md` — עותק של עובדה בתוך פרוזה |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
 | מופע של ספרייה חיצונית שנבנה **ברמת המודול** ומשותף לחוטים — ובמיוחד כשהבנייה כוללת קריאות תצורה (`use`, `enable`, `disable`, `register`, `add_*`, `before`) | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` — מתי אובייקט נחשב מוכן, וכשהתצורה קורית בתוכו. ואם אותו מופע גם נבנה מ-`os.environ` או מפעיל משהו — ראה גם את השורה על ברמה העליונה של מודול |

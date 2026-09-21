@@ -31,3 +31,8 @@ MEDIUM — בפרויקטים עם `fail_on_warning` זה מפיל את build ה
 
 CodeBot PR #3232: `docs/conversation-handlers.rst` עם `:lines: 697-792`
 נשבר כשהפונקציה זזה והפיל את RTD; הוחלף ב-`:pyobject:`.
+
+## ראה גם
+
+- `prose-restates-code-fact.md` — ההכללה: כל ערך שהקוד מגדיר במקום אחר ומנוסח מחדש בתיעוד, לא רק מספר שורה.
+- `duplicate-rule-second-copy.md` / `RECURRING-PATTERNS.md` R6 — המסגור הרחב.
