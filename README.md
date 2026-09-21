@@ -189,6 +189,7 @@ amir-bug-patterns/
 │   ├── mongo-index-and-operator-traps.md
 │   ├── stale-asset-cache-policy.md
 │   ├── dead-parameter-external-api.md
+│   ├── host-metric-in-container.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL

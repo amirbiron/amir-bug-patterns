@@ -197,6 +197,7 @@ filter (DB `WHERE`, regex, JS `.filter()`) או צר מדי (מוציא מקרי
 - **CodeBot (PR #3365):** תוסף מארקדאון משוכפל תו-בתו בין `md_preview` ל-`live-preview.js` — כשהתוסף הפיל את התצוגה, ה-Live Preview היה שבור בדיוק באותה צורה.
 - **CodeBot (PR #3237):** `before_send` של Sentry בשני עותקים שהתחילו להתפצל — וכך אירועי transactions עקפו ניקוי סודות ש"כבר תוקן".
 - **Campaign AI (`8ceaf0b`):** רשימת סוגי ההתראות שוכפלה בין Python ל-SQL → המונה בדשבורד סטה מהאכיפה בפועל.
+- **CodeBot (PR #3429):** שורת הקיבולת של שירות ה-MCP חישבה `min(32, cpu_count + 4)` **בנוסחה משלה**, בנפרד מהמאגר שהיא מתארת — כלומר הייתה מדווחת מספר שגוי ברגע שרוחב המאגר משתנה, וזה בדיוק מה שקרה כשהמאגר נגזר מחדש ממכסת הזיכרון. התיקון: לקרוא את הרוחב מהאובייקט שהותקן (`_installed_width`) במקום לחשב אותו שוב.
 
 ### כלל לזיהוי
 1. לפני כתיבת פונקציה שמחשבת, מפרמטת, מסננת או ממפה משהו — `grep` על **שם התופעה**, לא על שם הפונקציה: `format_file_size`, `bulk-delete`, `lang_icon`, `humanize`. יש עותק → מאחדים.
@@ -209,6 +210,7 @@ filter (DB `WHERE`, regex, JS `.filter()`) או צר מדי (מוציא מקרי
 ### ראה גם
 - `bugbot-rules/duplicate-rule-second-copy.md`
 - `docs/source-projects/codebot-history-scan-patterns.md` P23
+- `bugbot-rules/host-metric-in-container.md` — הצד השני של PR #3429: הדפוס שיצר שם את העותק השני
 
 ---
 

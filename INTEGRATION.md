@@ -136,6 +136,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
 | מופע של ספרייה חיצונית שנבנה **ברמת המודול** ומשותף לחוטים — ובמיוחד כשהבנייה כוללת קריאות תצורה (`use`, `enable`, `disable`, `register`, `add_*`, `before`) | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` — מתי אובייקט נחשב מוכן, וכשהתצורה קורית בתוכו. ואם אותו מופע גם נבנה מ-`os.environ` או מפעיל משהו — ראה גם את השורה על ברמה העליונה של מודול |
 | `getattr(x, "y", None)` או `except` שאחריו **מסלול חלופי בגלל כשל** — לא ערך ברירת מחדל, ולא זיהוי יכולת סטטי | `bugbot-rules/silent-fallback-to-worse-path.md` |
+| עבודה **כבדת-זיכרון** בתוך handler או ג'וב — פרסור מסמך שלם, בניית ZIP, עיבוד תמונה, אמבדינג — או קביעת רוחב של מאגר או מספר עובדים: `max_workers`, `--workers`, `WEB_CONCURRENCY`, `Semaphore(n)`, `os.cpu_count()`, `os.process_cpu_count()` | `bugbot-rules/host-metric-in-container.md` — ממה גוזרים כמה עותקים רצים במקביל |
 | CSP, כותרות תגובה, או עמוד שנגיש בלי התחברות | `BY-STACK/browser-policy.md` |
 | `create_index` — ובמיוחד `partialFilterExpression` או `sparse=True` | `BY-STACK/mongodb.md` דפוס 1 + `bugbot-rules/mongo-index-and-operator-traps.md` — אופרטורים שהפילטר החלקי לא מקבל, ואתחול שבולע את השגיאה |
 | צינור `aggregate` — `$project`, `$sort`, `$group` — או `find_one` בתוך לולאה | `RECURRING-PATTERNS.md` R8 + `bugbot-rules/work-disproportionate-to-answer.md` |
