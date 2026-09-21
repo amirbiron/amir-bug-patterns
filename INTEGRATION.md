@@ -131,6 +131,8 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | גייטינג אדמין — רשימת היתר, התחזות (`/admin/impersonate/*`), או דגל שמרחיב הרשאה בהיעדר קונפיג (`CHATOPS_ALLOW_ALL_IF_NO_ADMINS`) | `CRITICAL-PATTERNS.md` K3 + `bugbot-rules/privilege-escalation-unverified.md`; לדגל עצמו — K12 סעיף 3 (fail-closed, בלי default שקט) |
 | `LOCK_FAIL_OPEN` — מריץ polling בלי מנעול ה-singleton, כלומר שני מריצים במקום אחד | `CORE-PATTERNS.md` U1 |
 | העלאת שרת HTTP או שינוי כתובת האזנה (`0.0.0.0`) | `CRITICAL-PATTERNS.md` K5 + `bugbot-rules/network-exposed-without-auth.md` |
+| מידלוור ASGI/Starlette עם `await receive()` בתוך `__call__`, ‏`await request.body()` ב-`BaseHTTPMiddleware`, או `app.add_middleware(` של מידלוור שקורא, מפענח או מפרסר גוף בקשה | `bugbot-rules/body-read-outside-cheap-reject.md` — מי דוחה בזול לפניו, והאם הוא באמת לפניו |
+| לולאה או שרשרת שמחכה לצד השני — `await receive()`, `reader.read()`, שרשרת דגימה (`setTimeout` / `setInterval` עם `fetch`) — ובמיוחד כשמשהו מוחזק בזמן ההמתנה: דגל `inFlight`, חיץ, נעילה | `bugbot-rules/wait-without-own-deadline.md` — מי מגביל את ההמתנה הזו |
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
 | כותב ב-docstring, בהערה או בעמוד תיעוד **ערך או התנהגות שמוגדרים במקום אחר** — ברירת מחדל, קבוע עם המספר שלו, ספירה, קוד שגיאה, מה רכיב אחר עושה — או **משנה** ערך או התנהגות כאלה | `bugbot-rules/prose-restates-code-fact.md` — עותק של עובדה בתוך פרוזה |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
@@ -194,6 +196,15 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | sync tokens / webhooks של Calendar/Gmail | `BY-STACK/webhooks.md` + `CORE-PATTERNS.md` U1 |
 | סטטוסים ו-activity log | `BY-STACK/state-machine.md` |
 | SQLAlchemy async | `BY-STACK/async-orm.md` |
+
+### Markdown-Docs (FastAPI + SQLAlchemy + שרת MCP)
+
+**הטבלה הזו חדשה וחלקית.** ‏Markdown-Docs הוא פרויקט מקור ותיק כאן — ארבעה מתוך חמשת מופעי T1 הגיעו ממנו — ובכל זאת לא הייתה לו שורת טריגר אחת. שתי השורות שלמטה נוספו לפי ראיה שנמדדה; שאר הדפוסים שלו עדיין מגיעים רק דרך הבלוק האוניברסלי, וזה פער פתוח.
+
+| כשאתה נוגע ב... | קרא |
+|---|---|
+| מידלוור ASGI/Starlette עם `await receive()` בתוך `__call__`, ‏`await request.body()` ב-`BaseHTTPMiddleware`, או `app.add_middleware(` של מידלוור שקורא, מפענח או מפרסר גוף בקשה | `bugbot-rules/body-read-outside-cheap-reject.md` — מי דוחה בזול לפניו, והאם הוא באמת לפניו. ‏**הנקודה הספציפית כאן:** ‏`OriginGuard` מכסה את `/api` בלבד, ו-`/mcp` אינו מתחיל ב-`/api` |
+| לולאה או שרשרת שמחכה לצד השני — `await receive()`, `reader.read()`, שרשרת דגימה (`setTimeout` / `setInterval` עם `fetch`) — ובמיוחד כשמשהו מוחזק בזמן ההמתנה: דגל `inFlight`, חיץ, נעילה | `bugbot-rules/wait-without-own-deadline.md` — מי מגביל את ההמתנה הזו |
 
 ### פרויקטים קטנים (TaskFlow, myAgent, APIWatchBot...)
 מספיק הבלוק האוניברסלי: K11 + testing + הכלל הרלוונטי היחיד לפי ה-stack

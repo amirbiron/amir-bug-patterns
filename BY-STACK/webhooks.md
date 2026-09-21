@@ -199,6 +199,9 @@ limiter.acquire(channel)
 ### Commits אמיתיים
 - EmailFlow `401f179`, `cc7e81a`.
 
+### ראה גם
+- `bugbot-rules/body-read-outside-cheap-reject.md` — אותו עיקרון (**השער לפני ההוצאה**) בחתימה אחרת: שכבה שקוראת גוף בקשה שהותקנה מחוץ לשכבה שדוחה מהכותרות. שם הבדיקה הזולה היא הכותרות; כאן דווקא הבדיקה היא היקרה (סיווג ב-LLM), ולכן אלה שני דפוסים ולא אחד.
+
 ---
 
 ## דפוס 7 — race של beat scheduler + `delay()` (CORE U1 specialization)
