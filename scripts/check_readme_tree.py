@@ -20,6 +20,18 @@ block = re.search(r"## מבנה הריפו.*?```text\n(.*?)```", readme, re.S)
 if not block:
     sys.exit("לא נמצא בלוק העץ תחת '## מבנה הריפו' ב-README.md — הבדיקה לא יכולה לרוץ.")
 
+def in_scope(path: str) -> bool:
+    """נתיבי נקודה — ``.github/``, ``.claude/`` — הם תשתית ולא חלק מספריית
+    הדפוסים, ולכן הם מחוץ להיקף של העץ.
+
+    **והכלל חל על שני הצדדים, וזה העיקר.** אילו הוא היה מסנן את
+    ``git ls-files`` בלבד, שורה בעץ שמתעדת קובץ כזה הייתה נופלת בצד השני
+    ומדווחת כ"אין מאחוריו קובץ" — כלומר הבדיקה הייתה שולחת את הקורא לחפש
+    מחיקה שלא קרתה. שני הצדדים חייבים למדוד את אותו היקף.
+    """
+    return not path.startswith(".")
+
+
 listed, dirs = set(), []                      # dirs: (עומק ההזחה, שם התיקייה)
 for line in block.group(1).splitlines()[1:]:  # השורה הראשונה היא שורש הריפו, לא נתיב
     m = re.match(r"^([│ ]*)[├└]── (\S+)", line)
@@ -31,11 +43,13 @@ for line in block.group(1).splitlines()[1:]:  # השורה הראשונה היא
     if name.endswith("/"):
         dirs.append((depth, name))            # גם 'docs/source-projects/' — שתי רמות בשורה אחת
     else:
-        listed.add("".join(d for _, d in dirs) + name)
+        path = "".join(d for _, d in dirs) + name
+        if in_scope(path):
+            listed.add(path)
 
 out = subprocess.run(["git", "-C", str(ROOT), "ls-files"],
                      capture_output=True, text=True, check=True).stdout
-tracked = {p for p in out.splitlines() if p and not p.startswith(".")}
+tracked = {p for p in out.splitlines() if p and in_scope(p)}
 
 problems = [f"קיים בריפו ואינו בעץ: {p} — הוסף שורה לעץ ב-README.md תחת {Path(p).parent}/"
             for p in sorted(tracked - listed)]
