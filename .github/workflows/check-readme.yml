@@ -1,0 +1,25 @@
+name: check-readme-tree
+
+# בלי ה-workflow הזה הסקריפט הוא עוד תיאור שאיש לא מריץ, ושני החלקים הם
+# שינוי אחד. העץ ב-README הוא עותק של עובדה שהבעלים שלה הוא התיקייה — R6 —
+# וזה מה שהופך סחיפה מתקווה לכשל CI.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    # ‏ubuntu-latest מצביע היום על Ubuntu 24.04, ובתמונה הזו Python 3.12.3
+    # מותקן מראש ו-python3 נמצא ב-PATH (החבילה python-is-python3). לכן אין
+    # כאן צעד setup-python — הוא היה מוסיף דקה לכל ריצה בלי תמורה.
+    # מקור: actions/runner-images, README (טבלת התמונות) ו-
+    # images/ubuntu/Ubuntu2404-Readme.md (Language and Runtime).
+    runs-on: ubuntu-latest
+    steps:
+      # ‏v7 הוא ה-major העדכני: מה שמופיע בסעיף Usage של ה-README הרשמי
+      # (`uses: actions/checkout@v7`), והשחרור האחרון הוא v7.0.1.
+      # מקור: github.com/actions/checkout — README ו-releases/latest.
+      - uses: actions/checkout@v7
+      - run: python3 scripts/check_readme_tree.py

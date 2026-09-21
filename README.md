@@ -189,6 +189,7 @@ amir-bug-patterns/
 │   ├── mongo-index-and-operator-traps.md
 │   ├── stale-asset-cache-policy.md
 │   ├── dead-parameter-external-api.md
+│   ├── derived-field-added-to-one-writer.md
 │   ├── host-metric-in-container.md
 │   ├── prose-restates-code-fact.md
 │   ├── body-read-outside-cheap-reject.md
@@ -205,6 +206,8 @@ amir-bug-patterns/
 │   ├── like-wildcard-injection.md           # CRITICAL
 │   ├── tenant-row-scoping.md                # CRITICAL
 │   └── path-prefix-not-boundary.md          # CRITICAL
+├── scripts/                     # בדיקות על הריפו עצמו
+│   └── check_readme_tree.py     # משווה את העץ שלמטה לקבצים שבמעקב, בשני הכיוונים
 └── docs/source-projects/        # מסמכי post-mortem מקוריים (reference)
     ├── noa-leads-patterns.md
     ├── emailflow-patterns.md
