@@ -110,7 +110,7 @@ lead = await create_lead(LeadCreate(full_name=..., phone=...))  # ה-caller הש
 לכל Pydantic `BaseModel` עם default:
 1. מצא את כל ה-callers שיוצרים instances **בלי** השדה.
 2. לכל caller, ודא שה-default תואם לכוונה של המקור (default של WhatsApp UI ≠ default של email-intake).
-3. לשדות enum nullable ב-DB אבל non-nullable ב-Pydantic: דווח על אי-התאמת schema.
+3. לשדות enum nullable ב-DB אבל non-nullable ב-Pydantic: דווח על אי-התאמת schema. וכשהעמודה **הורפתה** ל-nullable (מיגרציה, או `Mapped[X]` שהופך ל-`Mapped[X | None]`), הסכמה היא רק אחד מהצרכנים שצריך לבדוק — הבדיקה בצורתה הכללית, של כל הקוראים, ב-`bugbot-rules/relaxed-column-unaudited-consumers.md`.
 4. ל-enum ממקור חיצוני (AI, webhook): שקול אם דחיית ערכים לא מוכרים = אובדן נתונים. לפעמים `str | None` + ולידציה idempotent ב-caller עדיף מ-enum strict.
 5. Walrus + truthy על env: השתמש ב-`is not None` מפורש ו-`.strip()` כדי להבחין `""` מ-`None`.
 

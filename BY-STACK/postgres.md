@@ -3,7 +3,7 @@
 ## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
 - ✅ PostgreSQL (רוב הקובץ הזה ספציפי ל-PG)
 - ✅ כל DB של SQL עם queries של `LIKE` על קלט משתמש (K8 חל באופן רחב)
-- ✅ Alembic migrations (דפוס 5 — model drift)
+- ✅ Alembic migrations (דפוס 5 — model drift; דפוס 11 — עמודה שהורפתה ל-nullable)
 - ✅ MySQL — קרא דפוס 5 (MySQL לא תומך ב-`ADD COLUMN IF NOT EXISTS`)
 - ✅ דפדוף דרך `LIMIT` / `OFFSET` או cursor
 - ⏭ דלג אם: NoSQL בלבד (MongoDB יש לה gotchas שונים — ראה footnote בדפוס 8)
@@ -219,6 +219,35 @@ if notes:
 
 ---
 
+## דפוס 11 — עמודה שהורפתה ל-nullable, וצרכנים שנכתבו כשהערך היה מובטח
+
+```python
+# מיגרציה
+op.alter_column("bookings", "lead_id", existing_type=sa.dialects.postgresql.UUID(as_uuid=True), nullable=True)
+# מודל
+lead_id: Mapped[UUID | None] = mapped_column(...)
+
+# צרכן ישן, בקובץ שה-PR לא פתח
+for row in affected_rows:
+    await log_activity(db, lead_id=row.lead_id, ...)  # ❌ activities.lead_id הוא NOT NULL
+```
+
+הקוד החדש, שבשבילו הורפתה העמודה, מטפל ב-`None`. הצרכנים הישנים לא נבדקו, והם מעבירים אותו הלאה עד שהוא נוחת על אילוץ `NOT NULL` בטבלה **אחרת**, על מפתח במילון, או על סכמה שדורשת ערך — ובדרך כלל בג'וב או ב-webhook, שם אין משתמש שרואה שגיאה.
+
+### כלל לזיהוי
+1. `op.alter_column(..., nullable=True)` על עמודה קיימת, או `Mapped[X]` שהופך ל-`Mapped[X | None]`: `grep` על שם העמודה בכל הריפו (כולל `jobs/`, `scripts/` ו-SQL גולמי), מול רשימת הקבצים ב-diff. קובץ שקורא את העמודה ולא נפתח — מועמד.
+2. לכל קורא: לאן הערך הולך — פרמטר `X` ולא `X | None`, עמודת `NOT NULL` בטבלה אחרת, סכמת תשובה עם שדה חובה, מפתח במילון, `str()`.
+3. צרכני רקע (cron, webhook, worker) — ראשונים.
+4. טיפול ב-`None` כענף נפרד לצד המסלול הקיים ← מסלול אחד, ורק תופעות הלוואי תחת `if col is not None`.
+
+type checker לא יתפוס את זה כשהערך נקרא דרך `row.col` של `select(Model.col, ...)` — שם הטיפוס הוא `Any`. הכלל המלא: `bugbot-rules/relaxed-column-unaudited-consumers.md`.
+
+### Commits אמיתיים
+- Noa `4a11667` ← `dc24922` — ‏`leads.service_category` (מיגרציה 0011), ארבעה צרכנים.
+- Noa `7a224e5` ← `8918a49` (amirbiron/Noa_Leads#62) — ‏`bookings.lead_id` (מיגרציה 0033), ארבעה צרכנים, שלושה מהם ברקע.
+
+---
+
 ## Footnote — DBs אחרים
 
 - **MySQL:** אין `ADD COLUMN IF NOT EXISTS`. CHECK constraints לא נאכפים לפני 8.0.16. `utf8` אינו UTF-8 אמיתי (השתמש ב-`utf8mb4`). פרודקשן דורש SSL config מפורש (routine `230e0c1`).
@@ -232,4 +261,4 @@ if notes:
 - **CORE U6** — Migration drift (מקופל פנימה כאן)
 - **R2** — דפדוף עם tiebreaker (מקופל פנימה כאן)
 - **CRITICAL K8** — LIKE injection
-- **`bugbot-rules/postgres-null-cas.md`**, **`pagination-tiebreaker.md`**, **`migration-model-drift.md`**, **`like-wildcard-injection.md`**
+- **`bugbot-rules/postgres-null-cas.md`**, **`pagination-tiebreaker.md`**, **`migration-model-drift.md`**, **`like-wildcard-injection.md`**, **`relaxed-column-unaudited-consumers.md`**

@@ -118,7 +118,8 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | כשאתה נוגע ב... | קרא |
 |---|---|
 | שמירה/מחיקה שמסתיימת בהודעת ✅ למשתמש | `CRITICAL-PATTERNS.md` K11 |
-| קאש / invalidation | `bugbot-rules/return-value-failure-unchecked.md` §4 |
+| קאש / invalidation | `bugbot-rules/return-value-failure-unchecked.md` §4 + `bugbot-rules/write-from-cached-read.md` — ביטול שלא נבדק, ומי כותב על סמך מה שהקאש זוכר |
+| העתקת שדה ממסמך שנקרא לתוך מסמך שנכתב (`existing.get(`, `prev.get(`, `**prev`), או מספר גרסה שנגזר מקריאה | `bugbot-rules/write-from-cached-read.md` — מאיפה הגיע המסמך שקראת |
 | דגל שמצהיר "מטא-דאטה בלבד" (`npm install --package-lock-only`, `django-admin migrate --fake`), או רשומה שמתעדכנת בנפרד מהעבודה שהיא מתארת | `bugbot-rules/state-record-without-state-change.md` |
 | callbacks / handlers מקביליים, מזהים מבוססי-זמן | `CORE-PATTERNS.md` U1 |
 | `find_one_and_update` / `upsert` / תפיסת ג'וב | `CORE-PATTERNS.md` U1 + `bugbot-rules/race-toctou.md` |
@@ -142,6 +143,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | עבודה **כבדת-זיכרון** בתוך handler או ג'וב — פרסור מסמך שלם, בניית ZIP, עיבוד תמונה, אמבדינג — או קביעת רוחב של מאגר או מספר עובדים: `max_workers`, `--workers`, `WEB_CONCURRENCY`, `Semaphore(n)`, `os.cpu_count()`, `os.process_cpu_count()` | `bugbot-rules/host-metric-in-container.md` — ממה גוזרים כמה עותקים רצים במקביל |
 | CSP, כותרות תגובה, או עמוד שנגיש בלי התחברות | `BY-STACK/browser-policy.md` |
 | `create_index` — ובמיוחד `partialFilterExpression` או `sparse=True` | `BY-STACK/mongodb.md` דפוס 1 + `bugbot-rules/mongo-index-and-operator-traps.md` — אופרטורים שהפילטר החלקי לא מקבל, ואתחול שבולע את השגיאה |
+| `expireAfterSeconds` / `expire_after_seconds` / `unique=True` בהגדרת אינדקס, ‏`drop_index` / `drop_indexes`, ‏`create_index` בקובץ תחת `scripts/` או בפקודת אדמין, דיף שמוחק שורה מרשימת אינדקסים — או כתיבה של שדה תפוגה (`expires_at`, `expire_at`, `deleted_expires_at`) | `BY-STACK/mongodb.md` דפוס 9 + `bugbot-rules/mongo-index-and-operator-traps.md` §10 — מי מצהיר על האינדקס, ומי כותב |
 | צינור `aggregate` — `$project`, `$sort`, `$group` — או `find_one` בתוך לולאה | `RECURRING-PATTERNS.md` R8 + `bugbot-rules/work-disproportionate-to-answer.md` |
 | `startswith` / `endswith` על נתיב, URL או דומיין | `CRITICAL-PATTERNS.md` K16 |
 | `replace(tzinfo=` · `datetime.now()` **בלי** אזור זמן · כל `date.today()` · הצגת תאריך למשתמש | `RECURRING-PATTERNS.md` R7 |
@@ -196,6 +198,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | sync tokens / webhooks של Calendar/Gmail | `BY-STACK/webhooks.md` + `CORE-PATTERNS.md` U1 |
 | סטטוסים ו-activity log | `BY-STACK/state-machine.md` |
 | SQLAlchemy async | `BY-STACK/async-orm.md` |
+| `op.alter_column(..., nullable=True)` על עמודה קיימת, או `Mapped[X]` שהופך ל-`Mapped[X \| None]` / `nullable=False` שהופך ל-`nullable=True` באותה עמודה | `bugbot-rules/relaxed-column-unaudited-consumers.md` — מי קורא את העמודה, ולאן הוא מעביר את הערך |
 
 ### Markdown-Docs (FastAPI + SQLAlchemy + שרת MCP)
 

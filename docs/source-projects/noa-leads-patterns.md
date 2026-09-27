@@ -156,7 +156,7 @@ CLAUDE.md כלל 13 כבר מנסח את זה — אבל החזרה כל-כך מ
 - `3203410` (#1) — `LeadCreate.preferred_contact` ברירת מחדל WHATSAPP, ליד מ-EMAIL נשמר עם WHATSAPP. הקוד לא העביר במפורש → default נכנס בלי קריאה ידנית.
 - `7001892` — `LeadDraft.service_category: ServiceCategory` (StrEnum) דחה כל ערך לא ידוע → איבוד full_name + phone על שדה אחד.
 - `f6293e3` — `LeadDraft.full_name: str` חובה דחה null שה-AI החזיר → cron retry → manual_review מיותר.
-- `dc24922` (#1) — `TodayActionItem.service_category: str` חובה, אבל ה-Lead nullable → Pydantic validation נופל ב-/dashboard.
+- `dc24922` (#1) — `TodayActionItem.service_category: str` חובה, אבל ה-Lead nullable → Pydantic validation נופל ב-/dashboard. (זה הגל הראשון של Pattern 15.)
 - `236b072` (#1) — walrus `if override := env.get(...)` היה False על `""` ולא רק None.
 
 **סיבה שורשית:** Pydantic schemas הם חוזים נוקשים, אבל ה-callers מתייחסים אליהם כ-"data class" עם defaults הגיוניים. כשה-default לא תואם לכוונה (preferred_contact=WHATSAPP לליד EMAIL), הבאג שקט — אין הודעת שגיאה.
@@ -587,6 +587,39 @@ Wrong-source mapping (וריאציה 2): חפש Model(...)/dict assignments
 
 ---
 
+## P3 — Pattern 15: עמודה שהורפתה ל-nullable, וצרכנים שנכתבו כשהערך היה מובטח
+
+**תדירות:** 2 גלים — שני קומיטי תיקון, שמונה צרכנים — בהפרש של ארבעה חודשים. severity Medium-High (ג'וב לילי שנופל כולו, סנכרון שנתקע).
+
+**דוגמאות:**
+- **גל ראשון — `leads.service_category` (מאי 2026).** ‏`4a11667` ("Wave A: F-04") הרפה את העמודה במיגרציה 0011 וב-`Mapped[str | None]`. 19 דקות אחריו, `dc24922` תיקן ארבעה צרכנים שנכתבו כשהערך היה מובטח, שנתפסו על ידי bugbot: שתי סכמות תשובה של `/dashboard` עם `str` חובה (`TodayActionItem`, ‏`ProfitableServiceInsight`); ‏`notify_new_lead`, שהעביר `None` ל-`escape_telegram_html`; ו-`LeadUpdate`, שעדיין דחה `null` מפורש (`reject_explicit_null`) — הכיוון ההפוך: אי אפשר היה לאפס את הקטגוריה דרך ה-API. והגנה חמישית חיה בקוד היום: `create_lead` מעביר `str(payload.service_category)` רק כשיש ערך, עם הערה ש-`str(None)` היה הופך ל-`"None"`.
+- **גל שני — `bookings.lead_id` (ספטמבר 2026, amirbiron/Noa_Leads#62).** ‏`7a224e5` הרפה את העמודה במיגרציה 0033 בשביל קישור פתוח לקביעת פגישה. ביקורת הצרכנים באותו קומיט טיפלה בשלושה מקומות, לפי הודעת הקומיט: סיננה את `None` מ-`affected_lead_ids`, בדקה ש-`post_meeting_tasks` מדלג מעצמו (inner join ל-`Lead`), וכתבה למסלולי הסנכרון ענף נפרד לשורה בלי ליד. ‏`8918a49` תיקן ארבעה שפוספסו ונמצאו בביקורת חוזרת, לפני merge:
+  1. `_expire_stale_bookings`, שלב 4 (cron לילי) — `log_activity(lead_id=row.lead_id)` נפל על הפרת `NOT NULL` ב-`activities.lead_id`, וכל הריצה, שהיא טרנזקציה אחת, התגלגלה אחורה: אף פגישה לא סומנה ואף ליד לא שוחרר, בכל לילה מחדש. פגישה פתוחה "פגה" ברגע שמועדה עובר — זה מחזור החיים הרגיל שלה, לא מקרה קצה.
+  2. `POST /bookings/{id}/cancel` על שורה בלי ליד — 500, מאותו `log_activity`. אחרי התיקון 404.
+  3. `_apply_cancellation` (webhook של Google) — ענף נפרד לשורה בלי ליד החזיר `"applied"`, שאינו מפתח ב-`stats`. ה-`KeyError` נתפס ב-`except` של הלולאה, נרשם בלוג ונספר כשגיאה, וה-sync token לא התקדם.
+  4. `_apply_reschedule` — באותו ענף נפרד חסר ה-`except IntegrityError` שיש במסלול הליד, כך שהזזה על מועד תפוס הייתה נכשלת בכל webhook, והסנכרון נתקע לתמיד.
+
+  לכל אחד מהארבעה טסט ב-`backend/tests/test_open_booking.py`; לפי הודעת הקומיט, כל טסט הורץ על הקוד שלפני התיקון ונפל מהסיבה הנכונה.
+
+**סיבה שורשית:** מיגרציה מרחיבה את תחום הערכים של עמודה קיימת כדי לאפשר מקרה חדש, והקוד החדש מטפל בו. הצרכנים הקיימים, שנכתבו כשהערך היה מובטח, לא נבדקים — ועל שורה מהסוג החדש הם מעבירים את ה-`None` הלאה, עד שהוא נוחת על אילוץ בטבלה אחרת, על מפתח במילון או על חוזה שלא ציפה לו. הכשל לא במקום שבו השינוי נעשה ולא בקוד החדש, אלא בקוד ישן שאיש לא פתח. ומופעים 3–4 הם אותו דפוס בגרסה השנייה שלו: הטיפול ב-`None` נכתב כענף נפרד לצד המסלול הקיים — עותק שני של הלוגיקה, שנסחף מהרגע הראשון.
+
+**למה זה לא נתפס:**
+- **ביקורת הצרכנים נעשתה — מהזיכרון.** בגל השני היא תיקנה את השימוש הראשון באותן שורות (`affected_lead_ids`, שורה 297 ב-`7a224e5`) ופספסה את השני באותה פונקציה, 61 שורות למטה. ‏`grep` מכני על `lead_id` היה מוצא את כולם.
+- **ל-`None` אין שם בקוד.** ערך enum חדש אפשר לחפש; "המקרה שבו העמודה ריקה" לא מופיע בשום שורה של הצרכן.
+- **הכשל נוחת במקום אחר** — על אילוץ של `activities` ולא של `bookings`, ועל המילון `stats` ולא על העמודה.
+- **וגם type checker לא היה עוזר כאן.** אין אחד מוגדר בפרויקט, אבל גם pyright, שהורץ על הקוד שלפני התיקונים, לא תפס אף אחד מארבעת הצרכנים של הגל השני: שני ה-`log_activity` קיבלו את `lead_id` משורה של `select(Booking.lead_id, ...)`, ו-SQLAlchemy מקליד שדות של שורה כזו כ-`Any`. בגל הראשון הוא סימן אחד מארבעה — השורה ב-`notify_new_lead`, שבה `.get` מקבל מפתח מסוג `str | None` — ובנוסף סימן שלוש קריאות ל-`default_duration_minutes(service_category: str)` שבטוחות בזמן ריצה, כי הפונקציה רק עושה `dict.get`.
+
+**Custom rule prompt:** ראה `bugbot-rules/relaxed-column-unaudited-consumers.md` — ארבעה סעיפי דיווח, הצורה הנכונה, ודיוק הטריגר שנמדד על כל ההיסטוריה.
+
+**False positives:**
+- ⚠️ צרכן שמסנן לפי ערך קונקרטי של העמודה (`WHERE lead_id = :id`, או inner join לטבלת האב).
+- ⚠️ עמודה שנולדה nullable — אין אירוע הרפיה.
+- ⚠️ מיגרציה שמהדקת (`nullable=False`).
+
+**Mode מומלץ:** Warning, על `backend/alembic/versions/` ו-`backend/app/models/`. הטריגר מדויק — בכל ההיסטוריה שתי הרפיות, ושתיהן היו באגים — אבל ההחלטה לכל צרכן דורשת קריאה.
+
+---
+
 ## דירוג סופי
 
 | Priority | Pattern | תדירות | Severity range | Mode מומלץ |
@@ -605,6 +638,7 @@ Wrong-source mapping (וריאציה 2): חפש Model(...)/dict assignments
 | **P3** | 12. React state stale על prop / localStorage key | 2 | Medium-High | Warning |
 | **P3** | 13. Terminal-state leak (סגורים בקריאות אקטיביות) | 2 | Medium-High | Strict (cron) / Warning (UI) |
 | **P3** | 14. React + משאב async חיצוני (mic / camera / socket) | 1 | Medium-High | Strict |
+| **P3** | 15. עמודה שהורפתה ל-nullable, וצרכנים ישנים שלא נבדקו | 2 | Medium-High | Warning |
 
 ## הערה כללית על false-positive tuning
 
