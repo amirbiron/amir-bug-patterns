@@ -195,6 +195,7 @@ amir-bug-patterns/
 │   ├── body-read-outside-cheap-reject.md
 │   ├── wait-without-own-deadline.md
 │   ├── write-from-cached-read.md
+│   ├── relaxed-column-unaudited-consumers.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL

@@ -198,6 +198,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | sync tokens / webhooks של Calendar/Gmail | `BY-STACK/webhooks.md` + `CORE-PATTERNS.md` U1 |
 | סטטוסים ו-activity log | `BY-STACK/state-machine.md` |
 | SQLAlchemy async | `BY-STACK/async-orm.md` |
+| `op.alter_column(..., nullable=True)` על עמודה קיימת, או `Mapped[X]` שהופך ל-`Mapped[X \| None]` / `nullable=False` שהופך ל-`nullable=True` באותה עמודה | `bugbot-rules/relaxed-column-unaudited-consumers.md` — מי קורא את העמודה, ולאן הוא מעביר את הערך |
 
 ### Markdown-Docs (FastAPI + SQLAlchemy + שרת MCP)
 
