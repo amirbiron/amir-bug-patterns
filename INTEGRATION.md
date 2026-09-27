@@ -118,7 +118,8 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | כשאתה נוגע ב... | קרא |
 |---|---|
 | שמירה/מחיקה שמסתיימת בהודעת ✅ למשתמש | `CRITICAL-PATTERNS.md` K11 |
-| קאש / invalidation | `bugbot-rules/return-value-failure-unchecked.md` §4 |
+| קאש / invalidation | `bugbot-rules/return-value-failure-unchecked.md` §4 + `bugbot-rules/write-from-cached-read.md` — ביטול שלא נבדק, ומי כותב על סמך מה שהקאש זוכר |
+| העתקת שדה ממסמך שנקרא לתוך מסמך שנכתב (`existing.get(`, `prev.get(`, `**prev`), או מספר גרסה שנגזר מקריאה | `bugbot-rules/write-from-cached-read.md` — מאיפה הגיע המסמך שקראת |
 | דגל שמצהיר "מטא-דאטה בלבד" (`npm install --package-lock-only`, `django-admin migrate --fake`), או רשומה שמתעדכנת בנפרד מהעבודה שהיא מתארת | `bugbot-rules/state-record-without-state-change.md` |
 | callbacks / handlers מקביליים, מזהים מבוססי-זמן | `CORE-PATTERNS.md` U1 |
 | `find_one_and_update` / `upsert` / תפיסת ג'וב | `CORE-PATTERNS.md` U1 + `bugbot-rules/race-toctou.md` |
