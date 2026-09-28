@@ -144,7 +144,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | CSP, כותרות תגובה, או עמוד שנגיש בלי התחברות | `BY-STACK/browser-policy.md` |
 | `create_index` — ובמיוחד `partialFilterExpression` או `sparse=True` | `BY-STACK/mongodb.md` דפוס 1 + `bugbot-rules/mongo-index-and-operator-traps.md` — אופרטורים שהפילטר החלקי לא מקבל, ואתחול שבולע את השגיאה |
 | `expireAfterSeconds` / `expire_after_seconds` / `unique=True` בהגדרת אינדקס, ‏`drop_index` / `drop_indexes`, ‏`create_index` בקובץ תחת `scripts/` או בפקודת אדמין, דיף שמוחק שורה מרשימת אינדקסים — או כתיבה של שדה תפוגה (`expires_at`, `expire_at`, `deleted_expires_at`) | `BY-STACK/mongodb.md` דפוס 9 + `bugbot-rules/mongo-index-and-operator-traps.md` §10 — מי מצהיר על האינדקס, ומי כותב |
-| צינור `aggregate` — `$project`, `$sort`, `$group` — או `find_one` בתוך לולאה | `RECURRING-PATTERNS.md` R8 + `bugbot-rules/work-disproportionate-to-answer.md` |
+| צינור `aggregate` — `$project`, `$addFields` / `$set`, `$sort`, `$group` — או `find_one` בתוך לולאה | `RECURRING-PATTERNS.md`, "עבודה ומטען שאינם פרופורציונליים לתשובה" + `bugbot-rules/work-disproportionate-to-answer.md` + `BY-STACK/mongodb.md`, "השדות הכבדים נגררים דרך המיון" |
 | `startswith` / `endswith` על נתיב, URL או דומיין | `CRITICAL-PATTERNS.md` K16 |
 | `replace(tzinfo=` · `datetime.now()` **בלי** אזור זמן · כל `date.today()` · הצגת תאריך למשתמש | `RECURRING-PATTERNS.md` R7 |
 | **ברמה העליונה של מודול** (מחוץ לכל פונקציה): `Thread(`, `.start()`, `scheduler`, `asyncio.create_task`, לקוח או חיבור שנבנה מ-`os.environ`, או קריאת רשת, מסד או קובץ | `bugbot-rules/import-time-side-effects.md` — מה רץ בזמן ייבוא. ואם מה שנבנה שם הוא מופע של ספרייה חיצונית שמשותף לחוטים — ראה גם את השורה על מופע של ספרייה חיצונית |
