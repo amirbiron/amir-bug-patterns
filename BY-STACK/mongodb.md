@@ -107,7 +107,24 @@ coll.update_one(flt, {"$setOnInsert": {"username": u}, "$set": {"username": u}},
 
 **התנאי אינו קישוט:** אם ה-`$group` משתמש בשדה — ‏`$first: "$$ROOT"`, ‏`$push`, ‏`$addToSet`, או כל accumulator שנוגע בו — ההסרה המוקדמת **משנה את התוצאה**, וזה באג ולא אופטימיזציה. הכלל חל על צינור שבו השדה אינו נקרא אחרי שלב ההסרה, ואת זה בודקים בקריאת הצינור, לא בהנחה.
 
-**ועל שגיאה 292 — `QueryExceededMemoryLimitNoDiskUseAllowed` — מה שנכון ומה שלא:** ‏`allowDiskUse: true` **כן** מתיר ל-`$sort` ול-`$group` לכתוב קבצים זמניים ולחרוג מ-100MB; זו בדיוק מטרתו (https://www.mongodb.com/docs/manual/core/aggregation-pipeline-limits/). מה שנכון בצמצום: **אשכולות Atlas Free ו-Flex אינם תומכים בכתיבת קבצים זמניים כלל** — *"Atlas ignores the `allowDiskUse` option and the corresponding commands behave as if the `allowDiskUse` option is set to `false`"* (https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/), ובאשכול Free גם מגבלת המיון בזיכרון היא 32MB ולא 100. כלומר ב-CodeBot הדגל הועבר ולא עזר **מפני שהאשכול שם אינו תומך בו**, ולא מפני ש-`allowDiskUse` אינו עובד ב-Atlas.
+**"לפני המיון" אינו מספיק — ההחרגה חייבת להיות צמודה ל-`$match`.** רק `$match` רשאי לבוא לפני `$project` שמחריג את השדה הכבד, או לפני `$unset` שלו (`$unset` הוא אותה היטלת החרגה בשם אחר). ‏`$addFields` / `$set` באמצע — והסיבה הנפוצה לו היא שדה שנגזר מהשדה הכבד: גודל, מספר שורות, תצוגה מקדימה — משאיר את ההחרגה כשלב בצינור, ואז `$sort` ו-`$group` שאחריה **עדיין נספרים על המסמכים המלאים**. נמדד בפרודקשן ב-`explain` (`executionStats`, השדה `totalDataSizeSortedBytesEstimate` של שלב המיון) על MongoDB 8.0.32, אותם 79 מסמכים, גודל מלא 2,545,947 בתים:
+
+| צורת הצינור | כמה המיון נספר |
+|---|---|
+| `$match` ← `$addFields` ← `$project` (החרגה) ← `$sort` | 2,585,634 |
+| `$match` ← `$project` (החרגה) ← `$sort` | 93,939 |
+| `$match` ← `$project` (הכללה) ← `$sort` | 57,030 |
+| `$match` ← `$addFields` ← `$project` (הכללה) ← `$sort` | 130,388 |
+
+היטלת **הכללה** אחרי `$addFields` כן מקטינה; החרגה באותו מקום לא. נמדד ב-8.0.32; המנגנון לא נקרא מקוד המקור. נמדד גם ב-`build_note_search_pipeline`, מקומית, על 101 פתקים סינתטיים: אותה צורה, אותה תוצאה.
+
+**ומה עוד נמדד.** ב-28.9.2026 המדידה שוחזרה מקומית, על אותה גרסה ועל נתונים סינתטיים, יחד עם השלבים השכנים. **באותה מחלקה:** `$set` ו-`$unset` — כל אחד בדיוק כמו השלב שהוא כינוי שלו; `$unwind` באמצע, ושם המסמך המלא נספר פעם לכל איבר שנפרש; `$lookup` שרץ במנוע הקלאסי (צורת `pipeline` עם `let`); ו-`$group` שאחרי ההחרגה, שנספר מלא בדיוק כמו `$sort`. **מחוצה לה:** `$replaceRoot` / `$replaceWith` באמצע — ההחרגה אחריהם כן הקטינה, בחמש צורות שונות — ו-`$lookup` בצורת `localField` / `foreignField`, שגרסה 8.0 מריצה ב-SBE כברירת מחדל. באיזה מנוע `$lookup` ירוץ לא רואים בקוד, ולכן הכלל חל עליו.
+
+ולכן, כשהשלב באמצע קיים בגלל שדה שנגזר מהשדה הכבד: לשמור את השדה בזמן הכתיבה ולסנן עליו ב-`$match` — זה התיקון השורשי — או, כשאין ברירה, לחשב אותו ואז להחליף את ההחרגה בהיטלת הכללה.
+
+ראיות: CodeBot PR #3459 — "שאר קבצים" החזיר 500 על צינור שעבר את הכלל "לפני המיון" (PR #3336 העביר אליו את ההחרגה, ו-`$addFields` נשאר לפניה). הפירוט, שתי המדידות והשחזור: `docs/source-projects/codebot-patterns.md`, "החרגה לפני המיון שעדיין לא הקטינה אותו".
+
+**ועל שגיאה 292 — `QueryExceededMemoryLimitNoDiskUseAllowed` — מה שנכון ומה שלא:** ‏`allowDiskUse: true` **כן** מתיר ל-`$sort` ול-`$group` לכתוב קבצים זמניים ולחרוג מ-100MB; זו בדיוק מטרתו (https://www.mongodb.com/docs/manual/core/aggregation-pipeline-limits/). מה שנכון בצמצום: **אשכולות Atlas Free ו-Flex אינם תומכים בכתיבת קבצים זמניים כלל** — *"Atlas ignores the `allowDiskUse` option and the corresponding commands behave as if the `allowDiskUse` option is set to `false`"* (https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/), ובאשכולות Free ו-Flex גם מגבלת המיון בזיכרון היא 32MB ולא 100 (`internalQueryMaxBlockingSortMemoryUsageBytes` = 33,554,432; ל-Flex: https://www.mongodb.com/docs/atlas/reference/flex-limitations/). כלומר ב-CodeBot הדגל הועבר ולא עזר **מפני שהאשכול שם אינו תומך בו**, ולא מפני ש-`allowDiskUse` אינו עובד ב-Atlas.
 
 המסקנה המעשית זהה בשני המקרים ובאה מכיוון אחר: הנפילה למסלול החלופי (`find` + `skip` במנות) עלתה יותר מהבעיה — `/files` לקח 3.1–3.4 שניות בטעינה רגילה (CodeBot PR #3336) — ולכן מתקנים את הצינור. ‏**ואין להסיר את הדגל** באשכול שכן תומך בו: שם הוא רשת הביטחון.
 
@@ -191,3 +208,4 @@ pymongo **זורק בכוונה**, כדי למנוע את הבלבול בין "�
 - **`bugbot-rules/mongo-index-and-operator-traps.md`**
 - **`docs/source-projects/codebot-history-scan-patterns.md` P15**
 - **`docs/source-projects/codebot-patterns.md` Pattern 18** — המקור של דפוס 9
+- **`docs/source-projects/codebot-patterns.md`, "החרגה לפני המיון שעדיין לא הקטינה אותו"** — המקור של הפסקה "ההחרגה חייבת להיות צמודה ל-`$match`", תחת "השדות הכבדים נגררים דרך המיון"

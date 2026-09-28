@@ -8,7 +8,7 @@
 
 4. **`$setOnInsert` ו-`$set` לא נוגעים באותו שדה** — מונגו זורקת conflict והעדכון נכשל כולו.
 
-5. **ההיטלה לפני המיון — כשהשדה לא נחוץ בהמשך.** `$project` שמסיר שדה כבד (`code`, `content`, `embedding`) שייך **לפני** `$sort` ו-`$group`, אלא אם שלב מאוחר משתמש בו (`$first: "$$ROOT"`, `$push`, accumulator שנוגע בשדה) — שם ההסרה משנה את התוצאה וזה באג. ולגבי שגיאה 292 (`QueryExceededMemoryLimitNoDiskUseAllowed`): ‏`allowDiskUse: true` **כן** מתיר ל-`$sort` ול-`$group` לגלוש לדיסק, אבל **אשכולות Atlas Free ו-Flex מתעלמים ממנו** ומתנהגים כאילו הוא `false`. כלומר הדגל אינו תחליף לצינור יעיל, ובאשכול שתומך בו — לא להסיר אותו.
+5. **ההיטלה לפני המיון, וצמודה ל-`$match` — כשהשדה לא נחוץ בהמשך.** `$project` שמסיר שדה כבד (`code`, `content`, `embedding`), או `$unset` שלו, שייך **מיד אחרי** ה-`$match`, אלא אם שלב מאוחר משתמש בו (`$first: "$$ROOT"`, `$push`, accumulator שנוגע בשדה) — שם ההסרה משנה את התוצאה וזה באג. ‏`$addFields` באמצע משאיר את ההחרגה כשלב בצינור, והמיון נספר על המסמכים המלאים; שדה שנגזר מהשדה הכבד — לשמור בזמן הכתיבה. ולגבי שגיאה 292 (`QueryExceededMemoryLimitNoDiskUseAllowed`): ‏`allowDiskUse: true` **כן** מתיר ל-`$sort` ול-`$group` לגלוש לדיסק, אבל **אשכולות Atlas Free ו-Flex מתעלמים ממנו** ומתנהגים כאילו הוא `false`. כלומר הדגל אינו תחליף לצינור יעיל, ובאשכול שתומך בו — לא להסיר אותו.
 
 6. **`if collection:` זורק `NotImplementedError`.** pymongo אוסר בכוונה על בדיקת אמת בוליאנית על `Collection` / `Database` / `Cursor`. תמיד `is not None`.
 
