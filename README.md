@@ -22,7 +22,7 @@
 | `claude-md-snippets/universal.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
 | `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 16 כללים). |
 | `TESTING-PATTERNS.md` | לזרוק ל-`docs/`, או לקשר מ-`CLAUDE.md`. |
-| `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
+| `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 7 כללים). |
 | `BY-STACK/hebrew-source.md` + `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
 
 זה ~90 שורות שמתווספות ל-`CLAUDE.md` שמכסות את ה-baseline האוניברסלי, האבטחה, הבדיקות והעברית.
@@ -118,7 +118,7 @@ amir-bug-patterns/
 ├── CORE-PATTERNS.md             # U1..U6 — 3/3 מקורות, החל בכל מקום
 ├── CRITICAL-PATTERNS.md         # K1..K16 — חומרה גבוהה, החל בכל מקום
 ├── RECURRING-PATTERNS.md        # R1..R9 — אושרו בשני פרויקטים, החל אם ה-stack תואם
-├── TESTING-PATTERNS.md          # T1..T3 — הבדיקה כמקור הבאג, החל בכל מקום
+├── TESTING-PATTERNS.md          # T1..T4 — הבדיקה כמקור הבאג, החל בכל מקום
 ├── MIGRATION-NOTES.md           # meta-analysis, top-3 day-1 picks
 ├── BY-STACK/                    # 12 קבצים, מאורגנים לפי מודל מנטלי
 │   ├── react-frontend.md
@@ -196,6 +196,7 @@ amir-bug-patterns/
 │   ├── wait-without-own-deadline.md
 │   ├── write-from-cached-read.md
 │   ├── relaxed-column-unaudited-consumers.md
+│   ├── load-by-path-without-import-bookkeeping.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL

@@ -137,6 +137,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
 | כותב ב-docstring, בהערה או בעמוד תיעוד **ערך או התנהגות שמוגדרים במקום אחר** — ברירת מחדל, קבוע עם המספר שלו, ספירה, קוד שגיאה, מה רכיב אחר עושה — או **משנה** ערך או התנהגות כאלה | `bugbot-rules/prose-restates-code-fact.md` — עותק של עובדה בתוך פרוזה |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
+| `pytest.skip(` / `skipif(` / `pytestmark` שנשען על בדיקת חיבור (`ping`, `connect`, `server_info`, פונקציה שמחזירה bool על חיבור) — ובמיוחד כשסביבה `except Exception` | `TESTING-PATTERNS.md`, "דילוג שמסתיר שגיאת תצורה" — דילוג רק על "אין שירות" |
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
 | מופע של ספרייה חיצונית שנבנה **ברמת המודול** ומשותף לחוטים — ובמיוחד כשהבנייה כוללת קריאות תצורה (`use`, `enable`, `disable`, `register`, `add_*`, `before`) | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` — מתי אובייקט נחשב מוכן, וכשהתצורה קורית בתוכו. ואם אותו מופע גם נבנה מ-`os.environ` או מפעיל משהו — ראה גם את השורה על ברמה העליונה של מודול |
 | `getattr(x, "y", None)` או `except` שאחריו **מסלול חלופי בגלל כשל** — לא ערך ברירת מחדל, ולא זיהוי יכולת סטטי | `bugbot-rules/silent-fallback-to-worse-path.md` |
@@ -148,6 +149,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | `startswith` / `endswith` על נתיב, URL או דומיין | `CRITICAL-PATTERNS.md` K16 |
 | `replace(tzinfo=` · `datetime.now()` **בלי** אזור זמן · כל `date.today()` · הצגת תאריך למשתמש | `RECURRING-PATTERNS.md` R7 |
 | **ברמה העליונה של מודול** (מחוץ לכל פונקציה): `Thread(`, `.start()`, `scheduler`, `asyncio.create_task`, לקוח או חיבור שנבנה מ-`os.environ`, או קריאת רשת, מסד או קובץ | `bugbot-rules/import-time-side-effects.md` — מה רץ בזמן ייבוא. ואם מה שנבנה שם הוא מופע של ספרייה חיצונית שמשותף לחוטים — ראה גם את השורה על מופע של ספרייה חיצונית |
+| `spec_from_file_location` / `module_from_spec` / `exec_module` — טעינה של קובץ לפי נתיב (סקריפט, טסט, conftest) | `bugbot-rules/load-by-path-without-import-bookkeeping.md` |
 | שינוי שנעשה כדי לספק לינטר: הזזת `import`, ניקוי אזהרת escape, הרחבת `except` | `bugbot-rules/linter-fix-changes-runtime-behavior.md` |
 | מחיקה / שיתוף / שינוי שם לפי `_id` שהגיע מהממשק, ‏`created_at`, או פעולה גורפת על `code_snippets` ו-`large_files` | `bugbot-rules/logical-entity-vs-version-document.md` |
 | שליחה לספק עם תקרת קלט (טוקנים, אורך שדה), או `value[:LIMIT]` לפני שמירה | `bugbot-rules/silent-truncation-at-sink.md` |
@@ -232,7 +234,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 3. race/TOCTOU: קריאה חיצונית בלתי-הפיכה (שליחה, תשלום, draft) לפני INSERT מקומי עם UNIQUE — דגל. מזהה ייחודי מבוסס-timestamp ברזולוציית שניות — דגל (התנגשות בכתיבות מקבילות).
 
-4. טסטים: טסט חדש שנוסף עם תיקון חייב להיכשל בלי התיקון — אם ה-assert מתקיים גם בקוד הישן (למשל בודק תוצאה ריקה שנכונה בשני המקרים), דגל. הבדיקה עוברת דרך הממשק של הצרכן האמיתי, לא דרך המפרט.
+4. טסטים: טסט חדש שנוסף עם תיקון חייב להיכשל בלי התיקון — אם ה-assert מתקיים גם בקוד הישן (למשל בודק תוצאה ריקה שנכונה בשני המקרים), דגל. הבדיקה עוברת דרך הממשק של הצרכן האמיתי, לא דרך המפרט. בדיקת נגישות שמזינה `pytest.skip` / `skipif` ותופסת יותר מהחריגה שמשמעותה "אין שירות" (`except Exception`, `except:`, או tuple שכולל `Exception`) — דגל: אימות שגוי או כתובת פגומה הופכים לדילוג עם סיבה שקרית, במקום להיכשל.
 
 5. הפניות שורה: `literalinclude` עם `:lines:` כשיש חלופת `:pyobject:` — דגל. הפניית file.py:123 בתיעוד ארוך-חיים — דגל.
 
