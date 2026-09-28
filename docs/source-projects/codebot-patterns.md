@@ -1010,3 +1010,35 @@ _MD = _build_parser()   # ← משותף לכל החוטים
 ### לאילו פרויקטים השורה נכנסת
 
 **CodeBot בלבד** — כל המופעים ממנו. שאר הפרויקטים מקבלים את הדפוס דרך פריט 7 בסניפט, כי השורה "לפני כתיבת טסט חדש", שמפנה ל-`claude-md-snippets/testing.md`, קבועה בבלוק של כל פרויקט (`INTEGRATION.md` §1).
+
+---
+
+## Pattern 22 — טעינת מודול לפי נתיב, בלי מה ש-`import` עושה בשבילך
+
+**איפה:** טוענים לפי נתיב ב-`scripts/` וב-`tests/` של CodeBot, שאינם חבילות. **PR #3465** (`507ba0b2`, ‏27.09.2026; ההצעה ציטטה את `8584d7c` — הרישום — ואת `92de553` — ההסרה, שנשארו בענף אחרי מיזוג ה-squash ואינם ב-main). את הרישום תפסה הרצה של הסקריפט אחרי שהטבלה (`@dataclass`) נכנסה לאורקל, ואת ההסרה — סקירת הקוד של ה-PR (SUGG-006). נכנס ללולאה גם בלי ריוויוור, כי זה "תיקנת פעמיים את אותו סוג טעות". ההצעה נכתבה ב-CodeKeeper (`הצעת-דפוס-טעינת-מודול-לפי-נתיב.md`) והוכרעה בפתק עליה (28.09.2026) לפני היישום. לפי ההצעה, הכול אומת ב-27.09.2026 בהרצה, ומול התיעוד של Python 3.11 (`importlib`, המתכון "Importing a source file directly").
+
+### איך זה נראה
+
+כש-`scripts/` או `tests/` אינם חבילה, טוענים קובץ לפי נתיב: `spec_from_file_location`, `module_from_spec` ו-`exec_module`. המתכון הזה מדלג על שני דברים ש-`import` רגיל עושה: **רישום ב-`sys.modules` לפני שהמודול רץ**, ו**הסרת הרישום כשההרצה נכשלת**. בלי הראשון, `@dataclass` במודול עם `from __future__ import annotations` נופל; בלי השני, נשאר ב-`sys.modules` מודול חצי-בנוי, וכל ייבוא שלו באותו תהליך מקבל אותו בשקט.
+
+### הראיות
+
+1. **הרישום** — `_load_oracle` ב-`scripts/compare_md_parser_to_cmark.py` (`8584d7c` בענף). הסקריפט טוען את `tests/test_md_parser_oracle.py` לפי נתיב, וכשנכנסה לאורקל טבלה של `@dataclass(frozen=True)`, הטעינה נפלה. נמדד בטעינה בלי רישום: `AttributeError: 'NoneType' object has no attribute '__dict__'` — זה בא מ-`dataclasses`, שמחפש את המודול של המחלקה ב-`sys.modules` בזמן שהיא נבנית. התיקון: `sys.modules[name] = module` לפני `exec_module`, כמו במתכון.
+2. **ההסרה** — אותה פונקציה (`92de553` בענף). המתכון בתיעוד **אינו מנקה**: אם `exec_module` זורק, הרישום נשאר. התיקון: `try` / `except BaseException:` / `del sys.modules[name]` / `raise`, ונוסף הטסט `test_a_broken_oracle_is_not_left_half_built_in_sys_modules`. מוטציות ב-worktree נפרד: הסרת הניקוי מפילה את הטסט הזה, והסרת הרישום מפילה את `test_the_compare_script_loads_the_oracle_it_depends_on`.
+3. **ספרייה שנייה, pydantic** — `tests/_save_layer_harness.py` רושם לפני ההרצה, כי pydantic פותר את ההפניות של `BotConfig` דרך `sys.modules`; בלי הרישום — `PydanticUserError: BotConfig is not fully defined` (נמדד, לפי ההערה שם). זה מה שהופך את "כל קוד שמחפש את המודול לפי `__module__`" מהשערה למחלקה. ובאותו קובץ גם הצורה של הניקוי בתוך טסט: `monkeypatch.setitem(sys.modules, name, module)`, שמסיר לבד ב-teardown.
+4. **התפוצה** (grep על `spec_from_file_location`, ‏27.09.2026) — 20 קבצים טוענים מודול לפי נתיב (22 אתרי טעינה, לפי הסקירה), ואין פונקציה משותפת: כל קובץ כותב את המתכון מחדש, בגרסה משלו. **10 טוענים ב-9 קבצי טסט קוראים ל-`exec_module` בלי לרשום את המודול**, בהם `_load_compare_script` ב-`tests/test_md_parser.py`. אחד מהם, `_load_script` ב-`tests/test_md_parser_upgrade_zero_diff_script.py`, נוסף באותו PR, בהעתקה מכוונת מהתקדים `tests/test_docs_section_zero_diff_script.py`. כולם עוברים היום, כי המודולים שהם טוענים אינם צריכים את הרישום.
+
+### מה משותף (ולמה זה ימשיך לקרות)
+
+- **המתכון נראה שלם.** שלוש שורות, והמודול עובד.
+- **מה שחסר מתגלה רק כשהמודול הנטען משתנה**, ולא כשהטוען נכתב — `@dataclass` עם annotations כמחרוזות (נמדד), או כל קוד אחר שמחפש את המודול לפי `__module__`.
+- **ואז ההודעה אינה מצביעה על הטוען.** `'NoneType' object has no attribute '__dict__'` מתוך `dataclasses` נראית כמו באג במחלקה.
+- **וכשאין פונקציה משותפת, כל עותק מתוקן לבד.** זה R6: עותק שני של אותו כלל.
+
+### הסיווג
+
+`bugbot-rules/load-by-path-without-import-bookkeeping.md` ושורת טריגר, **בלי סניפט**. זה באג בקוד — בסקריפטים ובתשתית הטסטים — בפרויקט מקור אחד, ואין קובץ `BY-STACK` שמתאים; לפי צעד 4 ב-README, דפוס שנשאר ב-`bugbot-rules/` ובמסמך המקור מגיע לפרויקטים דרך שורת הטריגר בלבד. הדפוס לא היה בספרייה: לפי ההצעה, חיפוש של `sys.modules`, ‏`spec_from_file_location` ו-`exec_module` החזיר אפס, ו-`import-time-side-effects` עוסק במה שהמודול **עושה** כשהוא נטען, ולא באופן שבו הוא נטען. **ובלי משפט ב-`RECURRING-PATTERNS.md` R6:** ראיה בלבד לכלל קיים אינה נכנסת.
+
+### לאילו פרויקטים השורה נכנסת
+
+**CodeBot בלבד.** בלי סניפט, השורה היא מסלול ההגעה היחיד — פרויקט אחר יפגוש את הכלל רק כשמישהו יוסיף לו את השורה. זו ההחלטה של צעד 4 ב-README לדפוס שנשאר ב-`bugbot-rules/`, לא פטור.

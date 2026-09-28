@@ -196,6 +196,7 @@ amir-bug-patterns/
 │   ├── wait-without-own-deadline.md
 │   ├── write-from-cached-read.md
 │   ├── relaxed-column-unaudited-consumers.md
+│   ├── load-by-path-without-import-bookkeeping.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL
