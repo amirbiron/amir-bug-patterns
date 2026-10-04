@@ -1092,6 +1092,8 @@ for meta in repos:  # db["repo_metadata"].find(...)
 
 ממצא רביעי, על תלות של ה-autosync בפונקציות פרטיות של שירות המראות, נכנס לכלל כעיקרון: ההחלטה מה מותר למחוק שייכת לרכיב שיוצר את העותק.
 
+בריוויו על PR הספרייה, cubic הראה שחפיפה אינה מוכיחה שלמות — קריאה חלקית עם שם מוכר עוברת אותה; נוספה הגנת שלמות.
+
 ### מה נבדק
 
 לפי ההצעה, ב-04.10.2026: `codekeeper_list_repos` החזיר ארבעה ריפואים, ו-`codekeeper_list_repo_tree` על `codekeeper-plugin` החזיר עץ עם `ref: "HEAD"`. ונבדק אם `init_mirror` משאיר תיקיות זמניות שההתאמה עלולה למחוק באמצע: לפי `builtin/clone.c` ב-git v2.43.0, `--mirror` מדליק `option_bare`, ותיקיית היעד היא ה-git dir עצמו; ובמדידת strace על `git clone --mirror`, כל קובץ נעילה וכל קובץ זמני (`config.lock`, `packed-refs.new`) נוצר בתוך `<name>.git`, ושום רשומה לא נוצרת לידו.
