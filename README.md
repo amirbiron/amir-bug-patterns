@@ -197,6 +197,7 @@ amir-bug-patterns/
 │   ├── write-from-cached-read.md
 │   ├── relaxed-column-unaudited-consumers.md
 │   ├── load-by-path-without-import-bookkeeping.md
+│   ├── one-way-sync-orphans.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL
