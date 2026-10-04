@@ -1042,3 +1042,82 @@ _MD = _build_parser()   # ← משותף לכל החוטים
 ### לאילו פרויקטים השורה נכנסת
 
 **CodeBot בלבד.** בלי סניפט, השורה היא מסלול ההגעה היחיד — פרויקט אחר יפגוש את הכלל רק כשמישהו יוסיף לו את השורה. זו ההחלטה של צעד 4 ב-README לדפוס שנשאר ב-`bugbot-rules/`, לא פטור.
+
+---
+
+## Pattern 23 — באג שמתחפש לתקלה המוצהרת: תפיסה רחבה מהסיכון, לתוך המצב שהוצהר עבורו
+
+**איפה:** `ProductionBackend.save_file` ב-`mcp_server/backend.py` — הקריאה החוזרת אחרי שמירה. **PR #3475** (`56bdf798`, ‏28.09.2026). זיהוי עצמי בזמן המימוש.
+
+### איך זה נראה
+
+ראה `RECURRING-PATTERNS.md`, "תפיסה גורפת לתוך מצב שהוצהר עבור סיכון אחד".
+
+### הקוד
+
+`save_file` קורא חזרה את מה שנכתב (`find_version_by_id`, דרך `Collection.with_options(read_preference=ReadPreference.PRIMARY)`) ומשווה למה שהכלי התכוון לשמור. המצב המנוון המוצהר: `content_changed: null`, `file` בלי hash, ושורת `WARNING`.
+
+הגרסה הראשונה:
+
+```python
+try:
+    stored = dbm.find_version_by_id(inserted_id, int(user_id))
+except Exception:
+    logger.warning("mcp write %s: could not read back ...", tool, ..., exc_info=True)
+    stored = None
+```
+
+הגרסה שנכנסה:
+
+```python
+read_back = dbm.find_version_by_id  # לפני הכתיבה: מנהל בלי המתודה נופל לפני שנכתב דבר
+...
+try:
+    stored = read_back(inserted_id, int(user_id))
+except _PyMongoError:  # הבסיס של כל שגיאות pymongo — רשת, בחירת שרת, פקודה שנכשלה
+    logger.warning("mcp write %s: could not read back ...", tool, ..., exc_info=True)
+    stored = None
+```
+
+### מה נשבר בפועל (נמדד)
+
+`FakeCollection` ב-`tests/_fake_mongo.py` לא מימשה `with_options`. ה-`AttributeError` נפל ל-`except Exception`, כל שמירה בכל טסט שנשען על ה-harness החזירה `null`, והטסטים — שבודקים את `ok` ואת מה שבאוסף, ולא את `content_changed` — עברו. לפי ההצעה: שלוש הרצות של 22 הטסטים ב-`tests/test_save_preserves_content_mcp.py`, מעל `ProductionBackend`, `DatabaseManager` ו-`Repository` אמיתיים ועם אוספי הדמה המשותפים, על worktree של `eeeb65b` ולא על עץ העבודה (28.09.2026, `pymongo` 4.15.3, `mcp` 1.28.1), ותוסף pytest שסופר את התשובות של `save_file` ואת רשומות הלוג:
+
+| הרצה | הטסטים | התשובות של `save_file` | שורות `could not read back` |
+|---|---|---|---|
+| הקוד כמו שנכנס (`except _PyMongoError`, הדמה עם `with_options`) | 22 עברו | 34, בכולן `content_changed: false` וב-`file` יש hash | 0 |
+| הדמה בלי `with_options`, `except _PyMongoError` | 22 נכשלו: `AttributeError: 'FakeCollection' object has no attribute 'with_options'` | 0 — כל קריאה זרקה | 0 |
+| הדמה בלי `with_options`, `except Exception` | **22 עברו** | **34, בכולן `content_changed: null` ובלי hash** | **34** |
+
+השורה השלישית היא הדפוס: ריצה ירוקה שבה רשת הביטחון הייתה כבויה בכל שמירה, ונרשמה 34 פעמים כ"לא הצלחתי לקרוא". ועל הקוד שנכנס, מוטציה שמרחיבה בחזרה ל-`Exception` נתפסת ב-`test_an_error_that_is_not_the_databases_is_not_reported_as_a_failed_read`.
+
+**ובייצור** אותו מבנה היה הופך כל באג במסלול — שם מתודה אחרי ריפקטור, חתימה שהשתנתה — לכיבוי שקט של הפיצ'ר, שבתשובה ובשורת הלוג נראה בדיוק כמו "המסד לא ענה". ה-traceback היה ביומן (`exc_info=True`), אבל רק מי שכבר חושד קורא אותו.
+
+### וזו ההבחנה של `silent-fallback-to-worse-path`, הפוכה
+
+שם, "היעדר יכולת סטטי" (`getattr(db, "new_method", None)` מול דמה ישנה) הוא נפילה-לאחור לגיטימית, כי המצב ידוע וקבוע. כאן בדיוק היעדר כזה — דמה בלי מתודה — נתפס בזמן ריצה כחריגה, ונספר כתקלה החולפת שהמצב הוצהר עבורה.
+
+### למה אף כלל קיים לא נדלק
+
+כל אחד נכון במה שהוא בודק, והמקרה נפל בין ה-False positives שלהם. הדפוס היה קיים בחלקו, בשלושה מקומות שלא כיסו את המקרה:
+
+1. **`TESTING-PATTERNS.md`, "דילוג שמסתיר שגיאת תצורה"** (מקורו ב-Pattern 21 כאן) — אותו עיקרון בצד הבדיקות, אבל שורת הטריגר שלו היא `pytest.skip` / `skipif` ליד בדיקת חיבור, ולכן אינה נדלקת בקוד ייצור; והסיווג שלו רשם "פרויקט מקור אחד ← לא RECURRING".
+2. **Campaign AI, פריטים 51 ו-60** — אותו עיקרון במסווג שגיאות ובמריץ ג'ובים, מתועד במסמך המקור ולא קודם לכלל.
+3. **`RECURRING-PATTERNS.md`, "שלמות exception של External SDK", ו-`bugbot-rules/sdk-error-completeness.md`** — `except` **צר** מדי, סדר ה-`except`-ים ואתחול בעלייה; לא תפיסה רחבה מדי.
+
+ושלושת הכללים שהיו אמורים להיתקל במקרה פטרו אותו: `widened-exception-scope` עסק בהרחבה של `except` קיים ובעטיפה של קוד **קיים**, וה-False positive שלו ("try/except חדש סביב קוד חדש שמביא סיכון חדש מוצהר") פטר בדיוק את זה; `silent-fallback-to-worse-path` דורש "אין דיווח" (תנאי 3) ופטר "fallback מוצהר **עם** לוג"; והשורה על `except` שבולע, בבלוק "תמיד, בכל פרויקט" ב-`INTEGRATION.md`, מסתפקת בשורת לוג. לפי ההצעה, החיפוש בספרייה — "AttributeError", "הסיכון המוצהר", "מהסיבה הלא נכונה", `except Exception` ליד דמה/סטאב/fake, transient, "חולפת", unknown, `SERVICE_DOWN` — לא מצא כלל שמכסה את המקרה.
+
+### אותו עיקרון, בשני מקומות נוספים
+
+- Pattern 21 באותו קובץ ("בדיקת נגישות שתופסת הכול").
+- `campaign-ai-patterns.md`, פריטים 51 ו-60.
+
+### הסיווג
+
+R10 (RECURRING); מקור שני — Campaign AI, פריטים 51 ו-60.
+
+ה-`__mro__` נבדק מול הגרסאות המותקנות (28.09.2026): `pymongo` 4.15.3, `requests` 2.32.5, `httpx` 0.28.1, `redis` 7.0.0.
+
+### לאילו פרויקטים השורה נכנסת
+
+כולם, דרך הבלוק "תמיד, בכל פרויקט" ב-`INTEGRATION.md`.
