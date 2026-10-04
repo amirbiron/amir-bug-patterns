@@ -36,7 +36,7 @@
 - לפני עטיפת קריאה ב-try/except → `CRITICAL-PATTERNS.md` K11 (כשל בערך החזרה)
 - כותב `except` שבולע — `pass`, ערך falsy, או המשך כאילו הצליח → לוג, או הערה שאומרת למה הכשל הזה אינו מעניין. בלעדיהם זה ממצא, גם כשאין ✅ למשתמש במסלול. ‏(`raise` מחדש אינו בליעה) (K11, הצד ההפוך)
 - לפני כתיבת טסט חדש → `claude-md-snippets/testing.md`
-- אחרי שטסט נופל על חריגה → `bugbot-rules/widened-exception-scope.md` (אל תרחיב except)
+- אחרי שטסט נופל על חריגה → `bugbot-rules/widened-exception-scope.md` (אל תרחיב except); או כותב `except` רחב חדש — `Exception`, `BaseException`, חשוף — או ענף ברירת מחדל של מסווג חריגות, שמובילים למצב שהוצהר לסיכון אחד (`None`/`null`, retry, דילוג), גם כשיש לוג → אותו קובץ, הסעיף על תפיסה גורפת לתוך מצב מוצהר
 - לפני העברת סוד כפרמטר URL (`params={"key": ...}`) → `CRITICAL-PATTERNS.md` K14. ה-SDK של הניטור רושם את השאילתה בעצמו, בכל בקשה מוצלחת.
 
 ### סגירת הלולאה (חובה, לא רשות)
@@ -135,7 +135,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | מידלוור ASGI/Starlette עם `await receive()` בתוך `__call__`, ‏`await request.body()` ב-`BaseHTTPMiddleware`, או `app.add_middleware(` של מידלוור שקורא, מפענח או מפרסר גוף בקשה | `bugbot-rules/body-read-outside-cheap-reject.md` — מי דוחה בזול לפניו, והאם הוא באמת לפניו |
 | לולאה או שרשרת שמחכה לצד השני — `await receive()`, `reader.read()`, שרשרת דגימה (`setTimeout` / `setInterval` עם `fetch`) — ובמיוחד כשמשהו מוחזק בזמן ההמתנה: דגל `inFlight`, חיץ, נעילה | `bugbot-rules/wait-without-own-deadline.md` — מי מגביל את ההמתנה הזו |
 | `docs/**/*.rst` | `bugbot-rules/line-number-coupling.md` |
-| כותב ב-docstring, בהערה או בעמוד תיעוד **ערך או התנהגות שמוגדרים במקום אחר** — ברירת מחדל, קבוע עם המספר שלו, ספירה, קוד שגיאה, מה רכיב אחר עושה — או **משנה** ערך או התנהגות כאלה | `bugbot-rules/prose-restates-code-fact.md` — עותק של עובדה בתוך פרוזה |
+| כותב ב-docstring, בהערה, בעמוד תיעוד, בתיאור ה-PR או בשם של טסט **ערך או התנהגות שמוגדרים במקום אחר** — ברירת מחדל, קבוע עם המספר שלו, ספירה, קוד שגיאה, מה רכיב אחר עושה — או **משנה** ערך או התנהגות כאלה | `bugbot-rules/prose-restates-code-fact.md` — עותק של עובדה בתוך פרוזה |
 | טסטים עם סטאבים ידניים | `TESTING-PATTERNS.md` + `bugbot-rules/widened-exception-scope.md` |
 | `pytest.skip(` / `skipif(` / `pytestmark` שנשען על בדיקת חיבור (`ping`, `connect`, `server_info`, פונקציה שמחזירה bool על חיבור) — ובמיוחד כשסביבה `except Exception` | `TESTING-PATTERNS.md`, "דילוג שמסתיר שגיאת תצורה" — דילוג רק על "אין שירות" |
 | אתחול עצל של משאב משותף (חיבור, לקוח, pool, קאש) — או **הסרה** של התנהגות מנוונת שקיימת מזמן | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` |
@@ -231,7 +231,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 1. ערך החזרה ככשל: לכל קריאה עטופה ב-try/except או שאחריה דיווח הצלחה — ודא שהקורא בודק את הערך החוזר אם הפונקציה מחזירה None/False/0 בכשל במקום לזרוק. דגל אדום: `saved = True` קבוע אחרי קריאה, או הודעת ✅ למשתמש בלי תנאי. (בפרט: save_backup_bytes, delete_pattern, rowcount.)
 
-2. הרחבת except: כל דיף שמרחיב `except X` ל-`except Exception` או עוטף קוד קיים ב-try/except חדש — דרוש נימוק. אם באותו PR יש טסט שנופל בלי ההרחבה, השורש כנראה בסטאב/fixture של הטסט, לא בקוד.
+2. הרחבת except: כל דיף שמרחיב `except X` ל-`except Exception` או עוטף קוד קיים ב-try/except חדש — דרוש נימוק. אם באותו PR יש טסט שנופל בלי ההרחבה, השורש כנראה בסטאב/fixture של הטסט, לא בקוד. וגם try/except **חדש** שתופס רחב מהסיכון לפני מצב שהוצהר לו (`None`, retry, דילוג) — גם כשיש לוג.
 
 3. race/TOCTOU: קריאה חיצונית בלתי-הפיכה (שליחה, תשלום, draft) לפני INSERT מקומי עם UNIQUE — דגל. מזהה ייחודי מבוסס-timestamp ברזולוציית שניות — דגל (התנגשות בכתיבות מקבילות).
 

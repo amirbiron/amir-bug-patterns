@@ -355,6 +355,7 @@
 - **תוצאה:** transient הוא ברירת-מחדל **אקטיבית** — מפעיל retry אוטומטי ומסתיר bugs ותגובות לא-צפויות מ-Supabase מאחורי 503.
 - **מקור:** `db361d9`
 - **דפוס:** סיווג שגיאות מספק חיצוני
+- **ראה גם:** `RECURRING-PATTERNS.md`, "תפיסה גורפת לתוך מצב שהוצהר עבור סיכון אחד" — ברירת המחדל של המסווג היא הדלת לתוך המצב שהוצהר לתקלה חולפת
 
 #### 52. signup מיפה כל שגיאה ל-409 "email קיים"
 - **בעיה:** אחרי בדיקות transient, כל `AuthError` שאינו weak-password מופה ל-409.
@@ -409,6 +410,7 @@
 - **תוצאה:** retries מיותרים, ובסוף `job=failed` בזמן ש-`sent_notifications` נשאר `pending` **לנצח** — אף אחד לא קרא ל-`mark_notification_failed`.
 - **מקור:** `36b433a`
 - **דפוס:** Terminal-state / re-pick
+- **ראה גם:** `RECURRING-PATTERNS.md`, "תפיסה גורפת לתוך מצב שהוצהר עבור סיכון אחד" — מסלול ה-retry, שהוצהר לתקלה חולפת, נפתח לכל זריקה
 
 #### 61. בוט: `NotConfigured` גרר retry אינסופי
 - **בעיה:** `MetaWhatsAppNotConfiguredError` (חסר `META_WABA_ID`/`ACCESS_TOKEN`) נתפס ב-`except` הבסיסי → `BotSendTransientError` → retry עד מיצוי. אבל retry לא יכול לתקן config גלובלי חסר.
