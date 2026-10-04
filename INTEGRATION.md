@@ -36,7 +36,7 @@
 - לפני עטיפת קריאה ב-try/except → `CRITICAL-PATTERNS.md` K11 (כשל בערך החזרה)
 - כותב `except` שבולע — `pass`, ערך falsy, או המשך כאילו הצליח → לוג, או הערה שאומרת למה הכשל הזה אינו מעניין. בלעדיהם זה ממצא, גם כשאין ✅ למשתמש במסלול. ‏(`raise` מחדש אינו בליעה) (K11, הצד ההפוך)
 - לפני כתיבת טסט חדש → `claude-md-snippets/testing.md`
-- אחרי שטסט נופל על חריגה → `bugbot-rules/widened-exception-scope.md` (אל תרחיב except)
+- אחרי שטסט נופל על חריגה ← `bugbot-rules/widened-exception-scope.md` (אל תרחיב except); או כותב `except Exception` חדש לפני מצב שהוצהר לסיכון אחד — `None`/`null`, retry, דילוג — גם כשיש לוג ← אותו קובץ, הסעיף על תפיסה גורפת לתוך מצב מוצהר
 - לפני העברת סוד כפרמטר URL (`params={"key": ...}`) → `CRITICAL-PATTERNS.md` K14. ה-SDK של הניטור רושם את השאילתה בעצמו, בכל בקשה מוצלחת.
 
 ### סגירת הלולאה (חובה, לא רשות)
