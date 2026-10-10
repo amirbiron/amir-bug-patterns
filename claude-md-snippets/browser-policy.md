@@ -16,4 +16,6 @@
 
 8. **מדיניות cache גורפת ב-`setdefault`, לא בהשמה.** מידלוור שכותב `Cache-Control` על כל תגובה מסוג מסוים דורס עמודים שהגדירו `ETag` בכוונה ומבטל את ה-revalidation שנבנה להם. ו-`no-store` שם ש-`no-cache` הספיק מבטל גם אותו.
 
+9. **session ב-cookie: התשובה האחרונה מנצחת.** ב-session ב-cookie תשובה מחזירה את ה-cookie עם ה-session כפי שהבקשה הזו ראתה אותו בסופה — מה שהיה בתחילתה, ועוד מה שהיא עצמה כתבה (ב-session קבוע — כל תשובה, גם כזו שרק קראה), והדפדפן שומר את האחרון שהגיע — בקשה מקבילה (`beforeunload`, ‏polling) מוחקת מה שנכתב ל-session ומחזירה מה שנצרך ב-`session.pop`. ערך שזרימה תלויה בו נשמר בשרת, ו"פעם אחת" נאכף שם בפעולה אטומית. ‏`bugbot-rules/cookie-session-last-write-wins.md`.
+
 ראה `BY-STACK/browser-policy.md` — שם גם הרשימה בפועל, פר-פרויקט.
