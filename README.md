@@ -199,6 +199,7 @@ amir-bug-patterns/
 │   ├── load-by-path-without-import-bookkeeping.md
 │   ├── one-way-sync-orphans.md
 │   ├── cookie-session-last-write-wins.md
+│   ├── unsorted-representative.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL
