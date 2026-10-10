@@ -181,6 +181,10 @@ falsy" — והקורא מניח את הראשונה בלי לבדוק איזו 
 
   **שני נוסחים עם ההיקף הרחב מדי:** cubic (P3, על `docs/mcp-server.rst`) הציע "אותה תשובה שהכלי החזיר **על תוצאה שחרגה מהתקרה**" — אבל גם תוצאה של רווחים בלבד חרגה מהתקרה, והיא נענתה `empty_content`; והתיקון הראשון אחרי הריוויו כתב "על תוצאה ארוכה מדי", כלומר אותו היקף. ההיקף הנכון: "תוצאה ארוכה מדי שאינה רווחים בלבד", ושם הטסט הוא עכשיו `test_a_result_over_the_ceiling_that_is_not_only_whitespace_is_the_same_refusal_as_before`. **המטריצה:** לפי ההצעה (04.10.2026), 14 סוגי קלט ל-`note_str_replace` רצו על הבסיס (`d2f9e3b`) ועל הענף אחרי התיקון הראשון, כל אחד ב-`git worktree` נפרד, עם הדמה של `tests/test_mcp_new_note_tools.py`. השתנו רק שלושה סוגים, כולם תוצאה של רווחים בלבד מעל התקרה (רווחים, ירידות שורה, ותו אחד מעל התקרה): `empty_content` עד #3495, ו-`content_too_long` עכשיו, ובשני הצדדים נקרא רק `get_note`, כלומר לא נכתב דבר. 11 האחרים זהים במילון המלא, כולל `ambiguous_match` על תוצאה שהייתה חורגת, ורווחים בלבד בדיוק בתקרה. **הסיווג:** `bugbot-rules/prose-restates-code-fact.md`, הסעיף "טענה כוללת שנבדקה על חלק מהמקרים"; LOW, בלי סניפט.
 
+- **`sdk-error-completeness`, "Base צר ב-`except`" — `RefreshError` במקום `HttpError` (בחקירה של PR #3525, ‏`06cb8ebc`, ‏05.10.2026):** לא דפוס חדש — מכוסה ב-`bugbot-rules/sdk-error-completeness.md`, "Base צר ב-`except`" (`googleapiclient.errors.HttpError` הוא אחת הדוגמאות שם), ובסניפט `claude-md-snippets/external-sdk.md`, "לקוח עם אישורים שפגים צריך מסלול ריענון" (`invalid_grant`).
+  - **CodeBot,** ‏`services/google_drive_service.py`: בפונקציות ההעלאה הענף של 401 (`_is_auth_http_error` ← `_force_refresh_credentials`) נמצא תחת `except HttpError`. כשה-API עונה 401, ‏`google_auth_httplib2.AuthorizedHttp` מרענן בעצמו, ורענון שנכשל זורק `google.auth.exceptions.RefreshError` (google-auth-httplib2 0.4.4, ``AuthorizedHttp.request``), שאינו `HttpError`. הוא נופל ל-`except Exception` הכללי, מטופל כתקלת רשת, וההעלאה מחזירה `None` בלי סימן שצריך להתחבר מחדש. לא תוקן (מחוץ להיקף של PR #3525); תועד כמלכודת ב-`docs/services/google_drive_service.rst`.
+  - **ai-business-bot כבר עושה את זה נכון:** ‏`google_calendar.py` תופס `RefreshError` במפורש ומסמן את החיבור כשבור (`auth_invalid`).
+
 ---
 
 ## לקח תהליכי מהסשנים
@@ -1194,3 +1198,14 @@ R10 (RECURRING); מקור שני — Campaign AI, פריטים 51 ו-60.
 ### לאילו פרויקטים השורה נכנסת
 
 כולם, דרך הבלוק "תמיד, בכל פרויקט" ב-`INTEGRATION.md`.
+
+---
+
+## Pattern 25 — session ב-cookie: תשובה מקבילה מוחקת כתיבה ומחזירה צריכה
+
+- **בעיה:** ה-state של חיבור Google Drive מהוובאפ נשמר ב-`session["drive_oauth_state"]`. ב-session קבוע Flask מחזיר cookie בכל תשובה (``SessionInterface.should_set_cookie``, Flask 3.1.2), ו-`POST /api/ui_prefs` מ-`beforeunload` הסתיימה כ-100ms אחרי ההפניה לגוגל (לוג Render, 4.10.2026 21:47 UTC) והחזירה את ה-cookie הישן.
+- **תוצאה:** החזרה מגוגל נדחתה כ-`csrf` בלי שורת לוג. "החיבור לא נקלט", תלוי בתזמון.
+- **הצד השני:** ‏state שנצרך ב-`session.pop` מתקבל שוב כשתשובה מקבילה עם ה-cookie הקודם מגיעה אחרונה (נמדד ב-test client).
+- **התיקון (PR #3525, ‏`06cb8ebc`):** state במסמך המשתמש — hash, תוקף, צריכה ב-`find_one_and_update` עם `$unset` מול המשתמש שב-session — ולוג לכל דחייה.
+- **חשיפה זהה:** ‏`stop_impersonation` ודגלים חד-פעמיים ב-`webapp/app.py`; ב-ai-business-bot ‏`google_oauth_state`, ‏`google_oauth_code_verifier` ו-`meta_oauth_state`, עם polling כל 5 שניות.
+- **הכלל:** `bugbot-rules/cookie-session-last-write-wins.md`; ‏`BY-STACK/browser-policy.md`, "session ב-cookie: התשובה האחרונה מנצחת".

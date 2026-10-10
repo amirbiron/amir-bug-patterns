@@ -158,6 +158,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | הרצה ראשונה של ג'וב סנכרון: `baseline`, `last_*_check_time`, `if not last_seen` | `BY-STACK/cron-jobs.md` דפוס 10 — מה ההרצה הראשונה שולחת |
 | ג'וב או לולאה שיוצרים עותק ממקור אמת "אם חסר" — `if not ...exists(` ואחריו clone / create / `upsert` / אינדוקס — או שלב שמוחק מה שהמקור כבר לא מכיר (`prune`, `orphan`, `janitor`, `reconcile`) | `BY-STACK/cron-jobs.md`, "סנכרון חד-כיווני" + `bugbot-rules/one-way-sync-orphans.md` — מי מוחק את העותק כשהמקור מפסיק לרשום אותו, ומה עוצר מחיקה של הכול |
 | תגית `<script>` / `<link>` חדשה בתבנית, או כתיבת `Cache-Control` | `BY-STACK/browser-policy.md` B4–B5 + `bugbot-rules/stale-asset-cache-policy.md` |
+| כותב ל-`session[...]` ערך שבקשה אחרת חייבת למצוא — state של OAuth, ‏`code_verifier`, nonce, יעד חזרה, דגל "פעם אחת" — או צורך ערך כזה ב-`session.pop(` או ב-`session.clear(` | `bugbot-rules/cookie-session-last-write-wins.md` — כל תשובה מקבילה מחזירה את ה-cookie שלפני הכתיבה, והאחרונה מנצחת |
 | **לפני כתיבת פונקציה חדשה** שמפרמטת, מסננת, מחשבת או ממפה — גודל, תאריך, אייקון, שם שפה, רשימת ערכים, שאילתה | `RECURRING-PATTERNS.md` R6: `grep` על שם התופעה לפני שכותבים. יש עותק — מאחדים |
 | `except TypeError` / `except AttributeError` סביב קריאה ל-SDK חיצוני | `bugbot-rules/dead-parameter-external-api.md` |
 | route ב-`GET` שגופו מוחק, מאפס או מריץ פעולה בלתי הפיכה | `bugbot-rules/auth-before-irreversible-action.md` §5 |
@@ -176,6 +177,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | בידוד tenant / ContextVar / שאילתות בטבלאות רב-דייריות | `CRITICAL-PATTERNS.md` K12 + `bugbot-rules/tenant-row-scoping.md` |
 | threads של בוט/worker לצד ה-webapp | `bugbot-rules/background-thread-liveness.md` |
 | שליחת הודעה + עדכון סטטוס | `claude-md-snippets/universal.md` §5 (linked-field atomicity) |
+| כותב ל-`session[...]` ערך שבקשה אחרת חייבת למצוא — state של OAuth, ‏`code_verifier`, nonce, יעד חזרה, דגל "פעם אחת" — או צורך ערך כזה ב-`session.pop(` או ב-`session.clear(` | `bugbot-rules/cookie-session-last-write-wins.md` — כל תשובה מקבילה מחזירה את ה-cookie שלפני הכתיבה, והאחרונה מנצחת |
 
 ### Campaign AI (FastAPI + Supabase/Postgres + Meta Marketing API + סליקה)
 
