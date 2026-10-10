@@ -153,7 +153,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | שינוי שנעשה כדי לספק לינטר: הזזת `import`, ניקוי אזהרת escape, הרחבת `except` | `bugbot-rules/linter-fix-changes-runtime-behavior.md` |
 | מחיקה / שיתוף / שינוי שם לפי `_id` שהגיע מהממשק, ‏`created_at`, או פעולה גורפת על `code_snippets` ו-`large_files` | `bugbot-rules/logical-entity-vs-version-document.md` |
 | `find_one(` / `LIMIT 1` / `.first()` / `[0]` / `[:1]` **על מסנן שאינו אינדקס ייחודי**, בלי `sort` / `ORDER BY` | `bugbot-rules/unsorted-representative.md` — איזו שורה נבחרה, ומי קבע |
-| `$set` / `SET` של `is_active`, `is_default`, `is_current`, `is_primary` ל-true — בשחזור, `undelete`, הפעלה מחדש — או `is_active = 0` ואחריו `INSERT` | `bugbot-rules/single-active-invariant-in-code.md` — כמה פעילים זה יכול להשאיר, ומי במסד מונע את השני |
+| `$set` / `SET` של `is_active`, `is_default`, `is_current`, `is_primary` ל-true — בשחזור, `undelete`, הפעלה מחדש — או `is_active = 0` ואחריו `INSERT`, או הכנסה (`INSERT` / `insert_one`) של רשומה פעילה בלי כיבוי הקודם לפניה | `bugbot-rules/single-active-invariant-in-code.md` — כמה פעילים זה יכול להשאיר, ומי במסד מונע את השני |
 | שליחה לספק עם תקרת קלט (טוקנים, אורך שדה), או `value[:LIMIT]` לפני שמירה | `bugbot-rules/silent-truncation-at-sink.md` |
 | `clientX` בחיסור, ‏`left`/`right`, גרירה, שינוי גודל, או הצמדה ל-viewport | `BY-STACK/hebrew-source.md` H7 + `bugbot-rules/rtl-geometry-and-clamp.md` |
 | `EWMA` / `_ewma`, ‏`anomaly_detected`, ‏`cooldown`, ‏`first_ts`, ‏`adaptive_*_threshold_*` | `RECURRING-PATTERNS.md` R9 + `BY-STACK/observability.md` |
@@ -180,7 +180,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | threads של בוט/worker לצד ה-webapp | `bugbot-rules/background-thread-liveness.md` |
 | שליחת הודעה + עדכון סטטוס | `claude-md-snippets/universal.md` §5 (linked-field atomicity) |
 | כותב ל-`session[...]` ערך שבקשה אחרת חייבת למצוא — ובפרט לפני `redirect(` לצד שלישי — state של OAuth, ‏`code_verifier`, nonce, יעד חזרה, דגל "פעם אחת" — או צורך ערך כזה ב-`session.pop(` או ב-`session.clear(` | `bugbot-rules/cookie-session-last-write-wins.md` — כל תשובה מקבילה מחזירה את ה-cookie שלפני הכתיבה, והאחרונה מנצחת |
-| `$set` / `SET` של `is_active`, `is_default`, `is_current`, `is_primary` ל-true — בשחזור, `undelete`, הפעלה מחדש — או `is_active = 0` ואחריו `INSERT` | `bugbot-rules/single-active-invariant-in-code.md` — כמה פעילים זה יכול להשאיר, ומי במסד מונע את השני |
+| `$set` / `SET` של `is_active`, `is_default`, `is_current`, `is_primary` ל-true — בשחזור, `undelete`, הפעלה מחדש — או `is_active = 0` ואחריו `INSERT`, או הכנסה (`INSERT` / `insert_one`) של רשומה פעילה בלי כיבוי הקודם לפניה | `bugbot-rules/single-active-invariant-in-code.md` — כמה פעילים זה יכול להשאיר, ומי במסד מונע את השני |
 
 ### Campaign AI (FastAPI + Supabase/Postgres + Meta Marketing API + סליקה)
 
