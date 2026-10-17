@@ -349,6 +349,38 @@ filter (DB `WHERE`, regex, JS `.filter()`) או צר מדי (מוציא מקרי
 
 ---
 
+## R11. קובץ אחד שנטען בשני שמות
+
+**תדירות:** 2 פרויקטים (CodeBot + Facebook-Leads)
+**חומרה:** MEDIUM — שקט: אין שגיאה, ושני העותקים עונים. HIGH כשהעותק השני מפעיל תהליכון, מתזמן או התראה, או מחזיק נעילה או singleton שחייבים להיות יחידים.
+
+### איך זה נראה
+פייתון שומר מודול ב-`sys.modules` לפי השם שביקשו, ולא לפי הקובץ. כשאותו קובץ נגיש בשני שמות, כל שם טוען עותק משלו: מה שרץ בזמן טעינה רץ שוב, ומצב שמתעדכן בעותק אחד לא נראה מהשני. בלוג רואים את אותה שורה משני לוגרים, ובקוד — לרוב ייבוא עצל "כדי למנוע ייבוא מעגלי", שדוחה את הטעינה השנייה לאמצע הריצה.
+
+### דוגמאות אמיתיות
+- **CodeBot (PR #3543):** גוניקורן טען `app:app` מתוך `webapp/`, והקוד מייבא `webapp.app` ← כל עלייה של הוובאפ הריצה את הקובץ פעמיים: התראת עלייה, jobs ו-`MongoClient` כפולים. ובבוט, שרץ `python main.py`, `from main import get_admin_ids` טוען את `main.py` שוב בעדכון הראשון של משתמש.
+- **Facebook-Leads (פריט 38 ב-`eight-projects-patterns.md`, וההערה ב-`main.py` שם):** הבוט רץ `python main.py`, והפאנל עשה `from main import scan_progress` ← הפאנל קרא מילון של עותק שאף אחד לא מעדכן, ותמיד הראה "ממתין".
+
+### כלל לזיהוי
+1. נקודת כניסה שמכוונת לקובץ בשם אחר מזה שהקוד מייבא — `gunicorn app:app` מתוך תיקיית החבילה.
+2. `from main import` / `import main` בקוד ייצור, כשנקודת הכניסה היא `python main.py`.
+3. עקיפה שמחפשת את שני השמות — `sys.modules.get("app")`, או `except ImportError: from app import`.
+
+הנוסח המלא, עם שתי הדרכים הנוספות: `bugbot-rules/module-loaded-under-two-names.md`.
+
+### False positives
+- `from main import` בטסט, כש-`__main__` הוא pytest ולא `main.py`.
+- alias שמחזיר את אותו אובייקט מודול לשני השמות.
+
+### מצב מומלץ
+**strict.** שם אחד לכל קובץ: נקודת הכניסה טוענת אותו בשם שהקוד מייבא. כשהשם השני אפשרי — שומר בראש הקובץ שעוצר אותו, או alias שמחזיר את אותו מודול (`sys.modules.setdefault("main", sys.modules[__name__])` בראש הקובץ, כמו ב-Facebook-Leads). והבדיקה סופרת טעינות בתהליך שרץ כמו בפרודקשן — אותה פקודה ואותה תיקיית עבודה — ולא רק בודקת שהטעינה לא נופלת.
+
+### ראה גם
+- `bugbot-rules/module-loaded-under-two-names.md` — הנוסח לבאגבוטים
+- `bugbot-rules/import-time-side-effects.md` — מה רץ בזמן טעינה; כאן, כמה פעמים
+
+---
+
 ## ראה גם (cross-tier)
 
 - **K7 / PII בלוגים** — לפי תדירות זה RECURRING (EmailFlow P5 + 8-Projects C6/C24/C57), אבל לפי חומרה CRITICAL. הכלל המלא ב-`CRITICAL-PATTERNS.md`.
