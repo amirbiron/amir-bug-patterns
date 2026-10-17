@@ -359,7 +359,7 @@ filter (DB `WHERE`, regex, JS `.filter()`) או צר מדי (מוציא מקרי
 
 ### דוגמאות אמיתיות
 - **CodeBot (PR #3543):** גוניקורן טען `app:app` מתוך `webapp/`, והקוד מייבא `webapp.app` ← כל עלייה של הוובאפ הריצה את הקובץ פעמיים: התראת עלייה, jobs ו-`MongoClient` כפולים. ובבוט, שרץ `python main.py`, `from main import get_admin_ids` טוען את `main.py` שוב בעדכון הראשון של משתמש.
-- **Facebook-Leads (`454e530`, `4cb5c37`):** הבוט רץ `python main.py`, והפאנל עשה `from main import scan_progress` ← הפאנל קרא מילון של עותק שאף אחד לא מעדכן, ותמיד הראה "ממתין".
+- **Facebook-Leads (פריט 38 ב-`eight-projects-patterns.md`, וההערה ב-`main.py` שם):** הבוט רץ `python main.py`, והפאנל עשה `from main import scan_progress` ← הפאנל קרא מילון של עותק שאף אחד לא מעדכן, ותמיד הראה "ממתין".
 
 ### כלל לזיהוי
 1. נקודת כניסה שמכוונת לקובץ בשם אחר מזה שהקוד מייבא — `gunicorn app:app` מתוך תיקיית החבילה.
