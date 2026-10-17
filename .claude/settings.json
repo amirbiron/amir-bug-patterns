@@ -6,8 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/codekeeper-primer.sh\"",
-            "timeout": 20
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/codekeeper-primer.sh",
+            "timeout": 120,
+            "statusMessage": "טוען הוראות סוכן מ-CodeKeeper (עד דקה וחצי אם השרת בדיפלוי)..."
           }
         ]
       }
