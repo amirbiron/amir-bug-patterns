@@ -150,6 +150,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | `replace(tzinfo=` · `datetime.now()` **בלי** אזור זמן · כל `date.today()` · הצגת תאריך למשתמש | `RECURRING-PATTERNS.md` R7 |
 | **ברמה העליונה של מודול** (מחוץ לכל פונקציה): `Thread(`, `.start()`, `scheduler`, `asyncio.create_task`, לקוח או חיבור שנבנה מ-`os.environ`, או קריאת רשת, מסד או קובץ | `bugbot-rules/import-time-side-effects.md` — מה רץ בזמן ייבוא. ואם מה שנבנה שם הוא מופע של ספרייה חיצונית שמשותף לחוטים — ראה גם את השורה על מופע של ספרייה חיצונית |
 | `spec_from_file_location` / `module_from_spec` / `exec_module` — טעינה של קובץ לפי נתיב (סקריפט, טסט, conftest) | `bugbot-rules/load-by-path-without-import-bookkeeping.md` |
+| פקודת הפעלה של תהליך פייתון — `gunicorn` / `uvicorn` / `python <קובץ>.py` / `python -m`, בסקריפט הפעלה, ב-`Dockerfile` או ב-`render.yaml` · כתיבה או שינוי של `if __name__ == "__main__":` · `sys.path.insert` / `--pythonpath` / `PYTHONPATH` · `from main import` / `import main`, או ייבוא שנופל לשם אחר (`except ImportError: from app import`) | `RECURRING-PATTERNS.md`, "קובץ אחד שנטען בשני שמות" + `bugbot-rules/module-loaded-under-two-names.md` — באיזה שם הקובץ נטען כשהוא רץ, ובאיזה שם הקוד מייבא אותו |
 | שינוי שנעשה כדי לספק לינטר: הזזת `import`, ניקוי אזהרת escape, הרחבת `except` | `bugbot-rules/linter-fix-changes-runtime-behavior.md` |
 | מחיקה / שיתוף / שינוי שם לפי `_id` שהגיע מהממשק, ‏`created_at`, או פעולה גורפת על `code_snippets` ו-`large_files` | `bugbot-rules/logical-entity-vs-version-document.md` |
 | `find_one(` / `LIMIT 1` / `.first()` / `[0]` / `[:1]` **על מסנן שאינו אינדקס ייחודי**, בלי `sort` / `ORDER BY` | `bugbot-rules/unsorted-representative.md` — איזו שורה נבחרה, ומי קבע |
@@ -181,6 +182,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | שליחת הודעה + עדכון סטטוס | `claude-md-snippets/universal.md` §5 (linked-field atomicity) |
 | כותב ל-`session[...]` ערך שבקשה אחרת חייבת למצוא — ובפרט לפני `redirect(` לצד שלישי — state של OAuth, ‏`code_verifier`, nonce, יעד חזרה, דגל "פעם אחת" — או צורך ערך כזה ב-`session.pop(` או ב-`session.clear(` | `bugbot-rules/cookie-session-last-write-wins.md` — כל תשובה מקבילה מחזירה את ה-cookie שלפני הכתיבה, והאחרונה מנצחת |
 | `$set` / `SET` של `is_active`, `is_default`, `is_current`, `is_primary` ל-true — בשחזור, `undelete`, הפעלה מחדש — או `is_active = 0` ואחריו `INSERT`, או הכנסה (`INSERT` / `insert_one`) של רשומה פעילה בלי כיבוי הקודם לפניה | `bugbot-rules/single-active-invariant-in-code.md` — כמה פעילים זה יכול להשאיר, ומי במסד מונע את השני |
+| פקודת הפעלה של תהליך פייתון — `gunicorn` / `uvicorn` / `python <קובץ>.py` / `python -m`, בסקריפט הפעלה, ב-`Dockerfile` או ב-`render.yaml` · כתיבה או שינוי של `if __name__ == "__main__":` · `sys.path.insert` / `--pythonpath` / `PYTHONPATH` · `from main import` / `import main`, או ייבוא שנופל לשם אחר (`except ImportError: from app import`) | `RECURRING-PATTERNS.md`, "קובץ אחד שנטען בשני שמות" + `bugbot-rules/module-loaded-under-two-names.md` — באיזה שם הקובץ נטען כשהוא רץ, ובאיזה שם הקוד מייבא אותו |
 
 ### Campaign AI (FastAPI + Supabase/Postgres + Meta Marketing API + סליקה)
 
@@ -219,7 +221,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 
 ### פרויקטים קטנים (TaskFlow, myAgent, APIWatchBot...)
 מספיק הבלוק האוניברסלי: K11 + testing + הכלל הרלוונטי היחיד לפי ה-stack
-(myAgent: webhooks; TaskFlow: cron-jobs לתזכורות; סורק לידים / Social Publisher: `bugbot-rules/content-hash-normalization.md` — dedup של תוכן חיצוני).
+(myAgent: webhooks; TaskFlow: cron-jobs לתזכורות; סורק לידים / Social Publisher: `bugbot-rules/content-hash-normalization.md` — dedup של תוכן חיצוני). ולסורק לידים (Facebook-Leads) גם שורה שנייה: השורה על פקודת הפעלה של תהליך פייתון מהטבלה של CodeBot, כמו שהיא (`RECURRING-PATTERNS.md`, "קובץ אחד שנטען בשני שמות" + `bugbot-rules/module-loaded-under-two-names.md`). `main.py` שם רץ כסקריפט, והפאנל מייבא ממנו בשמו — ה-alias ב-`main.py` הוא מה שמחזיק את כל ה-`from main import` של הפאנל.
 
 ---
 

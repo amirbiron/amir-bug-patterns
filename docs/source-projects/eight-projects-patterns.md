@@ -254,6 +254,7 @@
 - **תוצאה:** הפאנל תמיד מציג "ממתין" גם כשסריקה רצה.
 - **מקור:** `Facebook-Leads-New` — commits `454e530`, `4cb5c37`
 - **דפוס:** ניהול מצב / concurrency
+- **המנגנון:** `RECURRING-PATTERNS.md`, "קובץ אחד שנטען בשני שמות" — הבוט רץ `python main.py`, והפאנל עשה `from main import scan_progress`, כלומר טען עותק שני של הקובץ, עם מילון משלו
 
 #### 39. Missing import — הודעת סיום סריקה לא נשלחת
 - **בעיה:** `send_message` לא ייובא ב-`run_cycle` — scan completion message לעולם לא נשלח.
