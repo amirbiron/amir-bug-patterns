@@ -201,6 +201,7 @@ amir-bug-patterns/
 │   ├── cookie-session-last-write-wins.md
 │   ├── unsorted-representative.md
 │   ├── single-active-invariant-in-code.md
+│   ├── evidence-that-cannot-fail.md
 │   ├── pii-in-logs.md                       # CRITICAL
 │   ├── secret-in-error-response.md          # CRITICAL
 │   ├── secret-in-derived-text.md            # CRITICAL
