@@ -156,7 +156,7 @@ q = select(Lead).options(joinedload(Lead.booking)).with_for_update()  # ❌
 q = select(Lead).options(joinedload(Lead.booking)).with_for_update(of=Lead)
 ```
 
-בישות aliased ה-`of` מקבל את ה-alias עצמו: `of=Lead` על `aliased(Lead)` נופל ב-`relation ... in FOR UPDATE clause not found in FROM clause`. ו-`of=Lead` לא נועל את ה-booking — כשההחלטה תלויה גם בשורה המקושרת, נועלים אותה בנפרד: `await session.refresh(lead.booking, with_for_update=True)`, או `select(Booking)...with_for_update()` עם `execution_options(populate_existing=True)`. בלי זה ה-select מחזיר את האובייקט שכבר ב-identity map עם הערכים שנטענו לפני הנעילה — הנעילה נרכשה, וההחלטה נסמכת על נתון ישן (נמדד ב-SQLAlchemy 2.1.8: אחרי עדכון מחיבור אחר, select רגיל החזיר את הערך הישן, ושתי הצורות החזירו את החדש). ושתיהן דורסות שינוי שטרם נשמר באובייקט.
+בישות aliased ה-`of` מקבל את ה-alias עצמו: `of=Lead` על `aliased(Lead)` נופל ב-`relation ... in FOR UPDATE clause not found in FROM clause`. ו-`of=Lead` לא נועל את ה-booking — כשההחלטה תלויה גם בשורה המקושרת, נועלים אותה בנפרד: `await session.refresh(lead.booking, with_for_update=True)` כש-`lead.booking is not None` (על `None` הוא זורק `UnmappedInstanceError`), או `select(Booking)...with_for_update()` עם `execution_options(populate_existing=True)`. בלי זה ה-select מחזיר את האובייקט שכבר ב-identity map עם הערכים שנטענו לפני הנעילה — הנעילה נרכשה, וההחלטה נסמכת על נתון ישן (נמדד ב-SQLAlchemy 2.1.8: אחרי עדכון מחיבור אחר, select רגיל החזיר את הערך הישן, ושתי הצורות החזירו את החדש). ושתיהן דורסות שינוי שטרם נשמר באובייקט.
 
 ‏`contains_eager` עם `join` מפורש גם הוא עובד, אבל זה `INNER JOIN` — שורה בלי קשר **נעלמת מהתוצאה בשקט**. נכון רק כשהקשר חובה:
 ```python

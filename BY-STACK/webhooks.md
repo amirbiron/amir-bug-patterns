@@ -68,7 +68,7 @@ async def handle_gmail(req: Request):
     draft_row.gmail_id = gmail_draft.id
     draft_row.status = "created"
     await session.commit()
-  except TimeoutError:  # או חריגת ה-timeout של הלקוח שלך
+  except (TimeoutError, ConnectionError):  # כל חריגה של הלקוח שלך שבה התשובה אבדה: timeout, חיבור שנותק אחרי השליחה
     draft_row.status = "unknown"  # ייתכן שה-draft נוצר אצל הספק — לא failed
     await session.commit()
     raise
@@ -78,7 +78,7 @@ async def handle_gmail(req: Request):
     raise
 ```
 
-לא תופסים `IntegrityError` גורף כ"כפילות": הוא נזרק גם על FK, ‏CHECK ו-NOT NULL, ו-200 עליהם מאשר לספק webhook שנזרק. ‏`ON CONFLICT (idempotency_key) DO NOTHING RETURNING id` מחזיר שורה ריקה רק על התנגשות במפתח הזה, וכל שגיאה אחרת עולה (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026). העמודה `idempotency_key` היא UNIQUE ו-NOT NULL: בלי UNIQUE אין התנגשות, ו-NULL אינו מתנגש עם NULL — מפתח חסר היה עובר כרשומה חדשה. ו-timeout אינו כשל ודאי: ייתכן שהספק יצר את ה-draft, ולכן הוא נשמר כ-`unknown` ולא כ-`failed`.
+לא תופסים `IntegrityError` גורף כ"כפילות": הוא נזרק גם על FK, ‏CHECK ו-NOT NULL, ו-200 עליהם מאשר לספק webhook שנזרק. ‏`ON CONFLICT (idempotency_key) DO NOTHING RETURNING id` מחזיר שורה ריקה רק על התנגשות במפתח הזה, וכל שגיאה אחרת עולה (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026). העמודה `idempotency_key` היא UNIQUE ו-NOT NULL: בלי אינדקס ייחודי תואם Postgres דוחה את ה-INSERT עצמו (`there is no unique or exclusion constraint matching the ON CONFLICT specification` — נמדד), ו-NULL אינו מתנגש עם NULL — מפתח חסר היה עובר כרשומה חדשה. ותשובה שאבדה — timeout, חיבור שנותק אחרי השליחה — אינה כשל ודאי: ייתכן שהספק יצר את ה-draft, ולכן היא נשמרת כ-`unknown` ולא כ-`failed`.
 
 ### Commits אמיתיים
 - EmailFlow `f847a44`, `401f179`, `cc7e81a`, `75c0a47`, `0fdd247`.
