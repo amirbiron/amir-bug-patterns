@@ -12,7 +12,7 @@
    - `password`, `passwordHash`, `password_hash`, `salt`
    - `refresh_token`, `access_token`, `api_key`, `secret`, `private_key`
    - JWT bearer tokens בשדות תגובה שאינם cookie
-   - חריג: תשובה שמנפיקה טוקנים למשתמש — endpoint של OAuth, או login / refresh משלך — ורק שדות הטוקן שהונפקו בה (`access_token`, ו-`refresh_token` כשמונפק). לא טוקן או מפתח של ספק שהשרת מחזיק (CRITICAL K6, K7).
+   - חריג: תשובה שמנפיקה credential חדש לבעליו המאומת — טוקנים ב-endpoint של OAuth או login / refresh משלך, או מפתח API חדש ב-endpoint שיוצר אותו — ורק השדות שהונפקו בה, פעם אחת (`access_token` ו-`refresh_token` כשמונפק, או ה-`api_key` החדש). לא טוקן או מפתח של ספק שהשרת מחזיק (CRITICAL K6, K7).
    - שדות תפעוליים פנימיים בלבד (`internal_status`, `decision_factors`, `model_version`)
 
 3. מחלקת exception מותאמת כוללת מזהים פנימיים ב-`message` / `to_dict()` / serialization שלה, ואז נזרקת בגבול API. דוגמה:

@@ -116,7 +116,7 @@ flow של signup מאפשר קביעת סיסמה לחשבון שכבר קיים
 
 ### כלל לזיהוי
 1. Serialization של משתמש / actor חייב לעבור דרך DTO / Pydantic response model מפורש שמפרט רק את השדות המותרים. ORM row → JSON אסור בגבולות API.
-2. שמות שדות אסורים בכל מקום ב-response של API: `password`, `passwordHash`, `password_hash`, `salt`, `refresh_token`, `access_token`, `api_key`, `secret`, `private_key` — חוץ מתשובה שמנפיקה טוקנים (endpoint של OAuth, או login / refresh משלך), ורק שדות הטוקן שהונפקו בה: `access_token`, ו-`refresh_token` כשמונפק.
+2. שמות שדות אסורים בכל מקום ב-response של API: `password`, `passwordHash`, `password_hash`, `salt`, `refresh_token`, `access_token`, `api_key`, `secret`, `private_key` — חוץ מתשובה שמנפיקה credential חדש לבעליו המאומת (טוקנים ב-endpoint של OAuth או login / refresh משלך; מפתח API חדש ב-endpoint שיוצר אותו), ורק השדות שהונפקו בה, פעם אחת: `access_token` ו-`refresh_token` כשמונפק, או ה-`api_key` החדש. לא מפתח של ספק שהשרת מחזיק.
 3. מחלקות exception שעלולות להיזרק בגבולות API לא יכולות לכלול IDs פנימיים / hostnames / סיבות heuristic ב-message הפומבי שלהן. דפוס: `class XError(AppException): public_message: str  # safe;  detail: dict  # server-only`.
 
 ### ראה גם
@@ -142,7 +142,7 @@ flow של signup מאפשר קביעת סיסמה לחשבון שכבר קיים
 **אסור בלוגים (או ב-response של API):**
 - `email`, `phone`, `from_email`, `to_email`, שדות כתובת, שדות שם.
 - תוכן body של email / chat / messages.
-- OAuth tokens גולמיים, `refresh_token`, `access_token`, API keys (ב-response — חוץ מטוקנים שהונפקו למשתמש בתשובת ההנפקה עצמה, ראה K6. זה לא מתיר להחזיר מפתחות API של ספק שהשרת מחזיק, ובלוג הם אסורים תמיד).
+- OAuth tokens גולמיים, `refresh_token`, `access_token`, API keys (ב-response — חוץ מ-credential שהונפק למשתמש בתשובת ההנפקה עצמה, טוקן או מפתח API חדש שלו, ראה K6. זה לא מתיר להחזיר מפתחות של ספק שהשרת מחזיק, ובלוג הם אסורים תמיד).
 
 **אסור ב-response של API בלבד (לוגים בסדר אם יש בקרת גישה ללוגים — אחרי ניקוי PII וסודות, K13):**
 - סיבות heuristic להחלטה (`'esp:mailchimp.com'`, `'spam_score=0.8'`).
