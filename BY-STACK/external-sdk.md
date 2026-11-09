@@ -1,6 +1,6 @@
 # BY-STACK: SDKs חיצוניים (Anthropic, Google, Stripe, OAuth, push notifications)
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ קריאות SDK של Anthropic / OpenAI / LLM אחר
 - ✅ APIs של Google (Calendar, Gmail, OAuth, Sheets, FCM, web-push)
 - ✅ SDKs של Stripe, Twilio, Telegram, Slack, Meta

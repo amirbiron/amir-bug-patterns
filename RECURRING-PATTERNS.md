@@ -15,8 +15,8 @@
 SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifecycle שתופסים מפתחים לא מוכנים:
 - attributes של אובייקט ORM שניגשים אליהם *אחרי* `await session.rollback()` זורקים `MissingGreenlet`.
 - `AsyncSession` אחד שמשותף בין tasks concurrent דרך `asyncio.gather` → race / שחיתות (sessions לא בטוחים ל-thread או ל-task).
-- אחרי `await session.commit()` בלולאה, גישה מחדש לאותה שורת ORM מחזירה attributes ישנים (commit מרענן רק את ה-PK; דורש `await session.refresh(row)` מפורש).
-- `joinedload` + `with_for_update` אינם תואמים (SQLAlchemy זורק).
+- אחרי `await session.commit()` בלולאה, גישה מחדש לאותה שורת ORM נכשלת או מחזירה ערך ישן: ב-`expire_on_commit=True` (ברירת המחדל) commit מסמן את כל האובייקטים כפגי תוקף והגישה זורקת `MissingGreenlet`; ב-`False` השדות נשארים מלפני ה-commit. בשני המקרים — `await session.refresh(row)` מפורש.
+- `joinedload` + `with_for_update` נדחים ב-Postgres: ‏`joinedload` הוא LEFT OUTER JOIN, ו-`FOR UPDATE` אינו חל על הצד ה-nullable שלו (השגיאה מה-DB, לא מ-SQLAlchemy).
 - `Engine` singleton שמקושר ל-event loop אחד נכשל ב-Celery task השני (שמקבל loop חדש).
 
 ### דוגמאות אמיתיות
@@ -29,9 +29,9 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 
 ### כלל לזיהוי
 1. לעולם אל תעביר את אותו `AsyncSession` ל-tasks concurrent מרובים דרך `asyncio.gather` / `asyncio.create_task` — כל task פותח את שלו עם `async with sessionmaker() as session:`.
-2. אחרי `await session.rollback()` (מפורש או מ-exception): אל תיגש ל-attributes של ORM. חלץ `.id` / primitives **לפני** rollback, או `session.expunge(obj)` כדי לנתק.
+2. אחרי `await session.rollback()` (מפורש או מ-exception): אל תיגש ל-attributes של ORM. חלץ `.id` / primitives **לפני** rollback, או `session.expunge(obj)` כדי לנתק — גם הוא לפני ה-rollback ועל אובייקט שהשדות שלו טעונים; אחרי ה-rollback האובייקט המנותק ריק וזורק `DetachedInstanceError`.
 3. אחרי `await session.commit()` בתוך לולאה, קרא ל-`await session.refresh(row)` לפני גישה מחדש ל-attributes.
-4. `joinedload` עם locking → השתמש ב-`contains_eager` במקום.
+4. `joinedload` עם locking → `with_for_update(of=Model)`, שנועל רק את הטבלה הראשית ושומר את ה-LEFT JOIN. ‏`contains_eager` עם `join` הוא INNER JOIN ומשמיט שורות בלי קשר — רק כשהקשר חובה.
 5. Celery tasks: צור engine חדש בתוך ה-task (או השתמש ב-connection pool שמתחדש ל-loop הנוכחי).
 
 ### False positives
@@ -91,7 +91,7 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 - `window.open("mailto:...")` מחזיר `null` ב-Chrome (handoff של protocol מערכת, **לא** popup blocker). קוד שמפרש `null` כ-"חסום" מבטל את הפעולה הלגיטימית.
 - `navigator.clipboard.writeText(...)` דורש HTTPS; זורק על HTTP. בלי try/catch → שגיאת console + כשל UX שקט.
 - Tooltip / dropdown נסגר מיד על click כי ה-click מבעבע ל-parent שמחליף state.
-- CSS reset גלובלי (`* { margin: 0; padding: 0 }`) יש לו specificity גבוה יותר ממחלקות utility של Tailwind כמו `space-y-6`.
+- CSS reset גלובלי (`* { margin: 0; padding: 0 }`) מחוץ לכל `@layer` גובר ב-Tailwind v4 על מחלקות utility כמו `space-y-6`, שיושבות ב-`@layer utilities` — לא בגלל specificity (של `*` הוא אפס), אלא כי כלל מחוץ לשכבה גובר על כל כלל שבשכבה. ב-v3 אותו reset מפסיד להן.
 - דליפת `URL.createObjectURL` — blob URL לעולם לא משוחרר, מצטבר לכל render.
 - `setTimeout(fn, delay)` עם `delay = NaN` — שגיאת React / delay אינסופי.
 
@@ -108,7 +108,7 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 2. `navigator.clipboard.*` בלי try/catch → דווח.
 3. `URL.createObjectURL` בלי `URL.revokeObjectURL` מתאים ב-cleanup של `useEffect` / `componentWillUnmount` / `addEventListener('unload', ...)`.
 4. `setTimeout(fn, delay)` / `setInterval(fn, delay)` / `new Date(value)` בלי הגנת `isFinite(delay)` ל-delay/value ממקור חיצוני.
-5. `* { margin: 0; padding: 0 }` גלובלי בפרויקט שמשתמש ב-framework utility CSS (Tailwind, UnoCSS) → דווח.
+5. `* { margin: 0; padding: 0 }` גלובלי מחוץ ל-`@layer`, בפרויקט שה-utilities שלו יושבות בתוך `@layer` של CSS (Tailwind v4) → דווח. ב-Tailwind v3 זה אינו הבאג.
 
 ### מצב מומלץ
 **warning** — רוב הבאגים הם UX, לא אובדן נתונים.

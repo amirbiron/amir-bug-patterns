@@ -1,6 +1,6 @@
 # BY-STACK: React frontend
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ React עם `useState` / `useEffect` / `useCallback` / `useMemo`
 - ✅ Data fetching דרך TanStack Query, SWR, או דומה (state של frontend שמסונכרן מהשרת)
 - ✅ טפסים, dropdowns, או כל קומפוננטה שמקבלת ערך התחלתי מ-prop שיכול להשתנות
@@ -163,13 +163,13 @@ setTimeout(load, isFinite(parsed) && parsed > 0 ? parsed : 1000);  // ✅
 
 ---
 
-## דפוס 8 — CSS reset גלובלי שדורס מחלקות utility
+## דפוס 8 — CSS reset גלובלי שדורס מחלקות utility (Tailwind v4)
 
 ```css
-* { margin: 0; padding: 0; }  /* ❌ דורס Tailwind space-y-*, p-*, m-* */
+* { margin: 0; padding: 0; }  /* ❌ ב-Tailwind v4 דורס space-y-*, p-*, m-* */
 ```
 
-השתמש ב-reset מוגבל-scope (למשל `@tailwind base` בלבד) או הסר את ה-selector של `*`.
+ב-v4 ה-utilities יושבות ב-`@layer utilities`, וכלל שמחוץ לשכבה גובר עליהן בלי קשר ל-specificity; ב-v3 אותו reset מפסיד ל-utilities ואינו הבאג. סמוך על Preflight (`@import "tailwindcss"` ב-v4, ‏`@tailwind base` ב-v3) והסר את ה-reset; reset שחייב להישאר — בתוך `@layer base`. ההסבר והמדידה: `browser-handoff.md` דפוס 4.
 
 ### Commits אמיתיים
 - Web `c586691`.

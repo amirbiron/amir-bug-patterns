@@ -1,6 +1,6 @@
 # BY-STACK: Webhooks ("מישהו קורא אליי")
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ webhooks נכנסים משירותים חיצוניים (Google Calendar, Gmail, Meta, Stripe, Twilio, Telegram)
 - ✅ Consumers של Pub/Sub / SQS / Kafka (at-least-once delivery)
 - ✅ לוגיקת rate-limit נכנסת שקוראת `X-Forwarded-For` או דומה

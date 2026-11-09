@@ -1,6 +1,6 @@
 # BY-STACK: handoff צד-דפדפן (mailto:, tel:, clipboard, DOM quirks)
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ קוד דפדפן שפותח קישורי `mailto:`, `tel:`, `sms:`, או `file:`
 - ✅ קוד דפדפן שמשתמש ב-`navigator.clipboard.*`
 - ✅ קומפוננטות React עם tooltips, dropdowns, או modals שנסגרים על click מבחוץ
@@ -102,18 +102,21 @@ async function copy(text) {
 
 ---
 
-## דפוס 4 — CSS reset גלובלי דורס מחלקות utility
+## דפוס 4 — CSS reset גלובלי דורס מחלקות utility (Tailwind v4)
 
 ```css
 /* איפשהו ב-CSS legacy */
 * { margin: 0; padding: 0; }
 ```
 
-בפרויקט Tailwind, `space-y-6` מתורגם ל-margins על ילדים. ה-reset הגלובלי יש לו specificity גבוהה יותר (universal selector + declaration ישיר) ומנצח.
+בפרויקט Tailwind, `space-y-6` מתורגם ל-margins על ילדים. הסיבה שה-reset גובר אינה specificity — ל-`*` יש את ה-specificity הנמוך ביותר, אפס — אלא **שכבות**: ב-Tailwind v4 ה-utilities נכתבות בתוך `@layer utilities`, ובמפל של CSS כלל שאינו בשום שכבה גובר על כל כלל שבשכבה, בלי קשר ל-specificity. ב-Tailwind v3 אין שכבות אמיתיות בפלט: ה-utilities מנצחות את `*` ב-specificity, והבאג לא מופיע.
+
+נמדד בקומפילציה אמיתית ובדפדפן (Tailwind 3.4.19 ו-4.3.5, ‏Chromium, נובמבר 2026), עם `p-4 space-y-6` וה-reset אחרי Tailwind: ב-v3 ‏padding של 16px ומרווח של 24px; ב-v4 — אפס בשניהם; ב-v4 עם ה-reset בתוך `@layer base` — שוב 16px ו-24px.
 
 ### תיקון
-- השתמש ב-`@tailwind base` של Tailwind עצמו ל-reset (Preflight).
-- או scope ל-reset: `body > * { margin: 0; padding: 0 }` — אבל זה עדיין שובר utilities.
+- השתמש ב-reset של Tailwind עצמו (Preflight): ‏`@import "tailwindcss"` ב-v4, ‏`@tailwind base` ב-v3.
+- reset שחייב להישאר — בתוך `@layer base`, ואז ה-utilities גוברות עליו.
+- או scope ל-reset: `body > * { margin: 0; padding: 0 }` — אבל זה עדיין שובר utilities: ב-v4 הוא עדיין מחוץ לשכבה, וגובר על ה-utilities של כל אלמנט שהוא תופס (נמדד: ה-padding של ילד ישיר של `body` התאפס).
 - הכי טוב: הסר את ה-reset הידני וסמוך על ה-reset המובנה של Tailwind / framework utility-CSS.
 
 ### Commits אמיתיים

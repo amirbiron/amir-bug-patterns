@@ -1,6 +1,6 @@
 # BY-STACK: Cron jobs / scheduled tasks ("אני רץ לפי טיימר")
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ jobs מתוזמנים (Celery beat, APScheduler, cron, node-cron, Render cron, Heroku scheduler)
 - ✅ queries תקופתיים שמסננים שורות ומעבדים אותן ב-batch
 - ✅ workers ברקע שעושים retry לכשלים עם מוני attempts
@@ -118,10 +118,10 @@ UPDATE messages SET status='processing'
 
 ## דפוס 4 — singleton engine ב-Celery / async task runner
 
-engine ברמת module שמקושר ל-event loop של זמן ה-import נכשל כשה-task הבא מקבל loop טרי.
+engine ברמת module: החיבורים ב-pool נקשרים ל-loop שבו נפתחו — של ה-task הראשון, לא של זמן ה-import — וה-task הבא, שרץ ב-loop חדש (`asyncio.run`), מקבל חיבור של loop שנסגר ונופל ב-`attached to a different loop`.
 
 ### תיקון
-יצירת engine lazy לכל task, או `engine.dispose()` בין tasks. ראה `BY-STACK/async-orm.md` דפוס 4.
+יצירת engine lazy לכל task, או `engine.dispose()` בין tasks, או `poolclass=NullPool`. ראה `BY-STACK/async-orm.md` דפוס 4 — שם גם המדידה, ולמה ב-Celery קוד async רץ דרך `asyncio.run`.
 
 ### Commits אמיתיים
 - Shipment-bot `0f30963`.

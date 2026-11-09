@@ -1,6 +1,6 @@
 # BY-STACK: State machines
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ Status enums שמובילים lifecycle (`Lead.status`, `Order.status`, `Booking.status`, `Conversation.state`)
 - ✅ פעולות "touchpoint": פעולה אחת שחייבת לעדכן atomically כמה שדות מקושרים (status + last_outbound_at + last_activity_type + סגירת task קשור + log-activity)
 - ✅ Activity / audit logs שצרכנים downstream (cron / dashboards) תלויים בהם

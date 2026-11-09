@@ -1,6 +1,6 @@
 # BY-STACK: Async ORM (SQLAlchemy AsyncSession)
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ SQLAlchemy `AsyncSession` / `async_sessionmaker` / `create_async_engine`
 - ✅ FastAPI או aiohttp עם כתיבות DB async
 - ✅ Celery / RQ tasks שמשתמשים ב-SQLAlchemy async
@@ -38,7 +38,7 @@ except SomeError:
   logger.error("failed for lead %s", lead_email)  # ✅
 ```
 
-או נתק במפורש: `session.expunge(lead)` כדי לנתק (`lead.email` ממשיך לעבוד כ-primitive).
+או נתק במפורש: `session.expunge(lead)` כדי לנתק (`lead.email` ממשיך לעבוד כ-primitive) — **לפני** הפעולה שיכולה לעשות rollback, ועל אובייקט שהשדות שלו טעונים. ‏`expunge` אחרי ה-rollback, או על אובייקט שפג תוקפו ב-commit קודם (`expire_on_commit=True`), משאיר אובייקט מנותק וריק, והגישה לשדה זורקת `DetachedInstanceError` (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026).
 
 ### Commits אמיתיים
 - EmailFlow `0fdd247`.
@@ -69,13 +69,15 @@ async def process_all(sessionmaker, items):
 
 ---
 
-## דפוס 3 — attributes ישנים אחרי commit בלולאה
+## דפוס 3 — attributes אחרי commit בלולאה: `MissingGreenlet` או ערך ישן
 
 ```python
 for row in await session.execute(...):
   await session.commit()  # commits any pending changes
-  process(row.related_field)  # ❌ עלול להיות ישן (commit מרענן רק PK)
+  process(row.related_field)  # ❌ אחרי commit השדות פגי תוקף או ישנים — ראה למטה
 ```
+
+ההתנהגות תלויה ב-`expire_on_commit` של ה-session. ב-`True` — ברירת המחדל — commit מסמן את **כל** האובייקטים ב-session כפגי תוקף, והגישה לשדה מנסה טעינה עצלה, שאינה נתמכת ב-async: `MissingGreenlet`. ב-`False` — ההגדרה שבדוגמאות של SQLAlchemy ל-`async_sessionmaker` — השדות נשארים עם הערכים מלפני ה-commit, גם אם המסד השתנה בינתיים. התיקון זהה בשני המצבים (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026).
 
 ### תיקון
 ```python
@@ -93,30 +95,38 @@ for row in ...:
 
 ## דפוס 4 — singleton engine מקושר ל-event loop ב-Celery
 
+Celery לא מריץ `async def` כ-task: הוא מחזיר coroutine שאיש לא מחכה לו, וגוף הפונקציה לא רץ בכלל (נבדק ב-Celery 5.7.0 עם `task_always_eager`: התוצאה היא אובייקט `coroutine`, ו-`RuntimeWarning: coroutine ... was never awaited`). לכן קוד async ב-Celery נכתב כ-task סינכרוני שעוטף `asyncio.run(...)` — וכל הרצה של task יוצרת event loop חדש.
+
 ```python
 # module-level
 engine = create_async_engine(...)
 SessionLocal = async_sessionmaker(engine, ...)
 
-@app.task
-async def my_task():
-  async with SessionLocal() as session:  # ❌ engine מקושר ל-loop קודם → task שני נכשל
+async def _work():
+  async with SessionLocal() as session:  # ❌ ב-task השני: חיבור מה-pool של loop שכבר נסגר
     ...
+
+@app.task
+def my_task():
+  asyncio.run(_work())
 ```
 
-Celery יוצר event loop טרי לכל task. Engines שנוצרו ב-import time מקושרים ל-loop שהיה קיים אז.
+ב-import לא נפתח שום חיבור. החיבור הראשון נפתח ב-task הראשון, נקשר ל-loop שלו, וחוזר ל-pool בסוף ה-task. ה-task השני רץ ב-loop חדש, מקבל מה-pool את אותו חיבור, ונופל ב-`RuntimeError: ... attached to a different loop` (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026: הריצה הראשונה עוברת, השנייה נופלת).
 
 ### תיקון
-יצירה lazy לכל task, או `engine.dispose()` בין tasks, או השתמש ב-engine סינכרוני ב-Celery ובאסינכרוני רק ב-API layer.
+יצירה lazy לכל task, או `engine.dispose()` בסוף כל task, או `poolclass=NullPool` — בלי pool אין חיבור שעובר בין loops — או engine סינכרוני ב-Celery ואסינכרוני רק ב-API layer. ‏`dispose` בסוף כל task ו-`NullPool` עברו שתיהן באותה מדידה.
 ```python
-@app.task
-async def my_task():
+async def _work():
   engine = create_async_engine(DATABASE_URL, ...)
   try:
     async with async_sessionmaker(engine)() as session:
       ...
   finally:
     await engine.dispose()
+
+@app.task
+def my_task():
+  asyncio.run(_work())
 ```
 
 ### Commits אמיתיים
@@ -124,18 +134,26 @@ async def my_task():
 
 ---
 
-## דפוס 5 — `joinedload` + `with_for_update` לא תואמים
+## דפוס 5 — `joinedload` + `with_for_update` ב-Postgres
 
 ```python
 q = select(Lead).options(joinedload(Lead.booking)).with_for_update()  # ❌
 ```
 
-SQLAlchemy זורק (ה-join של eager load לא יכול להינעל באופן נקי).
+‏`joinedload` נבנה כ-`LEFT OUTER JOIN`, ו-`with_for_update()` בלי `of` נועל את כל הטבלאות בשאילתה. Postgres דוחה: `FOR UPDATE cannot be applied to the nullable side of an outer join`. השגיאה מגיעה מה-DB, עטופה ב-`DBAPIError` — לא מ-SQLAlchemy.
 
 ### תיקון
+כשהקשר אופציונלי — לנעול רק את הטבלה הראשית, ולהשאיר את ה-LEFT JOIN:
+```python
+q = select(Lead).options(joinedload(Lead.booking)).with_for_update(of=Lead)
+```
+
+‏`contains_eager` עם `join` מפורש גם הוא עובד, אבל זה `INNER JOIN` — שורה בלי קשר **נעלמת מהתוצאה בשקט**. נכון רק כשהקשר חובה:
 ```python
 q = select(Lead).options(contains_eager(Lead.booking)).join(Booking).with_for_update()
 ```
+
+נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026, על שני לידים שלאחד מהם אין booking: הצורה הראשונה נופלת בשגיאה, `of=Lead` מחזיר את שניהם, ו-`contains_eager` עם `join` מחזיר אחד.
 
 ### Commits אמיתיים
 - Shipment-bot `4352bac`.
