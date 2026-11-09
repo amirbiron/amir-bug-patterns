@@ -51,7 +51,7 @@ async def handle_gmail(req: Request):
   # 1. רזרבציה מקומית — כפילות מזוהה בהתנגשות על ה-idempotency key בלבד
   #    (insert מ-sqlalchemy.dialects.postgresql)
   draft_id = (await session.execute(
-    insert(Draft).values(idempotency_key=msg.message_id, status="reserved")
+    insert(Draft).values(idempotency_key=f"{TOPIC}:{msg.message_id}", status="reserved")  # message_id ייחודי רק בתוך topic
       .on_conflict_do_nothing(index_elements=["idempotency_key"])
       .returning(Draft.id)
   )).scalar_one_or_none()
@@ -116,6 +116,7 @@ async def handle_calendar_webhook(channel_id):
         .values(sync_token=changes.next_sync_token)
     )
     if result.rowcount == 1:
+      # apply_change רץ על אותה session ובלי commit משלו: ה-CAS וכל השינויים נשמרים יחד, או אף אחד
       for change in changes.items:
         await apply_change(change)
       await session.commit()
@@ -165,7 +166,7 @@ if rate_limiter.is_blocked(ip): return 429
 ### תיקון
 הגדר middleware של trusted-proxy ברמת ה-framework:
 - FastAPI / Starlette: `app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="<comma-separated-proxy-ips>")`.
-- Express: `app.set('trust proxy', <hop-count or array>)` — hop count רק כשהשרת לא נגיש ישירות (CRITICAL K2); כתובת הלקוח היא `req.ip`.
+- Express: `app.set('trust proxy', <hop-count or array>)` — hop count רק כשכל בקשה עוברת בדיוק אותו מספר proxies מהימנים, וכל אחד מהם מוסיף לכותרת את הכתובת שראה (CRITICAL K2); כתובת הלקוח היא `req.ip`.
 - Flask: `ProxyFix(app, x_for=N)`.
 
 ואז קרא את `request.client.host` (כבר תוקן על ידי ה-middleware).

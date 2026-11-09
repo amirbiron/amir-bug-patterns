@@ -12,6 +12,7 @@
    - `password`, `passwordHash`, `password_hash`, `salt`
    - `refresh_token`, `access_token`, `api_key`, `secret`, `private_key`
    - JWT bearer tokens בשדות תגובה שאינם cookie
+   - חריג: תשובה שמנפיקה טוקנים — endpoint של OAuth, או login / refresh — ורק שדות הטוקן שהונפקו בה.
    - שדות תפעוליים פנימיים בלבד (`internal_status`, `decision_factors`, `model_version`)
 
 3. מחלקת exception מותאמת כוללת מזהים פנימיים ב-`message` / `to_dict()` / serialization שלה, ואז נזרקת בגבול API. דוגמה:

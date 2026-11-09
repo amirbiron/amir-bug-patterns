@@ -38,7 +38,7 @@ except SomeError:
   logger.error("failed for lead %s", lead_email)  # ✅
 ```
 
-או נתק במפורש: `session.expunge(lead)` כדי לנתק (`lead.email` ממשיך לעבוד כ-primitive) — **לפני** הפעולה שיכולה לעשות rollback. באובייקט המנותק נשארים זמינים השדות שכבר נטענו; גישה לשדה שפג תוקפו או שלא נטען — אחרי ה-rollback, או אחרי commit קודם עם `expire_on_commit=True` — זורקת `DetachedInstanceError`. ו-`expunge` מוציא את האובייקט מהמעקב של ה-session: שינוי שעוד לא נשמר בו **לא ייכתב** ב-commit. כשהאובייקט עוד משתנה, או שיש בו שינוי שטרם נשמר — לחלץ primitives ולהשאיר אותו ב-session (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026: אובייקט ששונה ונותק לפני commit — הערך במסד לא השתנה).
+או נתק במפורש: `session.expunge(lead)` כדי לנתק (`lead.email` ממשיך לעבוד כ-primitive) — **לפני** הפעולה שיכולה לעשות rollback. באובייקט המנותק נשארים זמינים השדות שכבר נטענו; גישה לשדה שפג תוקפו או שלא נטען — אחרי ה-rollback, או אחרי commit קודם עם `expire_on_commit=True` — זורקת `DetachedInstanceError`. ו-`expunge` מוציא את האובייקט מהמעקב של ה-session: שינוי שעוד לא נשמר בו **לא ייכתב** ב-commit. כשהאובייקט עוד משתנה, או שיש בו שינוי שטרם נשמר — לחלץ primitives ולהשאיר אותו ב-session (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026: אובייקט ששונה ונותק לפני commit — הערך במסד לא השתנה). וערך שכבר נשלח ב-flush נשאר באובייקט המנותק גם אחרי שה-rollback ביטל אותו במסד (נמדד: באובייקט הערך החדש, במסד הקודם) — כשצריך את מצב המסד, טוענים את השורה מחדש אחרי ה-rollback.
 
 ### Commits אמיתיים
 - EmailFlow `0fdd247`.
@@ -90,7 +90,7 @@ for lead in leads:
   process(lead.status)
 ```
 
-‏`refresh` פועל על אובייקט ORM: על `Row` מ-`session.execute(select(...))` הוא זורק `UnmappedInstanceError`. ורענון כללי לא טוען קשר עצל (`lazy="select"`) — גישה ל-`lead.booking` אחריו עדיין זורקת `MissingGreenlet`. קשר נדרש נטען ב-`await session.refresh(lead, attribute_names=["booking"])`, מ-SQLAlchemy 2.0.4 (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026).
+‏`refresh` פועל על אובייקט ORM: על `Row` מ-`session.execute(select(...))` הוא זורק `UnmappedInstanceError`. ורענון כללי לא טוען קשר עצל (`lazy="select"`) — גישה ל-`lead.booking` אחריו עדיין זורקת `MissingGreenlet`. קשר נדרש נטען ב-`await session.refresh(lead, attribute_names=[...])`, מ-SQLAlchemy 2.0.4 — ורק מה שברשימה מתרענן: אחרי commit, `["booking"]` לבד משאיר את `lead.email` פג תוקף והגישה אליו זורקת `MissingGreenlet`, ולכן `["email", "booking"]` (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026).
 
 או קבץ את ה-commits מחוץ ללולאה.
 
@@ -120,7 +120,9 @@ def my_task():
 ב-import לא נפתח שום חיבור. החיבור הראשון נפתח ב-task הראשון, נקשר ל-loop שלו, וחוזר ל-pool בסוף ה-task. ה-task השני רץ ב-loop חדש, מקבל מה-pool את אותו חיבור, ונופל ב-`RuntimeError: ... attached to a different loop` (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026: הריצה הראשונה עוברת, השנייה נופלת).
 
 ### תיקון
-engine לכל task, שנסגר ב-`await engine.dispose()` בסוף ה-task — אחרי סגירת ה-session ולפני שה-loop נסגר. זו הצורה היחידה שעובדת גם כשה-tasks חופפים. ‏`engine.dispose()` בסוף כל task על engine משותף, או `poolclass=NullPool` — בלי pool אין חיבור שעובר בין loops — מספיקים רק כשה-tasks בתהליך רצים אחד-אחד (prefork): ברצף שניהם עברו, אבל עם ארבעה tasks מקבילים ב-threads (כמו `--pool=threads`), engine משותף נתקע עד ה-timeout בשלושת הווריאנטים — בלי `dispose`, עם `dispose` ועם `NullPool` — ו-engine לכל task עבר 60 מתוך 60 (אותה מדידה). או engine סינכרוני ב-Celery ואסינכרוני רק ב-API layer.
+engine לכל task, שנסגר ב-`await engine.dispose()` בסוף ה-task — אחרי סגירת ה-session ולפני שה-loop נסגר. זו צורה שעובדת גם כשה-tasks חופפים, בלי תנאים נוספים: עם ארבעה tasks מקבילים ב-threads (כמו `--pool=threads`) היא עברה 60 מתוך 60. engine משותף תלוי בסוג ה-pool. **עם pool** (ברירת המחדל) — רק כשה-tasks בתהליך רצים אחד-אחד (prefork), ועם `dispose()` בסוף כל task; במקביל, גם אחרי חימום, חיבורים עברו בין loops ונפלו (`another operation is in progress`, `attached to a different loop`). **עם `poolclass=NullPool`** — בלי pool אין חיבור שעובר בין loops, והוא עבר גם במקביל, 60 מתוך 60 — אבל רק אחרי ריצת חימום אחת: כשארבעת ה-tasks המקבילים היו הראשונים שפתחו חיבור, הם נתקעו עד ה-timeout. או engine סינכרוני ב-Celery ואסינכרוני רק ב-API layer. (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026.)
+
+ומלכודת בבדיקות: עם `task_always_eager` ה-task רץ באותו thread שקרא לו, ואם הקורא כבר בתוך event loop (handler async, ‏pytest-asyncio), ‏`asyncio.run` נכשל ב-`asyncio.run() cannot be called from a running event loop`. שם קוראים ל-task דרך `asyncio.to_thread(...)` — נבדק ב-Celery 5.7.0.
 ```python
 async def _work():
   engine = create_async_engine(DATABASE_URL, ...)
@@ -153,6 +155,8 @@ q = select(Lead).options(joinedload(Lead.booking)).with_for_update()  # ❌
 ```python
 q = select(Lead).options(joinedload(Lead.booking)).with_for_update(of=Lead)
 ```
+
+בישות aliased ה-`of` מקבל את ה-alias עצמו: `of=Lead` על `aliased(Lead)` נופל ב-`relation ... in FOR UPDATE clause not found in FROM clause`. ו-`of=Lead` לא נועל את ה-booking — כשההחלטה תלויה גם בשורה המקושרת, נועלים אותה בנפרד וקוראים אותה אחרי הנעילה.
 
 ‏`contains_eager` עם `join` מפורש גם הוא עובד, אבל זה `INNER JOIN` — שורה בלי קשר **נעלמת מהתוצאה בשקט**. נכון רק כשהקשר חובה:
 ```python

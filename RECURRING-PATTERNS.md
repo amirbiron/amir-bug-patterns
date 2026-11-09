@@ -16,7 +16,7 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 - attributes של אובייקט ORM שניגשים אליהם *אחרי* `await session.rollback()` זורקים `MissingGreenlet`.
 - `AsyncSession` אחד שמשותף בין tasks concurrent דרך `asyncio.gather` → race / שחיתות (sessions לא בטוחים ל-thread או ל-task).
 - אחרי `await session.commit()` בלולאה, גישה מחדש לאותה שורת ORM נכשלת או מחזירה ערך ישן: ב-`expire_on_commit=True` (ברירת המחדל) commit מסמן את כל האובייקטים כפגי תוקף והגישה זורקת `MissingGreenlet`; ב-`False` השדות נשארים מלפני ה-commit. בשני המקרים — `await session.refresh(row)` מפורש.
-- `joinedload` + `with_for_update` נדחים ב-Postgres כש-`joinedload` הוא LEFT OUTER JOIN (ברירת המחדל), ו-`FOR UPDATE` אינו חל על הצד ה-nullable שלו (השגיאה מה-DB, לא מ-SQLAlchemy).
+- `joinedload` + `with_for_update` נדחים ב-Postgres כש-`joinedload` הוא LEFT OUTER JOIN (ברירת המחדל), ו-`with_for_update()` בלי `of` נועל גם את הצד ה-nullable שלו, ש-`FOR UPDATE` אינו חל עליו (השגיאה מה-DB, לא מ-SQLAlchemy). ‏`with_for_update(of=Model)` אינו נכשל.
 - `Engine` singleton שמקושר ל-event loop אחד נכשל ב-Celery task השני (שמקבל loop חדש).
 
 ### דוגמאות אמיתיות
@@ -32,7 +32,7 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 2. אחרי `await session.rollback()` (מפורש או מ-exception): אל תיגש ל-attributes של ORM. חלץ `.id` / primitives **לפני** rollback, או `session.expunge(obj)` כדי לנתק — גם הוא לפני ה-rollback: באובייקט המנותק זמינים רק השדות שכבר נטענו, וגישה לשדה שפג תוקפו זורקת `DetachedInstanceError`; ושינוי שלא נשמר באובייקט שנותק לא ייכתב.
 3. אחרי `await session.commit()` בתוך לולאה, קרא ל-`await session.refresh(obj)` לפני גישה מחדש ל-attributes — על אובייקט ORM, לא על `Row`; וקשר עצל נטען רק כשהוא נקרא בשם, ב-`attribute_names`.
 4. `joinedload` עם locking → `with_for_update(of=Model)`, שנועל רק את הטבלה הראשית ושומר את ה-LEFT JOIN. ‏`contains_eager` עם `join` (או `joinedload(..., innerjoin=True)`) הוא INNER JOIN — משמיט שורות בלי קשר, ובלי `of` נועל גם את הטבלה המקושרת. רק כשהקשר חובה.
-5. Celery tasks: ה-task סינכרוני ועוטף `asyncio.run(...)` (Celery לא מריץ `async def`), ובתוכו engine חדש שנסגר ב-`await engine.dispose()` בסוף. engine משותף — רק כשה-tasks לא חופפים.
+5. Celery tasks: ה-task סינכרוני ועוטף `asyncio.run(...)` (Celery לא מריץ `async def`), ובתוכו engine חדש שנסגר ב-`await engine.dispose()` בסוף. engine משותף: עם pool — רק כשה-tasks לא חופפים, ועם `dispose()` בסוף כל task; עם `NullPool` — גם במקביל, ובלבד שהחיבור הראשון קרה לפני שה-tasks המקבילים מתחילים.
 
 ### False positives
 - SQLAlchemy סינכרוני (`sessionmaker` רגיל) — כללים שונים לחלוטין.

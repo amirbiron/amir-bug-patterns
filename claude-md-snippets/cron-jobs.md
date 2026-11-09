@@ -10,7 +10,7 @@
 
 5. **race של beat scheduler + dispatcher ad-hoc:** CAS update atomic `UPDATE ... WHERE status='pending' RETURNING id`, בדוק rowcount.
 
-6. **Celery + async engine:** Celery לא מריץ `async def` כ-task — task סינכרוני שעוטף `asyncio.run(...)`. engine ברמת module: החיבורים ב-pool נקשרים ל-loop שבו נפתחו (של ה-task הראשון, לא של זמן ה-import), וה-task הבא רץ ב-loop חדש ונכשל ב-`attached to a different loop`. צור engine לכל task וסגור אותו ב-`await engine.dispose()` בסופו; `engine.dispose()` על engine משותף או `poolclass=NullPool` — רק כשה-tasks לא חופפים (לא ב-`--pool=threads`, שם engine משותף נתקע).
+6. **Celery + async engine:** Celery לא מריץ `async def` כ-task — task סינכרוני שעוטף `asyncio.run(...)`. engine ברמת module: החיבורים ב-pool נקשרים ל-loop שבו נפתחו (של ה-task הראשון, לא של זמן ה-import), וה-task הבא רץ ב-loop חדש ונכשל ב-`attached to a different loop`. צור engine לכל task וסגור אותו ב-`await engine.dispose()` בסופו. engine משותף עם pool — רק כשה-tasks לא חופפים, ועם `dispose()` בין tasks; עם `poolclass=NullPool` — גם במקביל, ובלבד שהחיבור הראשון קרה לפני שה-tasks המקבילים מתחילים.
 
 7. **קריאות sync ב-cron async חוסמות את event loop.** עטוף עם `asyncio.to_thread(fn)` / `loop.run_in_executor`.
 
@@ -24,6 +24,6 @@
 
 12. **הרצה ראשונה בלי baseline שולחת את כל הבקלוג.** ג'וב "מה חדש מאז הפעם הקודמת" מכריע מה קורה כשאין פעם קודמת: לקבוע את הסמן על "עכשיו" ולא לשלוח כלום, או לשלוח פריט אחד עם ציון שזה הראשון. ההחלטה כתובה בקוד ליד `if not last_seen:`, ולא נגזרת ממה שקרה להיות ברירת המחדל.
 
-13. **ריצות חופפות.** כשזמן העיבוד ארוך מהמרווח, ריצה חדשה מתחילה לפני שהקודמת סיימה. נעילה בתחילת כל ריצה, ודילוג אם היא מוחזקת: ב-Postgres `pg_try_advisory_lock`; בלעדיו — נעילה עם TTL (Redis `SET ... NX EX`, או שורת נעילה במסד).
+13. **ריצות חופפות.** כשזמן העיבוד ארוך מהמרווח, ריצה חדשה מתחילה לפני שהקודמת סיימה. נעילה בתחילת כל ריצה, ודילוג אם היא מוחזקת: ב-Postgres `pg_try_advisory_lock`; בלעדיו — נעילה עם TTL (Redis `SET ... NX EX`, או שורת נעילה במסד), שארוך מזמן הריצה המרבי או מחודש כל עוד הריצה פעילה — אחרת הוא פוקע באמצע וריצה שנייה נכנסת.
 
 ראה `BY-STACK/cron-jobs.md` בריפו amir-bug-patterns לדוגמאות קוד.

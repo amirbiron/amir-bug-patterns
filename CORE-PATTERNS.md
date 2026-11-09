@@ -94,7 +94,7 @@
 
 ### False positives
 - state מקומי בלבד (modal פתוח/סגור, theme toggle) — לא תלוי בנתונים חיצוניים.
-- inputs uncontrolled עם `defaultValue` — מכוון.
+- inputs uncontrolled עם `defaultValue` בתוך אותה רשומה — מכוון. במעבר בין רשומות `key={record.id}` הוא התיקון, אחרת מה שהוקלד לרשומה אחת נשלח לאחרת.
 - קומפוננטה שמקבלת prop פעם אחת ב-mount (למשל `user.id`) — אין צורך ב-sync.
 - ה-dep array מדלג בכוונה על identity לא יציב (למשל אובייקט mutation של TanStack) — כדאי שתהיה הערת תיעוד מסבירה.
 
@@ -236,10 +236,10 @@
 
 ### כלל לזיהוי
 לכל פונקציה שמעדכנת status / "phase" / lifecycle column של ישות, ודא שגם **רשימת השדות האחים הקנונית** מתעדכנת באותה טרנזקציה. דוגמאות ספציפיות לפרויקט:
-- שינוי status → `last_outbound_at`, `last_activity_type`, `proposal_sent_at`, סגירת `AUTO_CLOSE_TASK_TYPES`, log activity — וביטול cache אחרי ה-commit: cache חיצוני אינו חלק מהטרנזקציה, ומילוי שמקורו בקריאה מלפני ה-commit לא אמור לדרוס (גרסת השורה במפתח או בערך).
+- שינוי status → `last_outbound_at`, `last_activity_type`, `proposal_sent_at`, סגירת `AUTO_CLOSE_TASK_TYPES`, log activity — וביטול cache אחרי ה-commit: cache חיצוני אינו חלק מהטרנזקציה. כדי שמילוי שהתחיל לפני ה-commit לא יגיע לקוראים, הגרסה הנוכחית נקראת מהמקור הסמכותי — מפתח שכולל אותה, או כתיבה מותנית שמשווה גרסאות — ו-TTL או outbox עם ניסיונות חוזרים מכסים ביטול שנכשל או תהליך שקרס לפניו.
 - קריאה חיצונית → או INSERT מקומי קודם עם `UNIQUE` *לפני* הקריאה, או כתיבת audit log עם `metadata.applied=false` בכשל.
 - רענון token → גם `access` וגם `refresh` בכתיבה atomic אחת (`localStorage.setItem` הוא per-key; השתמש ב-JSON blob אחד או בשתי כתיבות בטרנזקציה).
-- submit חלקי של טופס → server-side merge עם field mask מפורש (update אטומי של השדות שהשתנו בלבד). אובייקט מלא — רק עם גרסה (version / CAS) שהשרת משווה ודוחה בקשה מיושנת; בלעדיה snapshot ישן דורס שינוי של בקשה מקבילה.
+- submit חלקי של טופס → server-side merge עם field mask מפורש (update אטומי של השדות שהשתנו בלבד), ולשמירות חוזרות של אותו שדה גם סדר — גרסה, או שמירות סדורות מהלקוח — אחרת שמירה ישנה שמגיעה מאוחר דורסת טקסט חדש. אובייקט מלא — רק עם גרסה (version / CAS) שהשרת משווה ודוחה בקשה מיושנת; בלעדיה snapshot ישן דורס שינוי של בקשה מקבילה.
 
 ### False positives
 - migrations / scripts של backfill (one-shot, לא touchpoints טרנזקציוניים).

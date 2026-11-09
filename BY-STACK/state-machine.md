@@ -61,7 +61,7 @@ def apply_chip(lead, target_status):
 
 ל-`{WON, LOST, ARCHIVED}`: חייב לעבור דרך `close_lead(...)`, לא השמה ישירה.
 
-ל-`{BOOKING_PENDING, BOOKED}` → status אחר: `Booking` פעיל קיים חייב לעשות cascade (`REJECT` / `CANCEL`), או שהמעבר נחסם עם הודעה למשתמש. הודעה בלי חסימה אינה מספיקה: ב-Noa `75b384a` ‏`apply_chip` לא חסם, ונשאר אירוע Calendar יתום.
+ל-`{BOOKING_PENDING, BOOKED}` → status שמחוץ לקבוצה (לא האישור מ-`BOOKING_PENDING` ל-`BOOKED`, ששומר את ה-`Booking`): `Booking` פעיל קיים חייב לעשות cascade (`REJECT` / `CANCEL`), או שהמעבר נחסם עם הודעה למשתמש. הודעה בלי חסימה אינה מספיקה: ב-Noa `75b384a` ‏`apply_chip` לא חסם, ונשאר אירוע Calendar יתום.
 
 ### Commits אמיתיים
 - Noa `3312957` — chip קבע `BOOKING_PENDING`/`BOOKED` בלי שורת `Booking` → תקוע.

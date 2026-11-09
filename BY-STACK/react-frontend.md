@@ -49,7 +49,7 @@ function StatusDropdown({ leadId, currentStatus }) {
 ### False positives
 - props רק ב-mount (`user.id` שלעולם לא משתנה).
 - state מקומי בלבד (modal פתוח/סגור).
-- inputs uncontrolled עם `defaultValue`.
+- inputs uncontrolled עם `defaultValue` בתוך אותה רשומה. במעבר בין רשומות דווקא `key={record.id}` הוא התיקון — אחרת מה שהוקלד לרשומה אחת נשלח לאחרת.
 
 ### Commits אמיתיים
 - EmailFlow `d84daca`, `3987818` — status dropdown תקוע על ערך ישן.

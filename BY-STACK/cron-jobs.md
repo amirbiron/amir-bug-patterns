@@ -121,7 +121,7 @@ UPDATE messages SET status='processing'
 engine ברמת module: החיבורים ב-pool נקשרים ל-loop שבו נפתחו — של ה-task הראשון, לא של זמן ה-import — וה-task הבא, שרץ ב-loop חדש (`asyncio.run`), מקבל חיבור של loop שנסגר ונופל ב-`attached to a different loop`.
 
 ### תיקון
-engine לכל task שנסגר ב-`await engine.dispose()` בסופו; `engine.dispose()` על engine משותף או `poolclass=NullPool` — רק כשה-tasks לא חופפים (ב-`--pool=threads` engine משותף נתקע). ראה `BY-STACK/async-orm.md` דפוס 4 — שם גם המדידה, ולמה ב-Celery קוד async רץ דרך `asyncio.run`.
+engine לכל task שנסגר ב-`await engine.dispose()` בסופו. engine משותף עם pool — רק כשה-tasks לא חופפים, ועם `dispose()` בין tasks; עם `poolclass=NullPool` — גם במקביל, אחרי שהחיבור הראשון קרה לפני ה-tasks המקבילים. ראה `BY-STACK/async-orm.md` דפוס 4 — שם גם המדידה, ולמה ב-Celery קוד async רץ דרך `asyncio.run`.
 
 ### Commits אמיתיים
 - Shipment-bot `0f30963`.
@@ -200,7 +200,7 @@ function push(userId) {
 ### תיקון
 - השתמש ב-`"00:00"` כחצות קנוני; ולידציה לשעות 0-23.
 - `max(timedelta(0), now - last_seen)` לתצוגת "זמן מאז".
-- נעילה בתחילת כל ריצת cron, ודילוג אם כבר מוחזקת: ב-Postgres `pg_try_advisory_lock`; בלעדיו — נעילה עם TTL (Redis `SET ... NX EX`, או שורת נעילה במסד).
+- נעילה בתחילת כל ריצת cron, ודילוג אם כבר מוחזקת: ב-Postgres `pg_try_advisory_lock`; בלעדיו — נעילה עם TTL (Redis `SET ... NX EX`, או שורת נעילה במסד), שארוך מזמן הריצה המרבי או מחודש כל עוד הריצה פעילה — אחרת הוא פוקע באמצע וריצה שנייה נכנסת.
 
 ---
 

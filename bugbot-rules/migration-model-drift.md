@@ -8,7 +8,7 @@
 
 2. `op.drop_column(...)` ב-migration באותו PR שבו המודל עדיין מצהיר על העמודה או קוד אחר עדיין מתייחס אליה. (DROP חייב להיות ב-migration נפרד מאוחר יותר אחרי שהקוד הוסר לחלוטין.)
 
-3. ערך המשתנה `revision` בקובץ migration של Alembic ארוך יותר מ-32 chars — אורך העמודה `alembic_version.version_num` (`VARCHAR(32)`); deploy טרי נכשל. לא שם הקובץ: תבנית ברירת המחדל של Alembic היא `%(rev)s_%(slug)s`, והשם כולל את ה-slug ולכן כמעט תמיד ארוך יותר.
+3. ערך המשתנה `revision` בקובץ migration של Alembic ארוך מאורך העמודה `alembic_version.version_num` — 32 chars בברירת המחדל (`VARCHAR(32)`), ובפרויקט שהרחיב את העמודה, האורך שלה; deploy טרי נכשל. לא שם הקובץ: תבנית ברירת המחדל של Alembic היא `%(rev)s_%(slug)s`, והשם כולל את ה-slug ולכן כמעט תמיד ארוך יותר.
 
 4. `ADD COLUMN IF NOT EXISTS` ב-migration של MySQL (syntax של PG בלבד).
 

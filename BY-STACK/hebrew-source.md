@@ -253,12 +253,13 @@ $substrCP("שלום", 99, 200)        ←  ""        (התחלה מעבר לסו
 ```js
 // ❌ נוסחת LTR: נכונה רק כשהסיידבר משמאל למפריד
 const w = startWidth + (clientX - startX);
-// ✅ הסימן נגזר מהצד שבו הסיידבר יושב ביחס למפריד — לא מ-direction לבדו
-const sidebarOnLeft = sidebar.getBoundingClientRect().left < separator.getBoundingClientRect().left;
-const w = startWidth + (sidebarOnLeft ? (clientX - startX) : (startX - clientX));
+// ✅ הסימן נגזר מהקצה שנגרר: מפריד מימין למרכז הסיידבר — גרירה ימינה מרחיבה
+const s = sidebar.getBoundingClientRect(), d = separator.getBoundingClientRect();
+const separatorOnRight = (d.left + d.right) / 2 > (s.left + s.right) / 2;
+const w = startWidth + (separatorOnRight ? (clientX - startX) : (startX - clientX));
 ```
 
-‏`direction` הוא קירוב טוב כשהסיידבר יושב בקצה ה-inline-start, אבל חלונית שמעוגנת לשמאל גם בעמוד RTL מתנהגת כמו LTR, ושם נוסחה לפי `direction` מזיזה את המפריד הפוך מהאצבע. מה שקובע הוא איזה קצה נגרר ואיזה מעוגן.
+‏`direction` הוא קירוב טוב כשהסיידבר יושב בקצה ה-inline-start, אבל חלונית שמעוגנת לשמאל גם בעמוד RTL מתנהגת כמו LTR, ושם נוסחה לפי `direction` מזיזה את המפריד הפוך מהאצבע. מה שקובע הוא איזה קצה נגרר ואיזה מעוגן — מדידה כמו בקוד, או הצהרה מפורשת של הקצה (למשל `data-edge` על המפריד). השוואת המרכזים עובדת בין שהמפריד יושב בתוך הסיידבר ובין שמחוצה לו.
 
 **נמדד (CodeBot PR #3286):** האצבע ב-1038 והמפריד ב-1078; האצבע ב-958 והמפריד ב-1138 — פער של 180px, והמפריד זז **הפוך** מהאצבע.
 
