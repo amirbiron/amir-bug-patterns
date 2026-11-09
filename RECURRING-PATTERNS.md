@@ -16,7 +16,7 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 - attributes של אובייקט ORM שניגשים אליהם *אחרי* `await session.rollback()` זורקים `MissingGreenlet`.
 - `AsyncSession` אחד שמשותף בין tasks concurrent דרך `asyncio.gather` → race / שחיתות (sessions לא בטוחים ל-thread או ל-task).
 - אחרי `await session.commit()` בלולאה, גישה מחדש לאותה שורת ORM נכשלת או מחזירה ערך ישן: ב-`expire_on_commit=True` (ברירת המחדל) commit מסמן את כל האובייקטים כפגי תוקף והגישה זורקת `MissingGreenlet`; ב-`False` השדות נשארים מלפני ה-commit. בשני המקרים — `await session.refresh(row)` מפורש.
-- `joinedload` + `with_for_update` נדחים ב-Postgres כש-`joinedload` הוא LEFT OUTER JOIN (ברירת המחדל), ו-`with_for_update()` בלי `of` נועל גם את הצד ה-nullable שלו, ש-`FOR UPDATE` אינו חל עליו (השגיאה מה-DB, לא מ-SQLAlchemy). ‏`with_for_update(of=Model)` אינו נכשל.
+- `joinedload` (LEFT OUTER JOIN, ברירת המחדל) + `with_for_update()` בלי `of` נדחים ב-Postgres: הנעילה חלה גם על הצד ה-nullable של ה-join, ו-`FOR UPDATE` אינו חל עליו (השגיאה מה-DB, לא מ-SQLAlchemy). ‏`with_for_update(of=Model)` נועל רק את הטבלה הראשית ועובר; בישות `aliased()` — `of=` מקבל את ה-alias עצמו, לא את המודל.
 - `Engine` singleton שמקושר ל-event loop אחד נכשל ב-Celery task השני (שמקבל loop חדש).
 
 ### דוגמאות אמיתיות

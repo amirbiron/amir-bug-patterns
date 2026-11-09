@@ -45,13 +45,15 @@ Pub/Sub מספק at-least-once. תשעה workers מקבילים כל אחד קו
 
 ### תיקון
 ```python
+TOPIC = "gmail"  # ה-topic של Pub/Sub: message_id ייחודי רק בתוכו, ולכן הוא חלק מהמפתח
+
 @app.post("/pubsub/gmail")
 async def handle_gmail(req: Request):
   msg = parse_pubsub(req)
   # 1. רזרבציה מקומית — כפילות מזוהה בהתנגשות על ה-idempotency key בלבד
   #    (insert מ-sqlalchemy.dialects.postgresql)
   draft_id = (await session.execute(
-    insert(Draft).values(idempotency_key=f"{TOPIC}:{msg.message_id}", status="reserved")  # message_id ייחודי רק בתוך topic
+    insert(Draft).values(idempotency_key=f"{TOPIC}:{msg.message_id}", status="reserved")
       .on_conflict_do_nothing(index_elements=["idempotency_key"])
       .returning(Draft.id)
   )).scalar_one_or_none()
