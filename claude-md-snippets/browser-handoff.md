@@ -6,7 +6,7 @@
 
 3. **Tooltip / dropdown נסגר על click → בדוק event propagation.** או `e.stopPropagation()` בתוך האלמנט הפנימי, או hook של "click outside" שמשווה `event.target` עם ref פנימי דרך `.contains()`.
 
-4. **`* { margin: 0; padding: 0 }` דורס מחלקות utility של Tailwind.** השתמש ב-`@tailwind base` (Preflight) בלבד; הסר resets ידניים של `*`.
+4. **`* { margin: 0; padding: 0 }` דורס מחלקות utility של Tailwind.** זה נכון ב-Tailwind v4, שבו ה-utilities יושבות ב-`@layer utilities` וכל כלל שאינו בשכבה גובר עליהן בלי קשר ל-specificity; ב-v3 אותו reset מפסיד להן ואינו הבאג. השתמש ב-`@tailwind base` (Preflight) בלבד (ב-v3; ב-v4 — `@import "tailwindcss"`); הסר resets ידניים של `*`, ו-reset שחייב להישאר — בתוך `@layer base`.
 
 5. **ל-`URL.createObjectURL(blob)` חייב להיות `URL.revokeObjectURL` מתאים ב-cleanup של `useEffect`** — אחרת דליפות blob URL מצטברות.
 
@@ -18,4 +18,4 @@
 
 9. **`useEffect` באמצע await + unmount: השתמש ב-cancellation flag** כך ש-`setState` שלאחר מכן הוא no-op.
 
-ראה `BY-STACK/browser-handoff.md`.
+ראה `BY-STACK/browser-handoff.md` בריפו amir-bug-patterns.

@@ -1,12 +1,12 @@
 # דפוסי Webhooks (להעתקה ל-CLAUDE.md)
 
-1. **Reserve לפני fill.** INSERT ל-DB מקומי עם UNIQUE constraint או idempotency key לפני כל קריאה חיצונית בלתי הפיכה (Gmail draft, SMS, payment). על `IntegrityError`, החזר 200 (duplicate, ignore). לעולם אל תעשה `commit()` אחרי `await client.X()`.
+1. **Reserve לפני fill.** INSERT ל-DB מקומי עם UNIQUE constraint או idempotency key לפני כל קריאה חיצונית בלתי הפיכה (Gmail draft, SMS, payment). על `IntegrityError`, החזר 200 (duplicate, ignore). לעולם אל תעשה `commit()` של הרזרבציה אחרי `await client.X()`. ה-fill: אחרי הקריאה — לעדכן את השורה השמורה (מזהה חיצוני, `status='created'`); בכשל — `status='failed'` ו-raise, לא להשאיר `reserved`.
 
-2. **CAS על cursors משותפים.** כששני webhooks יכולים לקרוא את אותו `sync_token` / `history_id` / cursor, הקדם אותו דרך `UPDATE ... WHERE id=:id AND token=:expected RETURNING ...`. הסתעפות `IS NULL` לערכים nullable.
+2. **CAS על cursors משותפים.** כששני webhooks יכולים לקרוא את אותו `sync_token` / `history_id` / cursor, הקדם אותו דרך `UPDATE ... WHERE id=:id AND token=:expected RETURNING ...`. הסתעפות `IS NULL` לערכים nullable. ה-CAS רץ לפני החלת ה-deltas ובאותה טרנזקציה; `rowcount == 0` — webhook אחר הקדים וה-deltas שלו כבר מוחלים, ולכן לא מחילים את שלנו.
 
 3. **התמד ב-cursor בכל קריאה, גם ריקה.** אם הספק מחזיר `changes=[]` עם `next_sync_token`, כתוב את ה-token. אחרת לולאה אינסופית.
 
-4. **אימות signature לפני כל processing.** השתמש ב-verifier של הספק (`stripe.Webhook.construct_event`, Meta HMAC-SHA256, GitHub `X-Hub-Signature-256`). השווה עם `hmac.compare_digest`, לעולם לא `==`. קרא bytes גולמיים, לא טקסט שעבר encoding מחדש.
+4. **אימות signature לפני כל processing.** השתמש ב-verifier של הספק (`stripe.Webhook.construct_event`, Meta HMAC-SHA256, GitHub `X-Hub-Signature-256`). השווה עם `hmac.compare_digest`, לעולם לא `==`. קרא bytes גולמיים, לא טקסט שעבר encoding מחדש. האימות חל גם על endpoints של retry / replay.
 
 5. **trusted proxy להחלטות מבוססות-IP.** הגדר `ProxyHeadersMiddleware` / `app.set('trust proxy', N)` עם hop count מפורש. ואז קרא `request.client.host`. לעולם אל תקרא `X-Forwarded-For` ישירות.
 
@@ -16,4 +16,4 @@
 
 8. **race של beat scheduler + `.delay()`:** atomic `UPDATE ... WHERE status='pending' RETURNING id`, בדוק rowcount לפני שליחה.
 
-ראה `BY-STACK/webhooks.md` ו-`CRITICAL-PATTERNS.md` K2 / K9.
+ראה `BY-STACK/webhooks.md` ו-`CRITICAL-PATTERNS.md` K2 / K9 בריפו amir-bug-patterns.

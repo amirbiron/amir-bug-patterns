@@ -1,6 +1,6 @@
 # דפוסי External SDK (להעתקה ל-CLAUDE.md)
 
-1. **תפוס את ה-base class של ה-SDK, עדן בפנים.** `except anthropic.APIError` (לא רק `RateLimitError`); בלוקי `except` של subclasses מסודרים subclass-לפני-superclass.
+1. **תפוס את ה-base class של ה-SDK, עדן בפנים.** `except anthropic.APIError` (לא רק `RateLimitError`); בלוקי `except` של subclasses מסודרים subclass-לפני-superclass. העידון — לפי תת-המחלקות שה-SDK כבר ממפה (ב-PyGithub `RateLimitExceededException` מול `BadCredentialsException`), לא לפי קוד סטטוס: 403 הוא גם מכסה וגם הרשאה חסרה, ו"חבר את הטוקן מחדש" על מכסה שנגמרה שולח את המשתמש לתקן משהו תקין.
 
 2. **בדיקות תוצאה של `asyncio.gather(return_exceptions=True)` משתמשות ב-`isinstance(r, BaseException)`**, לא `Exception` (CancelledError הוא BaseException, לא Exception מאז Python 3.8).
 
@@ -10,15 +10,15 @@
 
 5. **regex על JSON של AI/SDK:** raw strings (`r"..."`), word boundaries (`\b`). עדיף `json.JSONDecoder().raw_decode(s[s.find("{"):])` על `\{.*\}` חמדן (נשבר על prose).
 
-6. **enums של Pydantic ממקורות חיצוניים:** השתמש ב-`str | None` עם ולידציה idempotent, לא `StrEnum` strict — דחייה strict זורקת את כל ה-payload (כולל שדות אחים תקפים).
+6. **enums של Pydantic ממקורות חיצוניים:** השתמש ב-`str | None` עם ולידציה idempotent, לא `StrEnum` strict — דחייה strict זורקת את כל ה-payload (כולל שדות אחים תקפים). enum strict נשאר לשדות פנימיים.
 
-7. **env flags של SDK:** תעד וכבד (למשל `OAUTHLIB_RELAX_TOKEN_SCOPE=1` לסטיית scope של Google, `STRIPE_API_VERSION` ל-pin).
+7. **env flags של SDK:** תעד וכבד (למשל `OAUTHLIB_RELAX_TOKEN_SCOPE=1` לסטיית scope של Google, `STRIPE_API_VERSION` ל-pin). `OAUTHLIB_INSECURE_TRANSPORT=1` — רק ב-dev מקומי, לעולם לא בפרודקשן.
 
 8. **Walrus + truthy על env vars:** `if override := os.environ.get("X"):` מתייחס ל-`""` כ-falsy. השתמש ב-`if override is not None:` ו-`.strip()`.
 
 9. **ממש `__bool__` על אובייקטי תוצאה** (או בדוק `isinstance(r, SendResult) and r.ok` — לעולם לא `r is True`).
 
-10. **קריאה שנראית כמו אימות אינה בהכרח שולחת בקשה.** יש SDKs ומתודות שמתועדים כמחזירים אובייקט עצל — למשל `Github.get_user()`, שמחזיר `AuthenticatedUser` עם `completed=False`, וה-`GET /user` יוצא רק בגישה לשדה. אישורים פסולים "מתחברים" בהצלחה וה-`except` לא רץ. העדף קריאה שמאלצת את הבקשה (ב-PyGithub: `get_user(lazy=False)` — שים לב לכיוון, היעדר הדגל הוא המצב העצל). אם נוגעים בשדה במקום זאת — בשורה משלה עם הערה, ולוודא שהשדה לא נגזר ממה שכבר בזיכרון. אמת בספירת בקשות, לא לפי שם המתודה.
+10. **קריאה שנראית כמו אימות אינה בהכרח שולחת בקשה.** יש SDKs ומתודות שמתועדים כמחזירים אובייקט עצל — למשל `Github.get_user()`, שמחזיר `AuthenticatedUser` עם `completed=False`, וה-`GET /user` יוצא רק בגישה לשדה. אישורים פסולים "מתחברים" בהצלחה וה-`except` לא רץ. העדף קריאה שמאלצת את הבקשה (ב-PyGithub: `get_user(lazy=False)` — שים לב לכיוון, היעדר הדגל הוא המצב העצל). אם נוגעים בשדה במקום זאת — בשורה משלה עם הערה, ולוודא שהשדה לא נגזר ממה שכבר בזיכרון. אמת בספירת בקשות, לא לפי שם המתודה. ובטסט — הכפיל נכשל בגישה לשדה ולא כבר בקריאה (`get_user()`), אחרת הוא עובר גם על קוד שלא מאמת כלום.
 
 11. **`except` סביב חתימה שלא נבדקה.** אם הפרמטר אינו קיים ב-API, פייתון נכשל בקשירת הארגומנטים לפני שגוף המתודה רץ: נכנסים ל-`try` ומתים בשורה הראשונה שבו, ה-`except` הוא המסלול היחיד שמסתיים אי פעם, וההודעה שלו מתארת את ההפך ממה שקורה ("falling back without execution stats" בזמן שהמנוע מריץ דווקא את המצב הכבד). לפתוח את החתימה בקוד הספרייה של **הגרסה המותקנת** לפני שכותבים את הטיפול, ולהריץ פעם אחת עם `raise` במקום ה-`except` כדי לראות אם מגיעים לשם בכלל. ו"תיקון" סינטקטי לקריאה שנכשלת (מ-positional ל-keyword) הוא טלאי על API שאולי לא קיים.
 
@@ -26,4 +26,4 @@
 
 13. **אובייקטים של SDK נבדקים ב-`is None`, לא באמת בוליאנית.** pymongo זורק `NotImplementedError` בכוונה על `if collection:` — כדי למנוע את הבלבול בין "קיים" ל"לא ריק". הצורה המפורשת נכונה תמיד; הבוליאנית נכונה רק כשה-SDK הסכים לה.
 
-ראה `BY-STACK/external-sdk.md`.
+ראה `BY-STACK/external-sdk.md` בריפו amir-bug-patterns.
