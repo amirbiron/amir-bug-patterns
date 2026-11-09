@@ -6,11 +6,11 @@
 
 3. **Tooltip / dropdown נסגר על click → בדוק event propagation.** או `e.stopPropagation()` בתוך האלמנט הפנימי, או hook של "click outside" שמשווה `event.target` עם ref פנימי דרך `.contains()`.
 
-4. **`* { margin: 0; padding: 0 }` דורס מחלקות utility של Tailwind.** זה נכון ב-Tailwind v4, שבו ה-utilities יושבות ב-`@layer utilities` וכל כלל שאינו בשכבה גובר עליהן בלי קשר ל-specificity; ב-v3 אותו reset מפסיד להן ואינו הבאג. השתמש ב-`@tailwind base` (Preflight) בלבד (ב-v3; ב-v4 — `@import "tailwindcss"`); הסר resets ידניים של `*`, ו-reset שחייב להישאר — בתוך `@layer base`.
+4. **`* { margin: 0; padding: 0 }` דורס מחלקות utility של Tailwind.** זה קורה כשה-utilities יושבות בשכבת CSS מקורית (`@layer utilities`) — ברירת המחדל ב-Tailwind v4 — כי כלל שאינו בשכבה גובר על כל כלל שבשכבה בלי קשר ל-specificity. בפלט ברירת המחדל של v3 אין שכבות מקוריות, וה-utilities מנצחות ב-specificity. השתמש ב-`@tailwind base` (Preflight) בלבד (ב-v3; ב-v4 — `@import "tailwindcss"`); הסר resets ידניים של `*`, ו-reset שחייב להישאר — בתוך `@layer base`, שקודמת ל-utilities בסדר השכבות.
 
 5. **ל-`URL.createObjectURL(blob)` חייב להיות `URL.revokeObjectURL` מתאים ב-cleanup של `useEffect`** — אחרת דליפות blob URL מצטברות.
 
-6. **`setTimeout(fn, delay)` / `new Date(value)` עם מספר ממקור חיצוני דורש הגנת `isFinite(value) && value > 0`.**
+6. **`setTimeout(fn, delay)` / `new Date(value)` עם מספר ממקור חיצוני דורש הגנת `isFinite(value) && value > 0`.** וב-`setTimeout` גם עד `2147483647` (מעליו הטיימר נורה מיד); ב-`new Date(value)` בודקים את התוצאה, `isFinite(d.getTime())`.
 
 7. **`localStorage` הוא per-key; state auth מרובה-שדות חייב להיות atomic** — שמור כ-JSON blob יחיד או תמיד כתוב את שני ה-keys יחד.
 

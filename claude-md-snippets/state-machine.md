@@ -12,7 +12,7 @@
 
    הרשימה מוחזקת ברמת הפרויקט, לכל status / סוג touchpoint (כמו `AUTO_CLOSE_TASK_TYPES`). הפריטים למעלה הם הרשימה של Noa — דוגמה, לא תבנית.
 
-2. **Status עם דרישות cascade.** מעבר ל-`BOOKING_PENDING` / `BOOKED` דורש שורת `Booking` או `ValidationError`. מעברים ל-`WON` / `LOST` / `ARCHIVED` עוברים דרך `close_lead(...)`, לא השמה ישירה. וגם היציאה: מעבר מ-`BOOKING_PENDING` / `BOOKED` לסטטוס אחר — ה-`Booking` הפעיל עושה cascade (`REJECT` / `CANCEL`) או שהמשתמש מקבל הודעה; אחרת נשאר אירוע יומן יתום.
+2. **Status עם דרישות cascade.** מעבר ל-`BOOKING_PENDING` / `BOOKED` דורש שורת `Booking` או `ValidationError`. מעברים ל-`WON` / `LOST` / `ARCHIVED` עוברים דרך `close_lead(...)`, לא השמה ישירה. וגם היציאה: מעבר מ-`BOOKING_PENDING` / `BOOKED` לסטטוס אחר — ה-`Booking` הפעיל עושה cascade (`REJECT` / `CANCEL`) או שהמעבר נחסם עם הודעה למשתמש — הודעה שמשאירה את ה-`Booking` פעיל אינה מספיקה, ואחריה נשאר אירוע יומן יתום.
 
 3. **Activity log מתעד intent, לא רק outcome.** כש-CAS / `UPDATE` מחזיר `rowcount=0`, עדיין לוג activity עם `metadata.applied=false`. אחרת צרכנים downstream (cron, dashboard) חושבים שה-event לא קרה.
 

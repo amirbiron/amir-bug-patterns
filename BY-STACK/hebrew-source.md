@@ -253,10 +253,12 @@ $substrCP("שלום", 99, 200)        ←  ""        (התחלה מעבר לסו
 ```js
 // ❌ נוסחת LTR: נכונה רק כשהסיידבר משמאל למפריד
 const w = startWidth + (clientX - startX);
-// ✅ הסימן נגזר מהפריסה בפועל
-const rtl = getComputedStyle(el).direction === 'rtl';
-const w = startWidth + (rtl ? (startX - clientX) : (clientX - startX));
+// ✅ הסימן נגזר מהצד שבו הסיידבר יושב ביחס למפריד — לא מ-direction לבדו
+const sidebarOnLeft = sidebar.getBoundingClientRect().left < separator.getBoundingClientRect().left;
+const w = startWidth + (sidebarOnLeft ? (clientX - startX) : (startX - clientX));
 ```
+
+‏`direction` הוא קירוב טוב כשהסיידבר יושב בקצה ה-inline-start, אבל חלונית שמעוגנת לשמאל גם בעמוד RTL מתנהגת כמו LTR, ושם נוסחה לפי `direction` מזיזה את המפריד הפוך מהאצבע. מה שקובע הוא איזה קצה נגרר ואיזה מעוגן.
 
 **נמדד (CodeBot PR #3286):** האצבע ב-1038 והמפריד ב-1078; האצבע ב-958 והמפריד ב-1138 — פער של 180px, והמפריד זז **הפוך** מהאצבע.
 
@@ -279,7 +281,7 @@ el.style.left = clamp(x, minLeft, maxLeft) + 'px';   // וההצמדה עובד�
 
 ### כלל לזיהוי
 
-1. `clientX` / `pageX` / `offsetX` בחיסור, בלי `direction` או `getBoundingClientRect` שקובעים את הסימן.
+1. `clientX` / `pageX` / `offsetX` בחיסור, בלי מדידה שקובעת את הסימן — הצד שבו החלונית יושבת ביחס לידית (`getBoundingClientRect`); ‏`direction` לבדו הוא קירוב.
 2. `left` / `right` / `marginLeft` שנקבעים ישירות בפריסה שיכולה להיות RTL — במקום `inset-inline-start` / logical properties.
 3. `Math.min(x, vpW - w)` או כל הצמדה ל-viewport, בלי שורה שמצמצמת את `w` עצמו קודם.
 4. אותו מימד (גובה, רוחב, ריפוד) שנקבע ביותר ממקום אחד — CSS ו-JS, או שני קבצי CSS.

@@ -109,13 +109,13 @@ async function copy(text) {
 * { margin: 0; padding: 0; }
 ```
 
-בפרויקט Tailwind, `space-y-6` מתורגם ל-margins על ילדים. הסיבה שה-reset גובר אינה specificity — ל-`*` יש את ה-specificity הנמוך ביותר, אפס — אלא **שכבות**: ב-Tailwind v4 ה-utilities נכתבות בתוך `@layer utilities`, ובמפל של CSS כלל שאינו בשום שכבה גובר על כל כלל שבשכבה, בלי קשר ל-specificity. ב-Tailwind v3 אין שכבות אמיתיות בפלט: ה-utilities מנצחות את `*` ב-specificity, והבאג לא מופיע.
+בפרויקט Tailwind, `space-y-6` מתורגם ל-margins על ילדים. הסיבה שה-reset גובר אינה specificity — ל-`*` יש את ה-specificity הנמוך ביותר, אפס — אלא **שכבות**: ב-Tailwind v4 ה-utilities נכתבות בתוך `@layer utilities`, ובמפל של CSS כלל שאינו בשום שכבה גובר על כל כלל שבשכבה, בלי קשר ל-specificity. בפלט ברירת המחדל של Tailwind v3 אין שכבות CSS מקוריות: ה-utilities מנצחות את `*` ב-specificity, והבאג לא מופיע — אבל אם עוטפים אותן בשכבה מקורית, reset מחוץ לשכבה גובר שוב. ו-utility עם `!important` (`!p-4`) שורד גם ב-v4: בהצהרות `!important` סדר השכבות מתהפך.
 
-נמדד בקומפילציה אמיתית ובדפדפן (Tailwind 3.4.19 ו-4.3.5, ‏Chromium, נובמבר 2026), עם `p-4 space-y-6` וה-reset אחרי Tailwind: ב-v3 ‏padding של 16px ומרווח של 24px; ב-v4 — אפס בשניהם; ב-v4 עם ה-reset בתוך `@layer base` — שוב 16px ו-24px.
+נמדד בקומפילציה אמיתית ובדפדפן (Tailwind 3.4.19 ו-4.3.5, ‏Chromium, נובמבר 2026), עם `p-4 space-y-6` וה-reset אחרי Tailwind: ב-v3 ‏padding של 16px ומרווח של 24px; ב-v4 — אפס בשניהם; ב-v4 עם ה-reset בתוך `@layer base` — שוב 16px ו-24px; ו-`!p-4` מול reset מחוץ לשכבה — 16px.
 
 ### תיקון
 - השתמש ב-reset של Tailwind עצמו (Preflight): ‏`@import "tailwindcss"` ב-v4, ‏`@tailwind base` ב-v3.
-- reset שחייב להישאר — בתוך `@layer base`, ואז ה-utilities גוברות עליו.
+- reset שחייב להישאר — בתוך `@layer base`, ואז ה-utilities גוברות עליו. זה נשען על סדר השכבות: Tailwind v4 מצהיר `@layer theme, base, components, utilities;` בראש הקובץ, כלומר `base` קודמת; הצהרת `@layer` מוקדמת יותר בסדר אחר הופכת את זה.
 - או scope ל-reset: `body > * { margin: 0; padding: 0 }` — אבל זה עדיין שובר utilities: ב-v4 הוא עדיין מחוץ לשכבה, וגובר על ה-utilities של כל אלמנט שהוא תופס (נמדד: ה-padding של ילד ישיר של `body` התאפס).
 - הכי טוב: הסר את ה-reset הידני וסמוך על ה-reset המובנה של Tailwind / framework utility-CSS.
 

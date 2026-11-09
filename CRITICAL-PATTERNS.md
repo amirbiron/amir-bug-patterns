@@ -38,7 +38,7 @@ flow של signup מאפשר קביעת סיסמה לחשבון שכבר קיים
 ### כלל לזיהוי
 בכל מקום שהקוד משתמש ב-`request.headers["x-forwarded-for"]` או שווה ערך להחלטות security / rate-limit / abuse:
 1. ה-framework חייב להיות מוגדר עם רשימה מפורשת של proxies אמינים (Starlette `ProxyHeadersMiddleware` עם `trusted_hosts`; Express `app.set('trust proxy', <list>)`; Flask `ProxyFix(... trusted_hops=N)`).
-2. **לעולם** אל תסמוך על כל ה-chain של `X-Forwarded-For`; סמוך רק על הסגמנטים מימין השווים למספר ה-hops שמוגדר.
+2. **לעולם** אל תסמוך על כל ה-chain של `X-Forwarded-For`; סמוך רק על הסגמנטים מימין השווים למספר ה-hops שמוגדר — ומספר hops קבוע בטוח רק כשמובטח שכל בקשה עוברת לפחות N proxies מהימנים. אם השרת נגיש גם ישירות, התוקף כותב בעצמו את N הסגמנטים הימניים; אז רשימת כתובות מפורשת של ה-proxies.
 3. אם אין proxy מקדים, השתמש ב-`request.client.host` / `req.socket.remoteAddress` בלבד.
 
 ### ראה גם
@@ -116,7 +116,7 @@ flow של signup מאפשר קביעת סיסמה לחשבון שכבר קיים
 
 ### כלל לזיהוי
 1. Serialization של משתמש / actor חייב לעבור דרך DTO / Pydantic response model מפורש שמפרט רק את השדות המותרים. ORM row → JSON אסור בגבולות API.
-2. שמות שדות אסורים בכל מקום ב-response של API: `password`, `passwordHash`, `password_hash`, `salt`, `refresh_token`, `access_token`, `api_key`, `secret`, `private_key`.
+2. שמות שדות אסורים בכל מקום ב-response של API: `password`, `passwordHash`, `password_hash`, `salt`, `refresh_token`, `access_token`, `api_key`, `secret`, `private_key` — חוץ מתשובת הנפקת הטוקנים של OAuth עצמה, שהפרוטוקול מחייב בה `access_token` (ו-`refresh_token` כשמונפק).
 3. מחלקות exception שעלולות להיזרק בגבולות API לא יכולות לכלול IDs פנימיים / hostnames / סיבות heuristic ב-message הפומבי שלהן. דפוס: `class XError(AppException): public_message: str  # safe;  detail: dict  # server-only`.
 
 ### ראה גם
@@ -142,9 +142,9 @@ flow של signup מאפשר קביעת סיסמה לחשבון שכבר קיים
 **אסור בלוגים (או ב-response של API):**
 - `email`, `phone`, `from_email`, `to_email`, שדות כתובת, שדות שם.
 - תוכן body של email / chat / messages.
-- OAuth tokens גולמיים, `refresh_token`, `access_token`, API keys.
+- OAuth tokens גולמיים, `refresh_token`, `access_token`, API keys (חוץ מתשובת הנפקת הטוקנים עצמה — ראה K6).
 
-**אסור ב-response של API בלבד (לוגים בסדר אם יש בקרת גישה ללוגים):**
+**אסור ב-response של API בלבד (לוגים בסדר אם יש בקרת גישה ללוגים — אחרי ניקוי PII וסודות, K13):**
 - סיבות heuristic להחלטה (`'esp:mailchimp.com'`, `'spam_score=0.8'`).
 - UUIDs פנימיים של DB של tenants / users אחרים.
 - Stack traces, שמות מחלקות exception, הודעות framework.
@@ -408,6 +408,7 @@ except Exception:
    אותיות", מה שמחזיר את `?monkey=`.
 4. הכלל חייב לתפוס גם **מחרוזת שאילתה עירומה** (`key=...` בלי `?`
    מוביל) — זו הצורה שבה שדות ניטור שומרים אותה.
+5. שמות נפוצים שנכתבים כמילה אחת בלי גבול פנימי — `apikey`, ‏`accesstoken` — נכנסים לרשימה כשם שלם. כלל המקטעים לבדו לא תופס את `?apikey=`, כי בין `api` ל-`key` אין גבול; ואת `?monkey=` הוא ממשיך לא לתפוס, כי השם השלם `apikey` אינו מופיע בו.
 
 ### מצב מומלץ
 הסוד עובר ל-header ייעודי (`x-goog-api-key` אצל Google), ויושב על
@@ -546,7 +547,7 @@ if not (p == base or base in p.parents):          # ✅ השוואת נתיב
 
 ‏`parents` היא רשימת תיקיות, לא רצף תווים, ולכן היא אינה יכולה לענות "כן" ל-`-evil`. ה-`resolve()` אינו קישוט: בלעדיו `base/../../etc` עובר את אותה בדיקה.
 
-**וסייג שהתיקון הזה אינו פותר — TOCTOU:** בין ה-`resolve()` לבין ה-`rmtree` יש חלון. אם גורם לא מהימן יכול להחליף רכיב בנתיב באותו רגע (קישור סימבולי שמוחלף, תיקיית אב שמוזזת), הבדיקה עברה על נתיב אחד והמחיקה תתבצע על אחר. הכלל הזה מניח ש**העץ מהימן ואינו משתנה בזמן הפעולה** — ובסביבה שבה ההנחה אינה מתקיימת נדרש מנגנון אטומי (פתיחת מתאר לתיקייה ועבודה יחסית אליו, `O_NOFOLLOW`, או מרחב שמות ייעודי), לא בדיקת מחרוזת משופרת.
+**וסייג שהתיקון הזה אינו פותר — TOCTOU:** בין ה-`resolve()` לבין ה-`rmtree` יש חלון. אם גורם לא מהימן יכול להחליף רכיב בנתיב באותו רגע (קישור סימבולי שמוחלף, תיקיית אב שמוזזת), הבדיקה עברה על נתיב אחד והמחיקה תתבצע על אחר. הכלל הזה מניח ש**העץ מהימן ואינו משתנה בזמן הפעולה** — ובסביבה שבה ההנחה אינה מתקיימת נדרש מנגנון אטומי (פתיחה שמגבילה את פתרון הנתיב כולו לעץ ואוסרת קישורים סימבוליים — ב-Linux `openat2` עם `RESOLVE_BENEATH` ו-`RESOLVE_NO_SYMLINKS` — או מרחב שמות ייעודי; ‏`O_NOFOLLOW` לבדו מגן רק על הרכיב האחרון בנתיב, וקישור סימבולי באמצע הנתיב עדיין נפתר), לא בדיקת מחרוזת משופרת.
 
 ### המשפחה המלאה — כל גבול היררכי שנבדק כמחרוזת
 

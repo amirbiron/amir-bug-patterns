@@ -10,11 +10,11 @@
 
 5. **race של beat scheduler + dispatcher ad-hoc:** CAS update atomic `UPDATE ... WHERE status='pending' RETURNING id`, בדוק rowcount.
 
-6. **Celery + async engine:** engine ברמת module: החיבורים ב-pool נקשרים ל-loop שבו נפתחו (של ה-task הראשון, לא של זמן ה-import), וה-task הבא רץ ב-loop חדש (`asyncio.run`) ונכשל ב-`attached to a different loop`. צור lazy לכל task, או `engine.dispose()` בין tasks, או `poolclass=NullPool`.
+6. **Celery + async engine:** Celery לא מריץ `async def` כ-task — task סינכרוני שעוטף `asyncio.run(...)`. engine ברמת module: החיבורים ב-pool נקשרים ל-loop שבו נפתחו (של ה-task הראשון, לא של זמן ה-import), וה-task הבא רץ ב-loop חדש ונכשל ב-`attached to a different loop`. צור engine לכל task וסגור אותו ב-`await engine.dispose()` בסופו; `engine.dispose()` על engine משותף או `poolclass=NullPool` — רק כשה-tasks לא חופפים (לא ב-`--pool=threads`, שם engine משותף נתקע).
 
 7. **קריאות sync ב-cron async חוסמות את event loop.** עטוף עם `asyncio.to_thread(fn)` / `loop.run_in_executor`.
 
-8. **קצוות זמן:** ולידציה לשעות 0-23 (לא "24:00"); `max(timedelta(0), now - last_seen)` לבטיחות clock-skew. וריצות חופפות (זמן עיבוד ארוך מהמרווח): נעילה (advisory lock) בתחילת כל ריצה, ודילוג אם היא מוחזקת.
+8. **קצוות זמן:** ולידציה לשעות 0-23 (לא "24:00"); `max(timedelta(0), now - last_seen)` לבטיחות clock-skew.
 
 9. **state של dedup בזיכרון בלי eviction → דליפת זיכרון.** השתמש ב-TTL / LRU או Redis עם `EXPIRE`.
 
@@ -23,5 +23,7 @@
 11. **ג'וב שיוצר עותק "אם חסר" צריך גם שלב שמוחק עותק שהמקור כבר לא מכיר.** מסלול ההסרה במקור לא תמיד מגיע אליו (שירות אחר, TTL, גרסה שהוחלפה). ובשלב הזה: כשהקריאה נכשלה או נקטעה, או שהיא לא מכירה אף פריט מהעותק (ריקה, מזהים לא שמישים, מסד אחר), לא מוחקים כלום, ורושמים אזהרה עם כמה פריטים נחסכו. קוראים מהמקור הסמכותי, מוחקים רק את מה שהג'וב היה יוצר (לא קישור ולא פריט בתהליך), דרך מנגנון המחיקה הקיים, וסופרים לפי קריאה חוזרת. מנייה של העותק שנכשלה היא שגיאה, לא רשימה ריקה.
 
 12. **הרצה ראשונה בלי baseline שולחת את כל הבקלוג.** ג'וב "מה חדש מאז הפעם הקודמת" מכריע מה קורה כשאין פעם קודמת: לקבוע את הסמן על "עכשיו" ולא לשלוח כלום, או לשלוח פריט אחד עם ציון שזה הראשון. ההחלטה כתובה בקוד ליד `if not last_seen:`, ולא נגזרת ממה שקרה להיות ברירת המחדל.
+
+13. **ריצות חופפות.** כשזמן העיבוד ארוך מהמרווח, ריצה חדשה מתחילה לפני שהקודמת סיימה. נעילה בתחילת כל ריצה, ודילוג אם היא מוחזקת: ב-Postgres `pg_try_advisory_lock`; בלעדיו — נעילה עם TTL (Redis `SET ... NX EX`, או שורת נעילה במסד).
 
 ראה `BY-STACK/cron-jobs.md` בריפו amir-bug-patterns לדוגמאות קוד.

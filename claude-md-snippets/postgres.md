@@ -2,7 +2,7 @@
 
 1. **`col = NULL` הוא NULL, לא TRUE.** CAS / `UPDATE WHERE col=:val` לא תופס שורות `NULL`. הסתעפות בקוד אפליקציה: `col.is_(None)` כשהערך הוא `None`.
 
-2. **`VARCHAR(N)` ≥ אורך ערך ה-enum המקסימלי** — מאומת על ידי טסט CI. SQLite (dev) לא אוכף אורך, Postgres כן. או `Enum(EnumClass)` ישירות.
+2. **`VARCHAR(N)` ≥ אורך ערך ה-enum המקסימלי** — מאומת על ידי טסט CI. SQLite (dev) לא אוכף אורך, Postgres כן. או `Enum(EnumClass, values_callable=lambda e: [m.value for m in e])` — בלי `values_callable` נשמרים שמות החברים ולא הערכים, ולכן במעבר מעמודת מחרוזת קיימת בודקים את הנתונים ואת הצרכנים.
 
 3. **IDs חיצוניים צריכים `BigInteger`.** Telegram, Discord, Stripe, GitHub IDs חורגים מ-2³¹.
 
@@ -20,6 +20,6 @@
 
 10. **`postgresql_ops` הוא למחלקות אופרטור, לא כיוון מיון.** השתמש ב-`desc("col")` ל-index יורד.
 
-11. **עמודה שהורפתה ל-nullable — ספור את הקוראים.** `op.alter_column(..., nullable=True)` או `Mapped[X]` שהופך ל-`Mapped[X | None]` על עמודה קיימת: `grep` על שם העמודה בכל הריפו (כולל `jobs/` ו-SQL גולמי), ולכל קורא — לאן ה-`None` הולך (פרמטר `X`, עמודת `NOT NULL` בטבלה אחרת, מפתח במילון, סכמה עם שדה חובה). צרכני רקע ראשונים, וטיפול ב-`None` במסלול הקיים ולא בענף נפרד. type checker לא יתפוס את זה כשהערך נקרא דרך `select(Model.col, ...)` — שם הטיפוס הוא `Any`.
+11. **עמודה שהורפתה ל-nullable — ספור את הקוראים.** `op.alter_column(..., nullable=True)` או `Mapped[X]` שהופך ל-`Mapped[X | None]` על עמודה קיימת: `grep` על שם העמודה בכל הריפו (כולל `jobs/` ו-SQL גולמי), ולכל קורא — לאן ה-`None` הולך (פרמטר `X`, עמודת `NOT NULL` בטבלה אחרת, מפתח במילון, סכמה עם שדה חובה). צרכני רקע ראשונים, וטיפול ב-`None` במסלול הקיים ולא בענף נפרד. type checker לא יתפוס את זה כשהערך נקרא דרך `row.col` של `select(Model.col, ...)` — שם הטיפוס הוא `Any`.
 
 ראה `BY-STACK/postgres.md` בריפו amir-bug-patterns.

@@ -139,7 +139,7 @@
 5. ל-regex על טקסט חיצוני: raw strings (`r"..."`) ו-word boundaries; עדיף `json.JSONDecoder().raw_decode()` על regex ל-JSON משובץ.
 6. לקריאות SDK: לתפוס את ה-base class של ה-SDK (`anthropic.APIError`, `googleapiclient.errors.HttpError`), לסדר את ה-`except` subclass-לפני-superclass.
 7. לאתחול SDK בזמן startup (VAPID keys, env vars, OAuth secrets): לעטוף את האתחול ב-try/except + לוודא פורמט ב-boot.
-8. להזרקת ערך חיצוני למחרוזת עם דקדוק ללא הפרדת נתונים/קוד (CSP, כותרות HTTP, שמות קבצים): שתי בדיקות, לא אחת. (א) תחביר — הערך ניתן לביטוי בדקדוק היעד, ב-`fullmatch` מול הדקדוק עצמו ולא בניקוי תווים אסורים (blocklist לעולם אינו שלם, וערך פגום בהנחיית מדיניות גרוע מערך חסר). (ב) סמנטיקה — הערך גם מורשה: מופיע ב-allowlist של origins/סכמות/ספריות מותרות. `evil.com` הוא host-source תקין תחבירית — רק הבדיקה השנייה עוצרת אותו. לא חל על SQL/shell — שם קיימת הפרדה אמיתית (parameterized queries, `shell=False`) וולידציה אינה תחליף לה.
+8. להזרקת ערך חיצוני למחרוזת עם דקדוק ללא הפרדת נתונים/קוד (CSP, כותרות HTTP, שמות קבצים): שתי בדיקות, לא אחת. (א) תחביר — הערך ניתן לביטוי בדקדוק היעד, ב-`fullmatch` מול הדקדוק עצמו ולא בניקוי תווים אסורים (blocklist לעולם אינו שלם, וערך פגום בהנחיית מדיניות גרוע מערך חסר). (ב) סמנטיקה — הערך גם מורשה: מופיע ב-allowlist של origins/סכמות/ספריות מותרות. `evil.com` הוא host-source תקין תחבירית — רק הבדיקה השנייה עוצרת אותו. לא חל על ערכים ב-SQL ועל פירוש מעטפת — שם קיימת הפרדה אמיתית (parameterized queries, `shell=False`) וולידציה אינה תחליף לה. אבל הפרמטריזציה מגינה רק על ערכים: מזהה שמשולב בשאילתה (שם עמודה או טבלה, כיוון מיון ב-`ORDER BY`) נבחר מ-allowlist. ו-`shell=False` מונע פירוש של מעטפת, לא את פירוש הארגומנט על ידי התוכנית עצמה — ארגומנט חיצוני שמתחיל ב-`-` נקרא כדגל — ולכן מאמתים לפי החוזה של התוכנית ומשתמשים ב-`--` לפני אופרנדים כשהיא תומכת.
 
 9. לבדיקת **שייכות** על ערך חיצוני (`value in <frozenset>`): בדיקת טיפוס **לפני** בדיקת החברות. `in` על קבוצה או מילון מחשב `hash(value)`, וערך לא-hashable זורק `TypeError` במקום להחזיר `False` — כלומר הוולידציה קורסת לפני שהספיקה לומר מה לא תקין, והמשתמש מקבל 500 במקום 400. השורה נראית תמימה בדיוק מפני שהיא נראית כמו שאלה שמחזירה כן/לא.
 
@@ -236,10 +236,10 @@
 
 ### כלל לזיהוי
 לכל פונקציה שמעדכנת status / "phase" / lifecycle column של ישות, ודא שגם **רשימת השדות האחים הקנונית** מתעדכנת באותה טרנזקציה. דוגמאות ספציפיות לפרויקט:
-- שינוי status → `last_outbound_at`, `last_activity_type`, `proposal_sent_at`, סגירת `AUTO_CLOSE_TASK_TYPES`, log activity, ביטול cache.
+- שינוי status → `last_outbound_at`, `last_activity_type`, `proposal_sent_at`, סגירת `AUTO_CLOSE_TASK_TYPES`, log activity — וביטול cache אחרי ה-commit: cache חיצוני אינו חלק מהטרנזקציה, ומילוי שמקורו בקריאה מלפני ה-commit לא אמור לדרוס (גרסת השורה במפתח או בערך).
 - קריאה חיצונית → או INSERT מקומי קודם עם `UNIQUE` *לפני* הקריאה, או כתיבת audit log עם `metadata.applied=false` בכשל.
 - רענון token → גם `access` וגם `refresh` בכתיבה atomic אחת (`localStorage.setItem` הוא per-key; השתמש ב-JSON blob אחד או בשתי כתיבות בטרנזקציה).
-- submit חלקי של טופס → שלח אובייקט מלא או השתמש ב-server-side merge עם field mask מפורש.
+- submit חלקי של טופס → server-side merge עם field mask מפורש (update אטומי של השדות שהשתנו בלבד). אובייקט מלא — רק עם גרסה (version / CAS) שהשרת משווה ודוחה בקשה מיושנת; בלעדיה snapshot ישן דורס שינוי של בקשה מקבילה.
 
 ### False positives
 - migrations / scripts של backfill (one-shot, לא touchpoints טרנזקציוניים).

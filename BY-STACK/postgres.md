@@ -47,7 +47,7 @@ class Lead(Base):
 
 ### כלל לזיהוי
 - טסט CI: לכל עמודת `String(N)` שמתמלאת מ-enum, ודא `N >= max(len(v) for v in EnumClass)`.
-- או השתמש ב-`Enum(EnumClass)` ישירות (יוצר טיפוס enum של PG או עמודת טקסט עם check constraint).
+- או השתמש ב-`Enum(EnumClass)` ישירות (יוצר טיפוס enum של PG או עמודת טקסט עם check constraint) — עם `values_callable=lambda e: [m.value for m in e]`. בלעדיו SQLAlchemy שומר את **שמות** החברים (`EMAIL_PROVIDER`) ולא את הערכים (`email_provider`), ולכן מעבר מעמודת `String` קיימת דורש בדיקה של הנתונים ושל הצרכנים (מקור: ה-docstring של `sqlalchemy.Enum` ב-2.1.8).
 
 ### Commits אמיתיים
 - Noa `2c8263a`.

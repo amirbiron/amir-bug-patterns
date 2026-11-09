@@ -169,7 +169,7 @@ setTimeout(load, isFinite(parsed) && parsed > 0 ? parsed : 1000);  // ✅
 * { margin: 0; padding: 0; }  /* ❌ ב-Tailwind v4 דורס space-y-*, p-*, m-* */
 ```
 
-ב-v4 ה-utilities יושבות ב-`@layer utilities`, וכלל שמחוץ לשכבה גובר עליהן בלי קשר ל-specificity; ב-v3 אותו reset מפסיד ל-utilities ואינו הבאג. סמוך על Preflight (`@import "tailwindcss"` ב-v4, ‏`@tailwind base` ב-v3) והסר את ה-reset; reset שחייב להישאר — בתוך `@layer base`. ההסבר והמדידה: `browser-handoff.md` דפוס 4.
+ב-v4 ה-utilities יושבות ב-`@layer utilities`, וכלל שמחוץ לשכבה גובר עליהן בלי קשר ל-specificity; בפלט ברירת המחדל של v3, בלי שכבות CSS מקוריות, אותו reset מפסיד ל-utilities ואינו הבאג. סמוך על Preflight (`@import "tailwindcss"` ב-v4, ‏`@tailwind base` ב-v3) והסר את ה-reset; reset שחייב להישאר — בתוך `@layer base`. ההסבר והמדידה: `browser-handoff.md` דפוס 4.
 
 ### Commits אמיתיים
 - Web `c586691`.

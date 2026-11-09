@@ -48,13 +48,17 @@ Pub/Sub מספק at-least-once. תשעה workers מקבילים כל אחד קו
 @app.post("/pubsub/gmail")
 async def handle_gmail(req: Request):
   msg = parse_pubsub(req)
-  # 1. רזרבציה מקומית עם UNIQUE constraint
-  try:
-    draft_row = Draft(idempotency_key=msg.message_id, status="reserved")
-    session.add(draft_row)
-    await session.commit()
-  except IntegrityError:
-    return Response(status_code=200)  # duplicate, ignore
+  # 1. רזרבציה מקומית — כפילות מזוהה בהתנגשות על ה-idempotency key בלבד
+  #    (insert מ-sqlalchemy.dialects.postgresql)
+  draft_id = (await session.execute(
+    insert(Draft).values(idempotency_key=msg.message_id, status="reserved")
+      .on_conflict_do_nothing(index_elements=["idempotency_key"])
+      .returning(Draft.id)
+  )).scalar_one_or_none()
+  await session.commit()
+  if draft_id is None:
+    return Response(status_code=200)  # duplicate, ignore — FK / CHECK / NOT NULL עדיין זורקים
+  draft_row = await session.get(Draft, draft_id)
 
   # 2. ואז קריאה חיצונית
   try:
@@ -67,6 +71,8 @@ async def handle_gmail(req: Request):
     await session.commit()
     raise
 ```
+
+לא תופסים `IntegrityError` גורף כ"כפילות": הוא נזרק גם על FK, ‏CHECK ו-NOT NULL, ו-200 עליהם מאשר לספק webhook שנזרק. ‏`ON CONFLICT (idempotency_key) DO NOTHING RETURNING id` מחזיר שורה ריקה רק על התנגשות במפתח הזה, וכל שגיאה אחרת עולה (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026).
 
 ### Commits אמיתיים
 - EmailFlow `f847a44`, `401f179`, `cc7e81a`, `75c0a47`, `0fdd247`.
@@ -90,29 +96,34 @@ async def handle_calendar_webhook(channel_id):
 
 שני webhooks מגיעים כמעט בו זמנית, שניהם קוראים את אותו `sync_token`, שניהם קוראים ל-`google_api.events.list(...)`, שניהם מחילים את אותם deltas → activities כפולות. שניהם כותבים את אותו `next_sync_token`, אבל ה-deltas שהם החילו עשויים להיות שונים.
 
-### תיקון — CAS על ה-cursor
+### תיקון — CAS על ה-cursor, וסנכרון מחדש כשהוא נכשל
 ```python
 async def handle_calendar_webhook(channel_id):
-  sub = await session.get(Subscription, channel_id)
-  old_token = sub.sync_token
-  changes = await google_api.events.list(sync_token=old_token)
+  for _ in range(MAX_CAS_ATTEMPTS):
+    old_token = (await session.execute(
+      select(Subscription.sync_token).where(Subscription.id == channel_id)
+    )).scalar_one()  # קריאה טרייה מהמסד, לא מה-identity map
+    changes = await google_api.events.list(sync_token=old_token)
 
-  # CAS update — להתקדם רק אם ה-cursor לא זז
-  if old_token is None:
-    where_clause = Subscription.sync_token.is_(None)
-  else:
-    where_clause = Subscription.sync_token == old_token
-  result = await session.execute(
-    update(Subscription)
-      .where(Subscription.id == channel_id, where_clause)
-      .values(sync_token=changes.next_sync_token)
-  )
-  if result.rowcount == 0:
-    # webhook אחר הקדים אותנו — ה-deltas שלו כבר מוחלים; אל תחיל מחדש את שלנו
-    return
-  for change in changes.items:
-    await apply_change(change)
-  await session.commit()
+    # CAS update — להתקדם רק אם ה-cursor לא זז
+    if old_token is None:
+      where_clause = Subscription.sync_token.is_(None)
+    else:
+      where_clause = Subscription.sync_token == old_token
+    result = await session.execute(
+      update(Subscription)
+        .where(Subscription.id == channel_id, where_clause)
+        .values(sync_token=changes.next_sync_token)
+    )
+    if result.rowcount == 1:
+      for change in changes.items:
+        await apply_change(change)
+      await session.commit()
+      return
+    # webhook אחר הקדים. ה-deltas שלנו חושבו מסמן ישן, וה-deltas שלו עשויים לכסות פחות
+    # משלנו — לכן לא מוותרים: קוראים את הסמן החדש ומסנכרנים ממנו שוב.
+    await session.rollback()
+  raise CursorContention(channel_id)
 ```
 
 ### Commits אמיתיים
@@ -154,7 +165,7 @@ if rate_limiter.is_blocked(ip): return 429
 ### תיקון
 הגדר middleware של trusted-proxy ברמת ה-framework:
 - FastAPI / Starlette: `app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="<comma-separated-proxy-ips>")`.
-- Express: `app.set('trust proxy', <hop-count or array>)`.
+- Express: `app.set('trust proxy', <hop-count or array>)` — hop count רק כשהשרת לא נגיש ישירות (CRITICAL K2); כתובת הלקוח היא `req.ip`.
 - Flask: `ProxyFix(app, x_for=N)`.
 
 ואז קרא את `request.client.host` (כבר תוקן על ידי ה-middleware).
@@ -174,7 +185,7 @@ if rate_limiter.is_blocked(ip): return 429
 טעויות נפוצות:
 - קריאת ה-body כטקסט ו-encoding מחדש — שובר signature. השתמש ב-bytes גולמיים.
 - השוואה עם `==` (timing attack). השתמש ב-`hmac.compare_digest`.
-- שכחת אימות ב-endpoints של retry / replay.
+- שכחת אימות במשלוח חוזר מהספק. ‏replay פנימי של אירוע שכבר אומת ונשמר — מאחורי הרשאה משלו, לא על החתימה המקורית: ב-Stripe ‏`construct_event` דוחה חתימה ישנה מ-`tolerance`, 300 שניות כברירת מחדל.
 
 (לא צוטט commit ספציפי — baseline הגנתי. הוסף לכל webhook מיום ראשון.)
 
