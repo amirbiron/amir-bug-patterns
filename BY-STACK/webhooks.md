@@ -1,6 +1,6 @@
 # BY-STACK: Webhooks ("מישהו קורא אליי")
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ webhooks נכנסים משירותים חיצוניים (Google Calendar, Gmail, Meta, Stripe, Twilio, Telegram)
 - ✅ Consumers של Pub/Sub / SQS / Kafka (at-least-once delivery)
 - ✅ לוגיקת rate-limit נכנסת שקוראת `X-Forwarded-For` או דומה
@@ -45,28 +45,80 @@ Pub/Sub מספק at-least-once. תשעה workers מקבילים כל אחד קו
 
 ### תיקון
 ```python
+TOPIC = "gmail"  # ה-topic של Pub/Sub: message_id ייחודי רק בתוכו, ולכן הוא חלק מהמפתח
+
 @app.post("/pubsub/gmail")
 async def handle_gmail(req: Request):
   msg = parse_pubsub(req)
-  # 1. רזרבציה מקומית עם UNIQUE constraint
-  try:
-    draft_row = Draft(idempotency_key=msg.message_id, status="reserved")
-    session.add(draft_row)
-    await session.commit()
-  except IntegrityError:
-    return Response(status_code=200)  # duplicate, ignore
+  key = f"{TOPIC}:{msg.message_id}"
+  # 1. רזרבציה מקומית — כפילות מזוהה בהתנגשות על ה-idempotency key בלבד
+  #    (insert מ-sqlalchemy.dialects.postgresql)
+  draft_id = (await session.execute(
+    insert(Draft).values(idempotency_key=key, status="reserved", reserved_at=func.now())
+      .on_conflict_do_nothing(index_elements=["idempotency_key"])
+      .returning(Draft.id)
+  )).scalar_one_or_none()  # FK / CHECK / NOT NULL עדיין זורקים
+  if draft_id is None:
+    # המפתח כבר קיים — וזה לא אומר שהעבודה נעשתה. בודקים את מצב השורה לפני שמאשרים.
+    # failed (כשל ודאי): תפיסה מחדש בעדכון אטומי — רק מסירה אחת זוכה
+    draft_id = (await session.execute(
+      update(Draft).where(Draft.idempotency_key == key, Draft.status == "failed")
+        .values(status="reserved", reserved_at=func.now()).returning(Draft.id)
+    )).scalar_one_or_none()
+    if draft_id is None:
+      status = (await session.execute(
+        select(Draft.status).where(Draft.idempotency_key == key)
+      )).scalar_one()
+      await session.commit()
+      if status == "created":
+        return Response(status_code=200)  # הושלם — כפילות אמיתית
+      return Response(status_code=503)    # reserved / unknown: לא 2xx, כדי שהספק ימסור שוב
+  await session.commit()  # הרזרבציה נשמרת לפני הקריאה החיצונית
 
-  # 2. ואז קריאה חיצונית
+  # 2. הקריאה החיצונית — לבדה ב-try, כדי שהמצב ישקף רק את התוצאה שלה
   try:
     gmail_draft = await gmail.drafts.create(body=msg.body)
-    draft_row.gmail_id = gmail_draft.id
-    draft_row.status = "created"
+  except Exception as exc:
+    # ProviderRejected — רק תשובות שלפי חוזה הספק הפעולה בוודאות לא בוצעה. לא כל 4xx:
+    # 409, למשל, יכול לומר שניסיון קודם כבר הצליח. כל השאר — timeout, חיבור שנותק,
+    # תשובה לא קריאה, קוד שהחוזה לא מכריע — לא ידוע אם ה-draft נוצר
+    outcome = "failed" if isinstance(exc, ProviderRejected) else "unknown"
+    await session.execute(update(Draft).where(Draft.id == draft_id).values(status=outcome))
     await session.commit()
-  except Exception:
-    draft_row.status = "failed"
-    await session.commit()
-    raise
+    raise  # 5xx לספק — הוא ימסור שוב, והמסירה הבאה תפעל לפי המצב
+
+  # 3. fill
+  await session.execute(
+    update(Draft).where(Draft.id == draft_id).values(gmail_id=gmail_draft.id, status="created")
+  )
+  await session.commit()
+  return Response(status_code=200)
 ```
+
+לא תופסים `IntegrityError` גורף כ"כפילות": הוא נזרק גם על FK, ‏CHECK ו-NOT NULL, ו-200 עליהם מאשר לספק webhook שנזרק. ‏`ON CONFLICT (idempotency_key) DO NOTHING RETURNING id` מחזיר שורה ריקה רק על התנגשות במפתח הזה, וכל שגיאה אחרת עולה (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026). העמודה `idempotency_key` היא UNIQUE ו-NOT NULL: בלי אינדקס ייחודי תואם Postgres דוחה את ה-INSERT עצמו (`there is no unique or exclusion constraint matching the ON CONFLICT specification` — נמדד), ו-NULL אינו מתנגש עם NULL — מפתח חסר היה עובר כרשומה חדשה. 
+
+**מפתח שכבר קיים אינו אומר שהעבודה נעשתה.** מסירה חוזרת מגיעה בדיוק אחרי כשל, ולכן 200 אוטומטי על התנגשות זורק את האירוע: השורה נשארת `failed`, ‏`unknown` או `reserved`, הספק מקבל אישור, ומסירה נוספת לא תגיע. לכן בהתנגשות בודקים את מצב השורה. `created` — הושלם, 200. `failed` — כשל ודאי: תופסים מחדש בעדכון אטומי שמחזיר אותה ל-`reserved` של השורה הזו בלבד (`UPDATE ... SET status='reserved', reserved_at=now() WHERE idempotency_key=:key AND status='failed'`), ורק המסירה שהעדכון שלה תפס שורה מבצעת שוב. בלי התנאי על המפתח העדכון היה תופס כל שורה `failed` בטבלה. `reserved` — מסירה אחרת באמצע הטיפול: תשובה שאינה 2xx, והספק ימסור שוב. `unknown` — לא ידוע אם הספק ביצע: גם כאן לא 2xx, ובלי ביצוע חוזר עיוור. השורה מחכה לבירור מול הספק, ורק הבירור מעביר אותה ל-`created` או ל-`failed`.
+
+**הבירור הוא ג'וב נפרד, והוא חלק מהתיקון.** ה-handler רק מסמן ומחזיר 503; בלי הג'וב, שורה `unknown` — או `reserved` של תהליך שמת אחרי הרזרבציה, או של fill שנכשל — תחזיר 503 לכל מסירה חוזרת עד שהספק יתייאש, בלי התראה. לכן הרזרבציה והתפיסה מחדש כותבות `reserved_at` — גם התפיסה מחדש, אחרת שורה שנתפסה זה עתה נושאת את הזמן של הניסיון הקודם ונחשבת ישנה מיד — והג'וב בוחר לפיו גם `reserved` שנשאר מעבר לזמן הטיפול המרבי במסירה אחת — לא ידוע אם הספק ביצע, בדיוק כמו ב-`unknown`:
+
+```sql
+-- לבירור מול הספק: unknown, ו-reserved שעבר את זמן הטיפול
+SELECT id FROM drafts
+ WHERE status = 'unknown'
+    OR (status = 'reserved' AND reserved_at < now() - interval '5 minutes');
+
+-- לדיווח לאדם: failed שנשאר מעבר לחלון הניסיונות של הספק
+SELECT id FROM drafts
+ WHERE status = 'failed' AND reserved_at < now() - interval '3 days';
+```
+
+המרווח בשאילתה הראשונה ארוך מה-timeout מול הספק, אחרת הג'וב תופס מסירה שעוד בטיפול.
+
+**ומה הבירור רשאי להסיק.** הפעולה נמצאה אצל הספק, בחיפוש לפי מזהה שלנו — `created`. לא נמצאה — זו עדיין לא הוכחה: בקשה שכבר יצאה יכולה להתבצע אצל הספק גם אחרי שהלקוח ויתר עליה, ו-`failed` פירושו שמסירה חוזרת תבצע שוב. לכן ל-`failed` עוברים רק באחד משניים: הספק מבטיח שהבקשה המקורית כבר לא תתבצע, או שהקריאה לספק נושאת מפתח idempotency שלו — ואז ביצוע חוזר עם אותו מפתח לא יוצר כפילות, כל עוד הספק שומר את המפתח. בלי אף אחד מהשניים השורה מדווחת לאדם, ולא משוחררת. וגם `failed` תלוי במסירה נוספת מהספק, וספק שכבר התייאש לא ימסור שוב. לכן השאילתה השנייה מדווחת לאדם על `failed` שנשאר מעבר לחלון הניסיונות של הספק: `reserved_at` שלו הוא זמן הניסיון האחרון, והמרווח שם הוא החלון של הספק שלך — שלושה ימים הם דוגמה. השורה אינה שומרת את המטען של האירוע, ולכן הג'וב לא מבצע אותה בעצמו.
+
+**`failed` מסומן רק על תשובה שלפי חוזה הספק הפעולה בוודאות לא בוצעה, וכל חריגה אחרת היא `unknown`.** לא כל 4xx הוא כזה: 409 יכול לומר שניסיון קודם כבר הצליח. תשובה שאבדה — timeout, חיבור שנותק אחרי השליחה — אינה כשל ודאי: ייתכן שהספק יצר את ה-draft. ומכיוון ש-`failed` פירושו "מותר לבצע שוב", ‏`except Exception` שמוביל אליו היה הופך כל timeout ל-draft כפול (`RECURRING-PATTERNS.md` R10). מאותה סיבה הקריאה החיצונית יושבת לבדה ב-`try`: כשל ב-fill אחרי שהספק כבר ביצע אינו `failed`.
+
+נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026. אחרי דחייה, המסירה החוזרת ביצעה שוב והסתיימה ב-`created`. אחרי timeout ואחרי קריסה שאחרי הרזרבציה היא קיבלה 503, בלי קריאה נוספת לספק. תשע מסירות מקבילות — על מפתח חדש, ועל שורה `failed` — הסתיימו בקריאה אחת לספק. שאילתת הבירור החזירה את שורת ה-timeout מיד, ואת השורה שקרסה רק אחרי שעבר המרווח; שאילתת הדיווח החזירה `failed` בן ארבעה ימים, ולא `failed` טרי או בן יום. ובריצת בקרה על הצורה הקודמת, עם 200 אוטומטי על התנגשות: אחרי דחייה ואחרי timeout המסירה החוזרת קיבלה 200, והשורה נשארה `failed` / `unknown`.
 
 ### Commits אמיתיים
 - EmailFlow `f847a44`, `401f179`, `cc7e81a`, `75c0a47`, `0fdd247`.
@@ -90,29 +142,35 @@ async def handle_calendar_webhook(channel_id):
 
 שני webhooks מגיעים כמעט בו זמנית, שניהם קוראים את אותו `sync_token`, שניהם קוראים ל-`google_api.events.list(...)`, שניהם מחילים את אותם deltas → activities כפולות. שניהם כותבים את אותו `next_sync_token`, אבל ה-deltas שהם החילו עשויים להיות שונים.
 
-### תיקון — CAS על ה-cursor
+### תיקון — CAS על ה-cursor, וסנכרון מחדש כשהוא נכשל
 ```python
 async def handle_calendar_webhook(channel_id):
-  sub = await session.get(Subscription, channel_id)
-  old_token = sub.sync_token
-  changes = await google_api.events.list(sync_token=old_token)
+  for _ in range(MAX_CAS_ATTEMPTS):
+    old_token = (await session.execute(
+      select(Subscription.sync_token).where(Subscription.id == channel_id)
+    )).scalar_one()  # קריאה טרייה מהמסד, לא מה-identity map
+    changes = await google_api.events.list(sync_token=old_token)
 
-  # CAS update — להתקדם רק אם ה-cursor לא זז
-  if old_token is None:
-    where_clause = Subscription.sync_token.is_(None)
-  else:
-    where_clause = Subscription.sync_token == old_token
-  result = await session.execute(
-    update(Subscription)
-      .where(Subscription.id == channel_id, where_clause)
-      .values(sync_token=changes.next_sync_token)
-  )
-  if result.rowcount == 0:
-    # webhook אחר הקדים אותנו — ה-deltas שלו כבר מוחלים; אל תחיל מחדש את שלנו
-    return
-  for change in changes.items:
-    await apply_change(change)
-  await session.commit()
+    # CAS update — להתקדם רק אם ה-cursor לא זז
+    if old_token is None:
+      where_clause = Subscription.sync_token.is_(None)
+    else:
+      where_clause = Subscription.sync_token == old_token
+    result = await session.execute(
+      update(Subscription)
+        .where(Subscription.id == channel_id, where_clause)
+        .values(sync_token=changes.next_sync_token)
+    )
+    if result.rowcount == 1:
+      # apply_change רץ על אותה session ובלי commit משלו: ה-CAS וכל השינויים נשמרים יחד, או אף אחד
+      for change in changes.items:
+        await apply_change(change)
+      await session.commit()
+      return
+    # webhook אחר הקדים. ה-deltas שלנו חושבו מסמן ישן, וה-deltas שלו עשויים לכסות פחות
+    # משלנו — לכן לא מוותרים: קוראים את הסמן החדש ומסנכרנים ממנו שוב.
+    await session.rollback()
+  raise CursorContention(channel_id)
 ```
 
 ### Commits אמיתיים
@@ -154,7 +212,7 @@ if rate_limiter.is_blocked(ip): return 429
 ### תיקון
 הגדר middleware של trusted-proxy ברמת ה-framework:
 - FastAPI / Starlette: `app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="<comma-separated-proxy-ips>")`.
-- Express: `app.set('trust proxy', <hop-count or array>)`.
+- Express: `app.set('trust proxy', <hop-count or array>)` — hop count רק כשכל בקשה עוברת בדיוק אותו מספר proxies מהימנים, וכל אחד מהם מוסיף לכותרת את הכתובת שראה (CRITICAL K2); כתובת הלקוח היא `req.ip`.
 - Flask: `ProxyFix(app, x_for=N)`.
 
 ואז קרא את `request.client.host` (כבר תוקן על ידי ה-middleware).
@@ -174,7 +232,7 @@ if rate_limiter.is_blocked(ip): return 429
 טעויות נפוצות:
 - קריאת ה-body כטקסט ו-encoding מחדש — שובר signature. השתמש ב-bytes גולמיים.
 - השוואה עם `==` (timing attack). השתמש ב-`hmac.compare_digest`.
-- שכחת אימות ב-endpoints של retry / replay.
+- שכחת אימות במשלוח חוזר מהספק. ‏replay פנימי של אירוע שכבר אומת ונשמר — מאחורי הרשאה משלו, לא על החתימה המקורית: ב-Stripe ‏`construct_event` דוחה חתימה ישנה מ-`tolerance`, 300 שניות כברירת מחדל.
 
 (לא צוטט commit ספציפי — baseline הגנתי. הוסף לכל webhook מיום ראשון.)
 

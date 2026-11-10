@@ -4,7 +4,7 @@
 
 ## דווח כשמתקיים אחד מהבאים
 
-1. **`clientX` / `pageX` / `offsetX` בחיסור, בלי שהסימן נגזר מהפריסה.** `startWidth + (clientX - startX)` היא נוסחת LTR. ב-RTL האלמנט זז הפוך מהאצבע. הצורה הנכונה: `getComputedStyle(el).direction` או מדידה בפועל קובעים את הסימן.
+1. **`clientX` / `pageX` / `offsetX` בחיסור, בלי שהסימן נגזר מהפריסה.** `startWidth + (clientX - startX)` היא נוסחת LTR. ב-RTL האלמנט זז הפוך מהאצבע. הצורה הנכונה: הסימן נגזר מהקצה שנגרר — מדידה (`getBoundingClientRect` של הידית מול החלונית) או הצהרה מפורשת של הקצה. ‏`direction` לבדו הוא קירוב, שנשבר כשחלונית מעוגנת לשמאל גם בעמוד RTL.
 
 2. **`left` / `right` / `marginLeft` שנקבעים ישירות** בפריסה שיכולה להיות RTL — במקום `inset-inline-start` / logical properties.
 

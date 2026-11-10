@@ -17,33 +17,30 @@
 
 | מקור | יעד |
 |---|---|
-| `CORE-PATTERNS.md` | לזרוק ל-`docs/` של הפרויקט החדש, או לקשר מ-`CLAUDE.md`. |
-| `CRITICAL-PATTERNS.md` | אותו דבר. |
 | `claude-md-snippets/universal.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 6 כללים). |
 | `claude-md-snippets/critical.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 16 כללים). |
-| `TESTING-PATTERNS.md` | לזרוק ל-`docs/`, או לקשר מ-`CLAUDE.md`. |
 | `claude-md-snippets/testing.md` | **להדביק את התוכן ל-`CLAUDE.md` של הפרויקט** (תמציתי, 7 כללים). |
-| `BY-STACK/hebrew-source.md` + `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
+| `claude-md-snippets/hebrew.md` | כל פרויקט שלי — ההערות בקוד בעברית. |
 
-זה ~90 שורות שמתווספות ל-`CLAUDE.md` שמכסות את ה-baseline האוניברסלי, האבטחה, הבדיקות והעברית.
+זה 84 שורות — כ-26 אלף תווים, כי רוב הכללים הם פסקה ארוכה אחת — שמתווספות ל-`CLAUDE.md` ומכסות את ה-baseline האוניברסלי, האבטחה, הבדיקות והעברית (נספר ב-`wc -l` וב-`wc -m` על ארבעת הקבצים, נובמבר 2026).
 
 ### 2. ואז לפי stack
 
-עבור על decision tree הזה. כל "כן" מעתיק קובץ stack אחד + snippet אחד.
+עבור על decision tree הזה. כל "כן" מדביק snippet אחד ל-`CLAUDE.md`. קובץ ה-`BY-STACK/` המקביל לא מועתק לפרויקט: הוא נשאר בריפו הזה ונקרא משם כשצריך, דרך שורת הטריגר. לכן בלוק הטריגרים הוא חלק מהצעד ולא תוספת — `INTEGRATION.md` §4, צעדים 2–3: בלעדיו קובץ ה-`BY-STACK/` לא ייקרא אף פעם.
 
-| אם בפרויקט יש... | להעתיק | להדביק ל-`CLAUDE.md` |
-|---|---|---|
-| React frontend | `BY-STACK/react-frontend.md` | `claude-md-snippets/react.md` |
-| SQLAlchemy async | `BY-STACK/async-orm.md` | `claude-md-snippets/async-orm.md` |
-| Webhooks / Pub-Sub / queue consumers | `BY-STACK/webhooks.md` | `claude-md-snippets/webhooks.md` |
-| Cron / tasks מתוזמנים | `BY-STACK/cron-jobs.md` | `claude-md-snippets/cron-jobs.md` |
-| Postgres (או כל SQL עם migrations & pagination) | `BY-STACK/postgres.md` | `claude-md-snippets/postgres.md` |
-| MongoDB / Atlas — אינדקסים שנוצרים מהקוד, אגרגציה, pymongo | `BY-STACK/mongodb.md` | `claude-md-snippets/mongodb.md` |
-| מדדי בריאות, התראות, או מנגנון שפועל אוטומטית לפי מספר | `BY-STACK/observability.md` | `claude-md-snippets/observability.md` |
-| Anthropic / Google / Stripe / OAuth / FCM SDKs | `BY-STACK/external-sdk.md` | `claude-md-snippets/external-sdk.md` |
-| קוד דפדפן עם `mailto:` / clipboard / blob URLs | `BY-STACK/browser-handoff.md` | `claude-md-snippets/browser-handoff.md` |
-| State machines / status enums | `BY-STACK/state-machine.md` | `claude-md-snippets/state-machine.md` |
-| מגיש HTML / CSP / OAuth בדפדפן / iframes | `BY-STACK/browser-policy.md` | `claude-md-snippets/browser-policy.md` |
+| אם בפרויקט יש... | להדביק ל-`CLAUDE.md` |
+|---|---|
+| React frontend | `claude-md-snippets/react.md` |
+| SQLAlchemy async | `claude-md-snippets/async-orm.md` |
+| Webhooks / Pub-Sub / queue consumers | `claude-md-snippets/webhooks.md` |
+| Cron / tasks מתוזמנים | `claude-md-snippets/cron-jobs.md` |
+| Postgres (או כל SQL עם migrations & pagination) | `claude-md-snippets/postgres.md` |
+| MongoDB / Atlas — אינדקסים שנוצרים מהקוד, אגרגציה, pymongo | `claude-md-snippets/mongodb.md` |
+| מדדי בריאות, התראות, או מנגנון שפועל אוטומטית לפי מספר | `claude-md-snippets/observability.md` |
+| Anthropic / Google / Stripe / OAuth / FCM SDKs | `claude-md-snippets/external-sdk.md` |
+| קוד דפדפן עם `mailto:` / clipboard / blob URLs | `claude-md-snippets/browser-handoff.md` |
+| State machines / status enums | `claude-md-snippets/state-machine.md` |
+| מגיש HTML / CSP / OAuth בדפדפן / iframes | `claude-md-snippets/browser-policy.md` |
 
 ### 3. אופציונלי — אם יש זמן
 

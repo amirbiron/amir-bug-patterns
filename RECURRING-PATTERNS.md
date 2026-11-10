@@ -15,8 +15,8 @@
 SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifecycle שתופסים מפתחים לא מוכנים:
 - attributes של אובייקט ORM שניגשים אליהם *אחרי* `await session.rollback()` זורקים `MissingGreenlet`.
 - `AsyncSession` אחד שמשותף בין tasks concurrent דרך `asyncio.gather` → race / שחיתות (sessions לא בטוחים ל-thread או ל-task).
-- אחרי `await session.commit()` בלולאה, גישה מחדש לאותה שורת ORM מחזירה attributes ישנים (commit מרענן רק את ה-PK; דורש `await session.refresh(row)` מפורש).
-- `joinedload` + `with_for_update` אינם תואמים (SQLAlchemy זורק).
+- אחרי `await session.commit()` בלולאה, גישה מחדש לאותה שורת ORM נכשלת או מחזירה ערך ישן: ב-`expire_on_commit=True` (ברירת המחדל) commit מסמן את כל האובייקטים כפגי תוקף והגישה זורקת `MissingGreenlet`; ב-`False` השדות נשארים מלפני ה-commit. בשני המקרים — `await session.refresh(row)` מפורש.
+- `joinedload` (LEFT OUTER JOIN, ברירת המחדל) + `with_for_update()` בלי `of` נדחים ב-Postgres: הנעילה חלה גם על הצד ה-nullable של ה-join, ו-`FOR UPDATE` אינו חל עליו (השגיאה מה-DB, לא מ-SQLAlchemy). ‏`with_for_update(of=Model)` נועל רק את הטבלה הראשית ועובר; בישות `aliased()` — `of=` מקבל את ה-alias עצמו, לא את המודל.
 - `Engine` singleton שמקושר ל-event loop אחד נכשל ב-Celery task השני (שמקבל loop חדש).
 
 ### דוגמאות אמיתיות
@@ -29,10 +29,10 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 
 ### כלל לזיהוי
 1. לעולם אל תעביר את אותו `AsyncSession` ל-tasks concurrent מרובים דרך `asyncio.gather` / `asyncio.create_task` — כל task פותח את שלו עם `async with sessionmaker() as session:`.
-2. אחרי `await session.rollback()` (מפורש או מ-exception): אל תיגש ל-attributes של ORM. חלץ `.id` / primitives **לפני** rollback, או `session.expunge(obj)` כדי לנתק.
-3. אחרי `await session.commit()` בתוך לולאה, קרא ל-`await session.refresh(row)` לפני גישה מחדש ל-attributes.
-4. `joinedload` עם locking → השתמש ב-`contains_eager` במקום.
-5. Celery tasks: צור engine חדש בתוך ה-task (או השתמש ב-connection pool שמתחדש ל-loop הנוכחי).
+2. אחרי `await session.rollback()` (מפורש או מ-exception): אל תיגש ל-attributes של ORM. חלץ `.id` / primitives **לפני** rollback, או `session.expunge(obj)` כדי לנתק — גם הוא לפני ה-rollback: באובייקט המנותק זמינים רק השדות שכבר נטענו, וגישה לשדה שפג תוקפו זורקת `DetachedInstanceError`; ושינוי שלא נשמר באובייקט שנותק לא ייכתב.
+3. אחרי `await session.commit()` בתוך לולאה, קרא ל-`await session.refresh(obj)` לפני גישה מחדש ל-attributes — על אובייקט ORM, לא על `Row`; וקשר עצל נטען רק כשהוא נקרא בשם, ב-`attribute_names`.
+4. `joinedload` עם locking → `with_for_update(of=Model)`, שנועל רק את הטבלה הראשית ושומר את ה-LEFT JOIN. ‏`contains_eager` עם `join` (או `joinedload(..., innerjoin=True)`) הוא INNER JOIN — משמיט שורות בלי קשר, ובלי `of` נועל גם את הטבלה המקושרת. רק כשהקשר חובה.
+5. Celery tasks: ה-task סינכרוני ועוטף `asyncio.run(...)` (Celery לא מריץ `async def`), ובתוכו engine חדש שנסגר ב-`await engine.dispose()` בסוף. engine משותף: עם pool — רק כשה-tasks לא חופפים, ועם `dispose()` בסוף כל task; עם `NullPool` — גם במקביל, ובלבד שהחיבור הראשון קרה לפני שה-tasks המקבילים מתחילים.
 
 ### False positives
 - SQLAlchemy סינכרוני (`sessionmaker` רגיל) — כללים שונים לחלוטין.
@@ -91,7 +91,7 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 - `window.open("mailto:...")` מחזיר `null` ב-Chrome (handoff של protocol מערכת, **לא** popup blocker). קוד שמפרש `null` כ-"חסום" מבטל את הפעולה הלגיטימית.
 - `navigator.clipboard.writeText(...)` דורש HTTPS; זורק על HTTP. בלי try/catch → שגיאת console + כשל UX שקט.
 - Tooltip / dropdown נסגר מיד על click כי ה-click מבעבע ל-parent שמחליף state.
-- CSS reset גלובלי (`* { margin: 0; padding: 0 }`) יש לו specificity גבוה יותר ממחלקות utility של Tailwind כמו `space-y-6`.
+- CSS reset גלובלי (`* { margin: 0; padding: 0 }`) מחוץ לכל `@layer` גובר ב-Tailwind v4 על מחלקות utility כמו `space-y-6`, שיושבות ב-`@layer utilities` — לא בגלל specificity (של `*` הוא אפס), אלא כי כלל מחוץ לשכבה גובר על כל הצהרה רגילה שבשכבה. לא על utility עם `!important` (`!p-4`), ובפלט ברירת המחדל של v3, בלי שכבות מקוריות, אותו reset מפסיד להן.
 - דליפת `URL.createObjectURL` — blob URL לעולם לא משוחרר, מצטבר לכל render.
 - `setTimeout(fn, delay)` עם `delay = NaN` — שגיאת React / delay אינסופי.
 
@@ -108,7 +108,7 @@ SQLAlchemy async (`AsyncSession`, `async_sessionmaker`) יש לו כללי lifec
 2. `navigator.clipboard.*` בלי try/catch → דווח.
 3. `URL.createObjectURL` בלי `URL.revokeObjectURL` מתאים ב-cleanup של `useEffect` / `componentWillUnmount` / `addEventListener('unload', ...)`.
 4. `setTimeout(fn, delay)` / `setInterval(fn, delay)` / `new Date(value)` בלי הגנת `isFinite(delay)` ל-delay/value ממקור חיצוני.
-5. `* { margin: 0; padding: 0 }` גלובלי בפרויקט שמשתמש ב-framework utility CSS (Tailwind, UnoCSS) → דווח.
+5. `* { margin: 0; padding: 0 }` גלובלי מחוץ ל-`@layer`, בפרויקט שה-utilities שלו יושבות בתוך `@layer` של CSS (Tailwind v4) → דווח כשה-reset אכן דורס את ה-utility הנבדק (לא utility עם `!important`). בפלט ברירת המחדל של Tailwind v3, בלי שכבות מקוריות, זה אינו הבאג.
 
 ### מצב מומלץ
 **warning** — רוב הבאגים הם UX, לא אובדן נתונים.

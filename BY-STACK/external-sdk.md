@@ -1,6 +1,6 @@
 # BY-STACK: SDKs חיצוניים (Anthropic, Google, Stripe, OAuth, push notifications)
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ קריאות SDK של Anthropic / OpenAI / LLM אחר
 - ✅ APIs של Google (Calendar, Gmail, OAuth, Sheets, FCM, web-push)
 - ✅ SDKs של Stripe, Twilio, Telegram, Slack, Meta
@@ -281,13 +281,19 @@ self.user = user
 
 ### בדיקה
 
-כפיל שזורק כבר ב-`get_user()` יעבור גם על קוד שאינו מאמת דבר, ויסתיר את הבאג. הכפיל חייב להיכשל **בגישה לשדה**:
+כפיל שזורק תמיד כבר ב-`get_user()` יעבור גם על קוד שאינו מאמת דבר, ויסתיר את הבאג. וכפיל שזורק רק בגישה לשדה יפיל את הצורה המומלצת, `get_user(lazy=False)`, שאינה נוגעת בשדה. הכפיל מחקה את שני המצבים, לפי הטבלה שלמעלה:
 
 ```python
 class _LazyFailingUser:
     @property
     def login(self):
         raise BadCredentialsException(401, "Bad credentials", None)
+
+class _FailingGithub:
+    def get_user(self, lazy=None):
+        if lazy is False:            # כמו PyGithub: הבקשה יוצאת כבר בקריאה
+            raise BadCredentialsException(401, "Bad credentials", None)
+        return _LazyFailingUser()     # בלי הדגל — הכשל מגיע רק בגישה לשדה
 ```
 
 ### סיווג הכשל

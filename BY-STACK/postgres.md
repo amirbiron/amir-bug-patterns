@@ -1,6 +1,6 @@
 # BY-STACK: Postgres (SQL, migrations, pagination, indexes)
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ PostgreSQL (רוב הקובץ הזה ספציפי ל-PG)
 - ✅ כל DB של SQL עם queries של `LIKE` על קלט משתמש (K8 חל באופן רחב)
 - ✅ Alembic migrations (דפוס 5 — model drift; דפוס 11 — עמודה שהורפתה ל-nullable)
@@ -47,7 +47,7 @@ class Lead(Base):
 
 ### כלל לזיהוי
 - טסט CI: לכל עמודת `String(N)` שמתמלאת מ-enum, ודא `N >= max(len(v) for v in EnumClass)`.
-- או השתמש ב-`Enum(EnumClass)` ישירות (יוצר טיפוס enum של PG או עמודת טקסט עם check constraint).
+- או השתמש ב-`Enum(EnumClass)` ישירות (יוצר טיפוס enum של PG או עמודת טקסט עם check constraint) — עם `values_callable=lambda e: [m.value for m in e]`. בלעדיו SQLAlchemy שומר את **שמות** החברים (`EMAIL_PROVIDER`) ולא את הערכים (`email_provider`), ולכן מעבר מעמודת `String` קיימת דורש בדיקה של הנתונים ושל הצרכנים (מקור: ה-docstring של `sqlalchemy.Enum` ב-2.1.8).
 
 ### Commits אמיתיים
 - Noa `2c8263a`.
@@ -107,14 +107,14 @@ q = (
 - `op.create_index(...)` ב-migration אבל לא ב-`__table_args__` של המודל. ל-DB טרי אין index.
 - `CheckConstraint("a > b")` ב-migration אבל `CheckConstraint("b < a")` (לוגית זהה) במודל. Postgres מנרמל שתי הצורות אבל השמות שונים → autogenerate רואה constraint "חסר".
 - `DROP COLUMN` ב-migration אבל הקוד עדיין מתייחס לעמודה.
-- revision id של Alembic ארוך מ-32 chars → migration נכשל ב-deploy טרי (ברירת מחדל `VARCHAR(32)` ב-`alembic_version`).
+- revision id של Alembic ארוך מ-32 chars → migration נכשל ב-deploy טרי (`VARCHAR(32)` הוא אורך העמודה `alembic_version.version_num`).
 - פרויקטי MySQL: `ADD COLUMN IF NOT EXISTS` לא קיים (PG-only).
 - חסר CREATE TABLE ל-migration של fresh-deploy שמתחיל ב-ALTER.
 
 ### כלל לזיהוי
 1. כל constraint/index ב-migration → שקף אותו ב-`__table_args__`.
 2. `DROP COLUMN` ב-PR שמוסיף attribute למודל (או משאיר הפניה קיימת) → דווח.
-3. revision id ≤ 30 chars.
+3. revision id ≤ 32 chars — אורך העמודה `alembic_version.version_num`.
 4. פרויקטי MySQL: אסור `ADD COLUMN IF NOT EXISTS` דרך grep; החלף ב-`try/except` או migration one-shot.
 5. migrations הם additive כשהקוד הישן עדיין משתמש בעמודה.
 

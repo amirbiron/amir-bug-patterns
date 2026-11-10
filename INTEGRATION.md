@@ -78,11 +78,10 @@
 
 ### והסניפטים האוניברסליים (universal / critical / testing)?
 
-ה-README (סעיף "איך להחיל על **פרויקט חדש**") אומר להדביק את שלושתם —
-~70 שורות (עם `hebrew.md` — ~90, המספר שב-README). שני המסמכים לא סותרים, כי הם מדברים על שני מצבים:
+ה-README (סעיף "איך להחיל על **פרויקט חדש**") אומר להדביק את שלושתם וגם את `hebrew.md` — הגודל כתוב שם, בצעד 1, ולא כאן. שני המסמכים לא סותרים, כי הם מדברים על שני מצבים:
 
 - **פרויקט חדש**: מדביקים את שלושת הסניפטים במלואם (צעד 1 ב-§4 כאן).
-  אין עדיין CLAUDE.md גדול, וה-70 שורות הן ה-baseline שכל השאר נבנה עליו.
+  אין עדיין CLAUDE.md גדול, והסניפטים הם ה-baseline שכל השאר נבנה עליו.
 - **פרויקט קיים עם CLAUDE.md מבוסס**: לא מדביקים אף אחד מהם במלואו — זה מנפח קובץ שכבר עמוס ויוצר עותק שמתיישן. מה כן, פר-סניפט: `testing.md` כבר מופנה מבלוק הטריגרים (שורת "לפני כתיבת טסט חדש") — ההפניה מספיקה; `universal.md` ו-`critical.md` נשארים בהפניה דרך הטריגרים של §2, ו**כלל בודד מתוכם שהדפוס שלו כבר עלה בפרויקט נפרס inline בבלוק** — כמו K11 ב-`CLAUDE.md` של CodeBot, שנכתב שם בגוף הטקסט כי הוא תפס את הריפו הזה שלוש פעמים. עלה דפוס נוסף בפרויקט ← מוסיפים גם את הכלל שלו inline, לא את כל הסניפט.
 
 ---
@@ -142,12 +141,16 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | מופע של ספרייה חיצונית שנבנה **ברמת המודול** ומשותף לחוטים — ובמיוחד כשהבנייה כוללת קריאות תצורה (`use`, `enable`, `disable`, `register`, `add_*`, `before`) | `CRITICAL-PATTERNS.md` K15 + `bugbot-rules/lazy-init-guard-publish-order.md` — מתי אובייקט נחשב מוכן, וכשהתצורה קורית בתוכו. ואם אותו מופע גם נבנה מ-`os.environ` או מפעיל משהו — ראה גם את השורה על ברמה העליונה של מודול |
 | `getattr(x, "y", None)` או `except` שאחריו **מסלול חלופי בגלל כשל** — לא ערך ברירת מחדל, ולא זיהוי יכולת סטטי | `bugbot-rules/silent-fallback-to-worse-path.md` |
 | עבודה **כבדת-זיכרון** בתוך handler או ג'וב — פרסור מסמך שלם, בניית ZIP, עיבוד תמונה, אמבדינג — או קביעת רוחב של מאגר או מספר עובדים: `max_workers`, `--workers`, `WEB_CONCURRENCY`, `Semaphore(n)`, `os.cpu_count()`, `os.process_cpu_count()` | `bugbot-rules/host-metric-in-container.md` — ממה גוזרים כמה עותקים רצים במקביל |
-| כתיבת CSP או כותרת תגובה, redirect שבולע כותרת שהלקוח נשען עליה — `WWW-Authenticate`, ‏`Retry-After` — גם באותו origin, או יצירה או עריכה של עמוד ציבורי שמוסיפה התנהגות דפדפן חדשה — iframe, fetch, script, טופס | `BY-STACK/browser-policy.md`, "B1. מדיניות גורפת שנכתבה לפי הרוב, חונקת מקרה יחיד", "B2. ערך פגום בהנחיית מדיניות גרוע מערך חסר" ו-"B3. הפניה בולעת את הכותרות שהתשובה נשענת עליהן"; לעמוד ציבורי חדש — הפסקה "ולפני הכול — למנות את הדפים שנגישים בלי התחברות" בפתיח הקובץ |
+| כותרת תגובה או הנחיית CSP שערכה **נבנה מערך חיצוני** — פרמטר, שם מארח, כתובת שמגיעה מבחוץ. ערך קבוע בקוד — לא | `BY-STACK/browser-policy.md`, "B2. ערך פגום בהנחיית מדיניות גרוע מערך חסר" |
+| `redirect` / `Mount` / 3xx על נתיב שמחזיר כותרת שהלקוח נשען עליה — `WWW-Authenticate`, ‏`Retry-After` — גם באותו origin | `BY-STACK/browser-policy.md`, "B3. הפניה בולעת את הכותרות שהתשובה נשענת עליהן" |
+| שינוי או כתיבה של הנחיית CSP **גורפת** — גם ערך קבוע | `BY-STACK/browser-policy.md`, "B1. מדיניות גורפת שנכתבה לפי הרוב, חונקת מקרה יחיד"; וכשהערך נבנה מערך חיצוני — גם B2. כותרת תגובה קבועה שאינה CSP (`nosniff`, HSTS) — לא |
+| עמוד ציבורי חדש, או עריכה של קיים שמוסיפה התנהגות דפדפן — iframe, טופס, fetch לדומיין אחר, מיקרופון. סקריפט מאותו origin שה-CSP כבר מתיר — לא | `BY-STACK/browser-policy.md`, "B1. מדיניות גורפת שנכתבה לפי הרוב, חונקת מקרה יחיד", ולעמוד חדש — הפסקה "ולפני הכול — למנות את הדפים שנגישים בלי התחברות" בפתיח הקובץ |
 | `create_index` — ובמיוחד `partialFilterExpression` או `sparse=True` | `BY-STACK/mongodb.md` דפוס 1 + `bugbot-rules/mongo-index-and-operator-traps.md` — אופרטורים שהפילטר החלקי לא מקבל, ואתחול שבולע את השגיאה |
 | `expireAfterSeconds` / `expire_after_seconds` / `unique=True` בהגדרת אינדקס, ‏`drop_index` / `drop_indexes`, ‏`create_index` בקובץ תחת `scripts/` או בפקודת אדמין, דיף שמוחק שורה מרשימת אינדקסים — או כתיבה של שדה תפוגה (`expires_at`, `expire_at`, `deleted_expires_at`) | `BY-STACK/mongodb.md` דפוס 9 + `bugbot-rules/mongo-index-and-operator-traps.md` §10 — מי מצהיר על האינדקס, ומי כותב |
-| צינור `aggregate` — `$project`, `$addFields` / `$set`, `$sort`, `$group` — או `find_one` בתוך לולאה | `RECURRING-PATTERNS.md`, "עבודה ומטען שאינם פרופורציונליים לתשובה" + `bugbot-rules/work-disproportionate-to-answer.md` + `BY-STACK/mongodb.md`, "השדות הכבדים נגררים דרך המיון" |
+| צינור `aggregate` — `$project`, `$addFields` / `$set`, `$sort`, `$group` | `RECURRING-PATTERNS.md`, "R8. עבודה ומטען שאינם פרופורציונליים לתשובה" + `bugbot-rules/work-disproportionate-to-answer.md` + `BY-STACK/mongodb.md`, "דפוס 5 — השדות הכבדים נגררים דרך המיון (ו-`allowDiskUse` אינו התשובה)" |
+| `find_one` / שאילתה בתוך לולאה | `RECURRING-PATTERNS.md`, "R8. עבודה ומטען שאינם פרופורציונליים לתשובה" + `bugbot-rules/work-disproportionate-to-answer.md` |
 | `startswith` / `endswith` על נתיב, URL או דומיין | `CRITICAL-PATTERNS.md` K16 |
-| `replace(tzinfo=` · `datetime.now()` **בלי** אזור זמן · כל `date.today()` · קוד שמעצב או מציג תאריך למשתמש | `RECURRING-PATTERNS.md` R7 |
+| `replace(tzinfo=` · `datetime.now()` **בלי** אזור זמן · כל `date.today()` · קוד שמעצב או מציג תאריך **שמגיע מהשרת או מהמסד** | `RECURRING-PATTERNS.md` R7 |
 | **ברמה העליונה של מודול** (מחוץ לכל פונקציה): `Thread(`, `.start()`, `scheduler`, `asyncio.create_task`, לקוח או חיבור שנבנה מ-`os.environ`, או קריאת רשת, מסד או קובץ | `bugbot-rules/import-time-side-effects.md` — מה רץ בזמן ייבוא. ואם מה שנבנה שם הוא מופע של ספרייה חיצונית שמשותף לחוטים — ראה גם את השורה על מופע של ספרייה חיצונית |
 | `spec_from_file_location` / `module_from_spec` / `exec_module` | `bugbot-rules/load-by-path-without-import-bookkeeping.md` |
 | שינוי שנעשה כדי לספק לינטר: הזזת `import`, ניקוי אזהרת escape, הרחבת `except` | `bugbot-rules/linter-fix-changes-runtime-behavior.md` |
@@ -155,7 +158,7 @@ CodeKeeper הוא שם המוצר, CodeBot הוא שם הריפו — לא שנ�
 | `find_one(` / `LIMIT 1` / `.first()` / `[0]` / `[:1]` **על מסנן שאינו אינדקס ייחודי**, בלי `sort` / `ORDER BY` | `bugbot-rules/unsorted-representative.md` — איזו שורה נבחרה, ומי קבע |
 | `$set` / `SET` של `is_active`, `is_default`, `is_current`, `is_primary` ל-true — בשחזור, `undelete`, הפעלה מחדש — או `is_active = 0` ואחריו `INSERT`, או הכנסה (`INSERT` / `insert_one`) של רשומה פעילה בלי כיבוי הקודם לפניה | `bugbot-rules/single-active-invariant-in-code.md` — כמה פעילים זה יכול להשאיר, ומי במסד מונע את השני |
 | שליחה לספק עם תקרת קלט (טוקנים, אורך שדה), או `value[:LIMIT]` לפני שמירה | `bugbot-rules/silent-truncation-at-sink.md` |
-| חישוב מיקום או גודל ב-JS — `clientX` בחיסור, ‏`getBoundingClientRect`, ‏`offsetLeft`, ‏`pageX`, ‏`offsetX`, ‏`style.left` / `style.right` שמוצבים מחישוב, הצמדה ל-viewport, אותו מימד (`height`, `max-height`) שנקבע ביותר ממקום אחד — CSS מול `calc()` ב-JS — או `overflow: hidden` על מכל שגובהו מחושב — או תכונות CSS **פיזיות** (`left`, `right`, `margin-left`, `padding-right`) בפריסה שאמורה להיות RTL. ‏`z-index` ותכונות לוגיות — לא | `BY-STACK/hebrew-source.md` H7 + `bugbot-rules/rtl-geometry-and-clamp.md` |
+| חישוב מיקום או גודל **בקוד ייצור** (לא בטסט שמודד) — `clientX` בחיסור, ‏`getBoundingClientRect`, ‏`offsetLeft`, ‏`pageX`, ‏`offsetX`, ‏`style.left` / `style.right` שמוצבים מחישוב, הצמדה ל-viewport, אותו מימד (`height`, `max-height`) שנקבע ביותר ממקום אחד — CSS מול `calc()` ב-JS — או `overflow: hidden` על מכל שגובהו מחושב — או תכונות CSS פיזיות (`left`, `right`, `margin-left`, `padding-right`) שנוספו או שונו בפריסה שאמורה להיות RTL. ‏`z-index` ותכונות לוגיות — לא | `BY-STACK/hebrew-source.md` H7 + `bugbot-rules/rtl-geometry-and-clamp.md` |
 | `EWMA` / `_ewma`, ‏`anomaly_detected`, ‏`cooldown`, ‏`first_ts`, ‏`adaptive_*_threshold_*` | `RECURRING-PATTERNS.md` R9 + `BY-STACK/observability.md` |
 | הרצה ראשונה של ג'וב סנכרון: `baseline`, `last_*_check_time`, `if not last_seen` | `BY-STACK/cron-jobs.md` דפוס 10 — מה ההרצה הראשונה שולחת |
 | ג'וב או לולאה שיוצרים עותק ממקור אמת "אם חסר" — `if not ...exists(` ואחריו clone / create / `upsert` / אינדוקס — או שלב שמוחק מה שהמקור כבר לא מכיר (`prune`, `orphan`, `janitor`, `reconcile`) | `BY-STACK/cron-jobs.md`, "סנכרון חד-כיווני" + `bugbot-rules/one-way-sync-orphans.md` — מי מוחק את העותק כשהמקור מפסיק לרשום אותו, ומה עוצר מחיקה של הכול |
@@ -273,7 +276,7 @@ review guidelines). מנוסח תמציתי כי הוא מוזרק לכל ריו
 
 1. **CLAUDE.md ראשוני**: להדביק את שלושת הסניפטים האוניברסליים —
    `claude-md-snippets/universal.md`, `claude-md-snippets/critical.md`,
-   `claude-md-snippets/testing.md` (שלושת הסניפטים יחד ≈ 70 שורות). בפרויקט עברי: גם
+   `claude-md-snippets/testing.md` (הגודל — ב-README, צעד 1). בפרויקט עברי: גם
    `claude-md-snippets/hebrew.md`.
 2. **decision tree של ה-stack** (README §2): לכל "כן" — להדביק את
    ה-snippet המתאים ולרשום את קובץ ה-BY-STACK בטבלת הטריגרים.

@@ -1,6 +1,6 @@
 # BY-STACK: State machines
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ Status enums שמובילים lifecycle (`Lead.status`, `Order.status`, `Booking.status`, `Conversation.state`)
 - ✅ פעולות "touchpoint": פעולה אחת שחייבת לעדכן atomically כמה שדות מקושרים (status + last_outbound_at + last_activity_type + סגירת task קשור + log-activity)
 - ✅ Activity / audit logs שצרכנים downstream (cron / dashboards) תלויים בהם
@@ -61,7 +61,7 @@ def apply_chip(lead, target_status):
 
 ל-`{WON, LOST, ARCHIVED}`: חייב לעבור דרך `close_lead(...)`, לא השמה ישירה.
 
-ל-`{BOOKING_PENDING, BOOKED}` → status אחר: `Booking` פעיל קיים חייב לעשות cascade (`REJECT` / `CANCEL`) או שצריך להודיע למשתמש.
+ל-`{BOOKING_PENDING, BOOKED}` → status שמחוץ לקבוצה (לא האישור מ-`BOOKING_PENDING` ל-`BOOKED`, ששומר את ה-`Booking`): `Booking` פעיל קיים חייב לעשות cascade (`REJECT` / `CANCEL`), או שהמעבר נחסם עם הודעה למשתמש. הודעה בלי חסימה אינה מספיקה: ב-Noa `75b384a` ‏`apply_chip` לא חסם, ונשאר אירוע Calendar יתום.
 
 ### Commits אמיתיים
 - Noa `3312957` — chip קבע `BOOKING_PENDING`/`BOOKED` בלי שורת `Booking` → תקוע.

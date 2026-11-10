@@ -1,6 +1,6 @@
 # BY-STACK: Async ORM (SQLAlchemy AsyncSession)
 
-## רלוונטיות — העתק את הקובץ הזה אם בפרויקט יש...
+## רלוונטיות — הקובץ הזה חל אם בפרויקט יש...
 - ✅ SQLAlchemy `AsyncSession` / `async_sessionmaker` / `create_async_engine`
 - ✅ FastAPI או aiohttp עם כתיבות DB async
 - ✅ Celery / RQ tasks שמשתמשים ב-SQLAlchemy async
@@ -38,7 +38,7 @@ except SomeError:
   logger.error("failed for lead %s", lead_email)  # ✅
 ```
 
-או נתק במפורש: `session.expunge(lead)` כדי לנתק (`lead.email` ממשיך לעבוד כ-primitive).
+או נתק במפורש: `session.expunge(lead)` כדי לנתק (`lead.email` ממשיך לעבוד כ-primitive) — **לפני** הפעולה שיכולה לעשות rollback. באובייקט המנותק נשארים זמינים השדות שכבר נטענו; גישה לשדה שפג תוקפו או שלא נטען — אחרי ה-rollback, או אחרי commit קודם עם `expire_on_commit=True` — זורקת `DetachedInstanceError`. ו-`expunge` מוציא את האובייקט מהמעקב של ה-session: שינוי שעוד לא נשמר בו **לא ייכתב** ב-commit. כשהאובייקט עוד משתנה, או שיש בו שינוי שטרם נשמר — לחלץ primitives ולהשאיר אותו ב-session (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026: אובייקט ששונה ונותק לפני commit — הערך במסד לא השתנה). וערך שכבר נשלח ב-flush נשאר באובייקט המנותק גם אחרי שה-rollback ביטל אותו במסד (נמדד: באובייקט הערך החדש, במסד הקודם) — כשצריך את מצב המסד, טוענים את השורה מחדש אחרי ה-rollback.
 
 ### Commits אמיתיים
 - EmailFlow `0fdd247`.
@@ -69,20 +69,28 @@ async def process_all(sessionmaker, items):
 
 ---
 
-## דפוס 3 — attributes ישנים אחרי commit בלולאה
+## דפוס 3 — attributes אחרי commit בלולאה: `MissingGreenlet` או ערך ישן
 
 ```python
-for row in await session.execute(...):
-  await session.commit()  # commits any pending changes
-  process(row.related_field)  # ❌ עלול להיות ישן (commit מרענן רק PK)
+leads = (await session.scalars(select(Lead))).all()   # אובייקטי ORM, לא Row
+for lead in leads:
+  lead.processed = True
+  await session.commit()
+  process(lead.status)  # ❌ אחרי commit השדות פגי תוקף או ישנים — ראה למטה
 ```
+
+ההתנהגות תלויה ב-`expire_on_commit` של ה-session. ב-`True` — ברירת המחדל — commit מסמן את **כל** האובייקטים ב-session כפגי תוקף, והגישה לשדה מנסה טעינה עצלה, שאינה נתמכת ב-async: `MissingGreenlet`. ב-`False` — ההגדרה שבדוגמאות של SQLAlchemy ל-`async_sessionmaker` — השדות נשארים עם הערכים מלפני ה-commit, גם אם המסד השתנה בינתיים. התיקון זהה בשני המצבים (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026).
 
 ### תיקון
 ```python
-for row in ...:
-  await session.refresh(row)  # רענון מפורש אחרי commit
-  process(row.related_field)
+for lead in leads:
+  lead.processed = True
+  await session.commit()
+  await session.refresh(lead)  # רענון מפורש אחרי commit — עמודות וקשרים שנטענים ב-eager
+  process(lead.status)
 ```
+
+‏`refresh` פועל על אובייקט ORM: על `Row` מ-`session.execute(select(...))` הוא זורק `UnmappedInstanceError`. ורענון כללי לא טוען קשר עצל (`lazy="select"`) — גישה ל-`lead.booking` אחריו עדיין זורקת `MissingGreenlet`. קשר נדרש נטען ב-`await session.refresh(lead, attribute_names=[...])`, מ-SQLAlchemy 2.0.4 — ורק מה שברשימה מתרענן: אחרי commit, `["booking"]` לבד משאיר את `lead.email` פג תוקף והגישה אליו זורקת `MissingGreenlet`, ולכן `["email", "booking"]` (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026).
 
 או קבץ את ה-commits מחוץ ללולאה.
 
@@ -93,30 +101,40 @@ for row in ...:
 
 ## דפוס 4 — singleton engine מקושר ל-event loop ב-Celery
 
+Celery לא מריץ `async def` כ-task: הוא מחזיר coroutine שאיש לא מחכה לו, וגוף הפונקציה לא רץ בכלל (נבדק ב-Celery 5.7.0 עם `task_always_eager`: התוצאה היא אובייקט `coroutine`, ו-`RuntimeWarning: coroutine ... was never awaited`). לכן קוד async ב-Celery נכתב כ-task סינכרוני שעוטף `asyncio.run(...)` — וכל הרצה של task יוצרת event loop חדש.
+
 ```python
 # module-level
 engine = create_async_engine(...)
 SessionLocal = async_sessionmaker(engine, ...)
 
-@app.task
-async def my_task():
-  async with SessionLocal() as session:  # ❌ engine מקושר ל-loop קודם → task שני נכשל
+async def _work():
+  async with SessionLocal() as session:  # ❌ ב-task השני: חיבור מה-pool של loop שכבר נסגר
     ...
+
+@app.task
+def my_task():
+  asyncio.run(_work())
 ```
 
-Celery יוצר event loop טרי לכל task. Engines שנוצרו ב-import time מקושרים ל-loop שהיה קיים אז.
+ב-import לא נפתח שום חיבור. החיבור הראשון נפתח ב-task הראשון, נקשר ל-loop שלו, וחוזר ל-pool בסוף ה-task. ה-task השני רץ ב-loop חדש, מקבל מה-pool את אותו חיבור, ונופל ב-`RuntimeError: ... attached to a different loop` (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026: הריצה הראשונה עוברת, השנייה נופלת).
 
 ### תיקון
-יצירה lazy לכל task, או `engine.dispose()` בין tasks, או השתמש ב-engine סינכרוני ב-Celery ובאסינכרוני רק ב-API layer.
+engine לכל task, שנסגר ב-`await engine.dispose()` בסוף ה-task — אחרי סגירת ה-session ולפני שה-loop נסגר. זו צורה שעובדת גם כשה-tasks חופפים, בלי תנאים נוספים: עם ארבעה tasks מקבילים ב-threads (כמו `--pool=threads`) היא עברה 60 מתוך 60. engine משותף תלוי בסוג ה-pool. **עם pool** (ברירת המחדל) — רק כשה-tasks בתהליך רצים אחד-אחד (prefork), ועם `dispose()` בסוף כל task; במקביל, גם אחרי חימום, חיבורים עברו בין loops ונפלו (`another operation is in progress`, `attached to a different loop`). **עם `poolclass=NullPool`** — בלי pool אין חיבור שעובר בין loops, והוא עבר גם במקביל, 60 מתוך 60 — אבל רק אחרי ריצת חימום אחת: כשארבעת ה-tasks המקבילים היו הראשונים שפתחו חיבור, הם נתקעו עד ה-timeout. או engine סינכרוני ב-Celery ואסינכרוני רק ב-API layer. (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026.)
+
+ומלכודת בבדיקות: עם `task_always_eager` ה-task רץ באותו thread שקרא לו, ואם הקורא כבר בתוך event loop (handler async, ‏pytest-asyncio), ‏`asyncio.run` נכשל ב-`asyncio.run() cannot be called from a running event loop`. שם קוראים ל-task דרך `asyncio.to_thread(...)` — נבדק ב-Celery 5.7.0.
 ```python
-@app.task
-async def my_task():
+async def _work():
   engine = create_async_engine(DATABASE_URL, ...)
   try:
     async with async_sessionmaker(engine)() as session:
       ...
   finally:
     await engine.dispose()
+
+@app.task
+def my_task():
+  asyncio.run(_work())
 ```
 
 ### Commits אמיתיים
@@ -124,18 +142,30 @@ async def my_task():
 
 ---
 
-## דפוס 5 — `joinedload` + `with_for_update` לא תואמים
+## דפוס 5 — `joinedload` + `with_for_update` ב-Postgres
 
 ```python
 q = select(Lead).options(joinedload(Lead.booking)).with_for_update()  # ❌
 ```
 
-SQLAlchemy זורק (ה-join של eager load לא יכול להינעל באופן נקי).
+‏`joinedload` נבנה כ-`LEFT OUTER JOIN`, ו-`with_for_update()` בלי `of` נועל את כל הטבלאות בשאילתה. Postgres דוחה: `FOR UPDATE cannot be applied to the nullable side of an outer join`. השגיאה מגיעה מה-DB, עטופה ב-`DBAPIError` — לא מ-SQLAlchemy.
 
 ### תיקון
+כשהקשר אופציונלי — לנעול רק את הטבלה הראשית, ולהשאיר את ה-LEFT JOIN:
+```python
+q = select(Lead).options(joinedload(Lead.booking)).with_for_update(of=Lead)
+```
+
+בישות aliased ה-`of` מקבל את ה-alias עצמו: `of=Lead` על `aliased(Lead)` נופל ב-`relation ... in FOR UPDATE clause not found in FROM clause`. ו-`of=Lead` לא נועל את ה-booking — כשההחלטה תלויה גם בשורה המקושרת, נועלים אותה בנפרד: `await session.refresh(lead.booking, with_for_update=True)` כש-`lead.booking is not None` (על `None` הוא זורק `UnmappedInstanceError`), או `select(Booking)...with_for_update()` עם `execution_options(populate_existing=True)`. בלי זה ה-select מחזיר את האובייקט שכבר ב-identity map עם הערכים שנטענו לפני הנעילה — הנעילה נרכשה, וההחלטה נסמכת על נתון ישן (נמדד ב-SQLAlchemy 2.1.8: אחרי עדכון מחיבור אחר, select רגיל החזיר את הערך הישן, ושתי הצורות החזירו את החדש). ושתיהן דורסות שינוי שטרם נשמר באובייקט.
+
+‏`contains_eager` עם `join` מפורש גם הוא עובד, אבל זה `INNER JOIN` — שורה בלי קשר **נעלמת מהתוצאה בשקט**. נכון רק כשהקשר חובה:
 ```python
 q = select(Lead).options(contains_eager(Lead.booking)).join(Booking).with_for_update()
 ```
+
+אותו דבר `joinedload(Lead.booking, innerjoin=True)`, כשאין בשאילתה outer join אחר. ושתי צורות ה-INNER JOIN, בלי `of`, נועלות גם את שורות הטבלה המקושרת — חיבור שני לא הצליח לנעול את ה-booking (`could not obtain lock on row`), ועם `of=Lead` הצליח.
+
+נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026, על שני לידים שלאחד מהם אין booking: הצורה הראשונה נופלת בשגיאה, `of=Lead` מחזיר את שניהם, ו-`contains_eager` עם `join` מחזיר אחד.
 
 ### Commits אמיתיים
 - Shipment-bot `4352bac`.
