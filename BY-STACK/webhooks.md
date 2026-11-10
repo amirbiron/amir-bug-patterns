@@ -50,35 +50,57 @@ TOPIC = "gmail"  # ה-topic של Pub/Sub: message_id ייחודי רק בתוכ�
 @app.post("/pubsub/gmail")
 async def handle_gmail(req: Request):
   msg = parse_pubsub(req)
+  key = f"{TOPIC}:{msg.message_id}"
   # 1. רזרבציה מקומית — כפילות מזוהה בהתנגשות על ה-idempotency key בלבד
   #    (insert מ-sqlalchemy.dialects.postgresql)
   draft_id = (await session.execute(
-    insert(Draft).values(idempotency_key=f"{TOPIC}:{msg.message_id}", status="reserved")
+    insert(Draft).values(idempotency_key=key, status="reserved")
       .on_conflict_do_nothing(index_elements=["idempotency_key"])
       .returning(Draft.id)
-  )).scalar_one_or_none()
-  await session.commit()
+  )).scalar_one_or_none()  # FK / CHECK / NOT NULL עדיין זורקים
   if draft_id is None:
-    return Response(status_code=200)  # duplicate, ignore — FK / CHECK / NOT NULL עדיין זורקים
-  draft_row = await session.get(Draft, draft_id)
+    # המפתח כבר קיים — וזה לא אומר שהעבודה נעשתה. בודקים את מצב השורה לפני שמאשרים.
+    # failed (כשל ודאי): תפיסה מחדש בעדכון אטומי — רק מסירה אחת זוכה
+    draft_id = (await session.execute(
+      update(Draft).where(Draft.idempotency_key == key, Draft.status == "failed")
+        .values(status="reserved").returning(Draft.id)
+    )).scalar_one_or_none()
+    if draft_id is None:
+      status = (await session.execute(
+        select(Draft.status).where(Draft.idempotency_key == key)
+      )).scalar_one()
+      await session.commit()
+      if status == "created":
+        return Response(status_code=200)  # הושלם — כפילות אמיתית
+      return Response(status_code=503)    # reserved / unknown: לא 2xx, כדי שהספק ימסור שוב
+  await session.commit()  # הרזרבציה נשמרת לפני הקריאה החיצונית
 
-  # 2. ואז קריאה חיצונית
+  # 2. הקריאה החיצונית — לבדה ב-try, כדי שהמצב ישקף רק את התוצאה שלה
   try:
     gmail_draft = await gmail.drafts.create(body=msg.body)
-    draft_row.gmail_id = gmail_draft.id
-    draft_row.status = "created"
+  except Exception as exc:
+    # ProviderRejected — החריגה של הלקוח שלך לדחייה מפורשת (4xx): הספק לא ביצע, כשל ודאי.
+    # כל השאר — timeout, חיבור שנותק, תשובה לא קריאה — לא ידוע אם ה-draft נוצר
+    outcome = "failed" if isinstance(exc, ProviderRejected) else "unknown"
+    await session.execute(update(Draft).where(Draft.id == draft_id).values(status=outcome))
     await session.commit()
-  except (TimeoutError, ConnectionError):  # כל חריגה של הלקוח שלך שבה התשובה אבדה: timeout, חיבור שנותק אחרי השליחה
-    draft_row.status = "unknown"  # ייתכן שה-draft נוצר אצל הספק — לא failed
-    await session.commit()
-    raise
-  except Exception:
-    draft_row.status = "failed"
-    await session.commit()
-    raise
+    raise  # 5xx לספק — הוא ימסור שוב, והמסירה הבאה תפעל לפי המצב
+
+  # 3. fill
+  await session.execute(
+    update(Draft).where(Draft.id == draft_id).values(gmail_id=gmail_draft.id, status="created")
+  )
+  await session.commit()
+  return Response(status_code=200)
 ```
 
-לא תופסים `IntegrityError` גורף כ"כפילות": הוא נזרק גם על FK, ‏CHECK ו-NOT NULL, ו-200 עליהם מאשר לספק webhook שנזרק. ‏`ON CONFLICT (idempotency_key) DO NOTHING RETURNING id` מחזיר שורה ריקה רק על התנגשות במפתח הזה, וכל שגיאה אחרת עולה (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026). העמודה `idempotency_key` היא UNIQUE ו-NOT NULL: בלי אינדקס ייחודי תואם Postgres דוחה את ה-INSERT עצמו (`there is no unique or exclusion constraint matching the ON CONFLICT specification` — נמדד), ו-NULL אינו מתנגש עם NULL — מפתח חסר היה עובר כרשומה חדשה. ותשובה שאבדה — timeout, חיבור שנותק אחרי השליחה — אינה כשל ודאי: ייתכן שהספק יצר את ה-draft, ולכן היא נשמרת כ-`unknown` ולא כ-`failed`.
+לא תופסים `IntegrityError` גורף כ"כפילות": הוא נזרק גם על FK, ‏CHECK ו-NOT NULL, ו-200 עליהם מאשר לספק webhook שנזרק. ‏`ON CONFLICT (idempotency_key) DO NOTHING RETURNING id` מחזיר שורה ריקה רק על התנגשות במפתח הזה, וכל שגיאה אחרת עולה (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026). העמודה `idempotency_key` היא UNIQUE ו-NOT NULL: בלי אינדקס ייחודי תואם Postgres דוחה את ה-INSERT עצמו (`there is no unique or exclusion constraint matching the ON CONFLICT specification` — נמדד), ו-NULL אינו מתנגש עם NULL — מפתח חסר היה עובר כרשומה חדשה. 
+
+**מפתח שכבר קיים אינו אומר שהעבודה נעשתה.** מסירה חוזרת מגיעה בדיוק אחרי כשל, ולכן 200 אוטומטי על התנגשות זורק את האירוע: השורה נשארת `failed`, ‏`unknown` או `reserved`, הספק מקבל אישור, ומסירה נוספת לא תגיע. לכן בהתנגשות בודקים את מצב השורה. `created` — הושלם, 200. `failed` — כשל ודאי: תופסים מחדש בעדכון אטומי (`UPDATE ... WHERE status='failed'`), ורק מסירה אחת זוכה ומבצעת שוב. `reserved` — מסירה אחרת באמצע הטיפול: תשובה שאינה 2xx, והספק ימסור שוב. `unknown` — לא ידוע אם הספק ביצע: גם כאן לא 2xx, ובלי ביצוע חוזר עיוור. השורה מחכה לבירור מול הספק, בג'וב נפרד או ידנית — חיפוש הפעולה לפי מזהה שלנו, או קריאה חוזרת עם אותו מפתח idempotency כשהספק תומך בזה — ורק הבירור מעביר אותה ל-`created` או ל-`failed`. ו-`reserved` שנשאר מעבר לזמן הטיפול המרבי (תהליך שמת אחרי הרזרבציה, או fill שנכשל) הוא `unknown` לכל דבר, ולכן השורה נושאת גם חותמת זמן של הרזרבציה.
+
+**`failed` מסומן רק על דחייה מפורשת של הספק, וכל חריגה אחרת היא `unknown`.** תשובה שאבדה — timeout, חיבור שנותק אחרי השליחה — אינה כשל ודאי: ייתכן שהספק יצר את ה-draft. ומכיוון ש-`failed` פירושו "מותר לבצע שוב", ‏`except Exception` שמוביל אליו היה הופך כל timeout ל-draft כפול (`RECURRING-PATTERNS.md` R10). מאותה סיבה הקריאה החיצונית יושבת לבדה ב-`try`: כשל ב-fill אחרי שהספק כבר ביצע אינו `failed`.
+
+נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026. אחרי דחייה, המסירה החוזרת ביצעה שוב והסתיימה ב-`created`. אחרי timeout ואחרי קריסה שאחרי הרזרבציה היא קיבלה 503, בלי קריאה נוספת לספק. תשע מסירות מקבילות — על מפתח חדש, ועל שורה `failed` — הסתיימו בקריאה אחת לספק. ובריצת בקרה על הצורה הקודמת, עם 200 אוטומטי על התנגשות: אחרי דחייה ואחרי timeout המסירה החוזרת קיבלה 200, והשורה נשארה `failed` / `unknown`.
 
 ### Commits אמיתיים
 - EmailFlow `f847a44`, `401f179`, `cc7e81a`, `75c0a47`, `0fdd247`.
