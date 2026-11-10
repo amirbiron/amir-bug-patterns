@@ -54,7 +54,7 @@ async def handle_gmail(req: Request):
   # 1. רזרבציה מקומית — כפילות מזוהה בהתנגשות על ה-idempotency key בלבד
   #    (insert מ-sqlalchemy.dialects.postgresql)
   draft_id = (await session.execute(
-    insert(Draft).values(idempotency_key=key, status="reserved")
+    insert(Draft).values(idempotency_key=key, status="reserved", reserved_at=func.now())
       .on_conflict_do_nothing(index_elements=["idempotency_key"])
       .returning(Draft.id)
   )).scalar_one_or_none()  # FK / CHECK / NOT NULL עדיין זורקים
@@ -63,7 +63,7 @@ async def handle_gmail(req: Request):
     # failed (כשל ודאי): תפיסה מחדש בעדכון אטומי — רק מסירה אחת זוכה
     draft_id = (await session.execute(
       update(Draft).where(Draft.idempotency_key == key, Draft.status == "failed")
-        .values(status="reserved").returning(Draft.id)
+        .values(status="reserved", reserved_at=func.now()).returning(Draft.id)
     )).scalar_one_or_none()
     if draft_id is None:
       status = (await session.execute(
@@ -96,11 +96,21 @@ async def handle_gmail(req: Request):
 
 לא תופסים `IntegrityError` גורף כ"כפילות": הוא נזרק גם על FK, ‏CHECK ו-NOT NULL, ו-200 עליהם מאשר לספק webhook שנזרק. ‏`ON CONFLICT (idempotency_key) DO NOTHING RETURNING id` מחזיר שורה ריקה רק על התנגשות במפתח הזה, וכל שגיאה אחרת עולה (נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026). העמודה `idempotency_key` היא UNIQUE ו-NOT NULL: בלי אינדקס ייחודי תואם Postgres דוחה את ה-INSERT עצמו (`there is no unique or exclusion constraint matching the ON CONFLICT specification` — נמדד), ו-NULL אינו מתנגש עם NULL — מפתח חסר היה עובר כרשומה חדשה. 
 
-**מפתח שכבר קיים אינו אומר שהעבודה נעשתה.** מסירה חוזרת מגיעה בדיוק אחרי כשל, ולכן 200 אוטומטי על התנגשות זורק את האירוע: השורה נשארת `failed`, ‏`unknown` או `reserved`, הספק מקבל אישור, ומסירה נוספת לא תגיע. לכן בהתנגשות בודקים את מצב השורה. `created` — הושלם, 200. `failed` — כשל ודאי: תופסים מחדש בעדכון אטומי (`UPDATE ... WHERE status='failed'`), ורק מסירה אחת זוכה ומבצעת שוב. `reserved` — מסירה אחרת באמצע הטיפול: תשובה שאינה 2xx, והספק ימסור שוב. `unknown` — לא ידוע אם הספק ביצע: גם כאן לא 2xx, ובלי ביצוע חוזר עיוור. השורה מחכה לבירור מול הספק, בג'וב נפרד או ידנית — חיפוש הפעולה לפי מזהה שלנו, או קריאה חוזרת עם אותו מפתח idempotency כשהספק תומך בזה — ורק הבירור מעביר אותה ל-`created` או ל-`failed`. ו-`reserved` שנשאר מעבר לזמן הטיפול המרבי (תהליך שמת אחרי הרזרבציה, או fill שנכשל) הוא `unknown` לכל דבר, ולכן השורה נושאת גם חותמת זמן של הרזרבציה.
+**מפתח שכבר קיים אינו אומר שהעבודה נעשתה.** מסירה חוזרת מגיעה בדיוק אחרי כשל, ולכן 200 אוטומטי על התנגשות זורק את האירוע: השורה נשארת `failed`, ‏`unknown` או `reserved`, הספק מקבל אישור, ומסירה נוספת לא תגיע. לכן בהתנגשות בודקים את מצב השורה. `created` — הושלם, 200. `failed` — כשל ודאי: תופסים מחדש בעדכון אטומי שמחזיר אותה ל-`reserved` (`UPDATE ... SET status='reserved' WHERE status='failed'`), ורק המסירה שהעדכון שלה תפס שורה מבצעת שוב. `reserved` — מסירה אחרת באמצע הטיפול: תשובה שאינה 2xx, והספק ימסור שוב. `unknown` — לא ידוע אם הספק ביצע: גם כאן לא 2xx, ובלי ביצוע חוזר עיוור. השורה מחכה לבירור מול הספק — חיפוש הפעולה לפי מזהה שלנו, או קריאה חוזרת עם אותו מפתח idempotency כשהספק תומך בזה — ורק הבירור מעביר אותה ל-`created` או ל-`failed`.
+
+**הבירור הוא ג'וב נפרד, והוא חלק מהתיקון.** ה-handler רק מסמן ומחזיר 503; בלי הג'וב, שורה `unknown` — או `reserved` של תהליך שמת אחרי הרזרבציה, או של fill שנכשל — תחזיר 503 לכל מסירה חוזרת עד שהספק יתייאש, בלי התראה. לכן הרזרבציה והתפיסה מחדש כותבות `reserved_at`, והג'וב בוחר לפיו גם `reserved` שנשאר מעבר לזמן הטיפול המרבי במסירה אחת — לא ידוע אם הספק ביצע, בדיוק כמו ב-`unknown`:
+
+```sql
+SELECT id FROM drafts
+ WHERE status = 'unknown'
+    OR (status = 'reserved' AND reserved_at < now() - interval '5 minutes');
+```
+
+המרווח ארוך מה-timeout מול הספק, אחרת הג'וב תופס מסירה שעוד בטיפול. ושורה שהג'וב לא הצליח לברר מדווחת לאדם — היא לא נשארת בתור בשקט.
 
 **`failed` מסומן רק על דחייה מפורשת של הספק, וכל חריגה אחרת היא `unknown`.** תשובה שאבדה — timeout, חיבור שנותק אחרי השליחה — אינה כשל ודאי: ייתכן שהספק יצר את ה-draft. ומכיוון ש-`failed` פירושו "מותר לבצע שוב", ‏`except Exception` שמוביל אליו היה הופך כל timeout ל-draft כפול (`RECURRING-PATTERNS.md` R10). מאותה סיבה הקריאה החיצונית יושבת לבדה ב-`try`: כשל ב-fill אחרי שהספק כבר ביצע אינו `failed`.
 
-נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026. אחרי דחייה, המסירה החוזרת ביצעה שוב והסתיימה ב-`created`. אחרי timeout ואחרי קריסה שאחרי הרזרבציה היא קיבלה 503, בלי קריאה נוספת לספק. תשע מסירות מקבילות — על מפתח חדש, ועל שורה `failed` — הסתיימו בקריאה אחת לספק. ובריצת בקרה על הצורה הקודמת, עם 200 אוטומטי על התנגשות: אחרי דחייה ואחרי timeout המסירה החוזרת קיבלה 200, והשורה נשארה `failed` / `unknown`.
+נמדד ב-SQLAlchemy 2.1.8 עם asyncpg מול Postgres 16, נובמבר 2026. אחרי דחייה, המסירה החוזרת ביצעה שוב והסתיימה ב-`created`. אחרי timeout ואחרי קריסה שאחרי הרזרבציה היא קיבלה 503, בלי קריאה נוספת לספק. תשע מסירות מקבילות — על מפתח חדש, ועל שורה `failed` — הסתיימו בקריאה אחת לספק. שאילתת הג'וב החזירה את שורת ה-timeout מיד, ואת השורה שקרסה רק אחרי שעבר המרווח. ובריצת בקרה על הצורה הקודמת, עם 200 אוטומטי על התנגשות: אחרי דחייה ואחרי timeout המסירה החוזרת קיבלה 200, והשורה נשארה `failed` / `unknown`.
 
 ### Commits אמיתיים
 - EmailFlow `f847a44`, `401f179`, `cc7e81a`, `75c0a47`, `0fdd247`.
